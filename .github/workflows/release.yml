@@ -1,0 +1,248 @@
+name: RELEASE
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Enter release version, eg: 0.0.1'
+        required: false
+
+jobs:
+  prepare:
+    name: Prepare release version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Validate version
+        id: validate-version
+        run: |
+          current_version=$(grep -m1 'version =' gradle.properties | grep -oE '([0-9]+\.[0-9]+\.[0-9]+)')
+          input_version=${{ github.event.inputs.version }}
+          echo "Current version: ${current_version}, Input version: ${input_version}"
+          if [[ -n "${input_version}" ]]; then
+            if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: Invalid version number ${input_version}. Please use format x.y.z"
+              exit 1
+            fi
+            p1=(${input_version//./ })
+            p2=(${current_version//./ })
+            if [ ${p1[0]} -lt ${p2[0]} ] \
+              || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -lt ${p2[1]} ]] \
+              || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -eq ${p2[1]} && ${p1[2]} -lt ${p2[2]} ]]; then
+              echo "ERROR: Input version is less than current version"
+              exit 1
+            fi
+            release_version=${input_version}
+          else
+            release_version=${current_version}
+          fi
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Check tag existence
+        run: |
+          if [ $(git tag -l v"${{ env.release_version }}") ]; then
+            echo "ERROR: Tag v${{ env.release_version }} already exists"
+            exit 1
+          fi
+
+      - name: Write version to file
+        run: |
+          echo "${release_version}" >> /tmp/release_version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${GITHUB_SHA}
+          path: /tmp/release_version
+          retention-days: 30
+
+  update-release:
+    name: Update release version
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${GITHUB_SHA}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Commit release version
+        run: |
+          release_version=${{ env.release_version }}
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
+          if [[ $(grep -m1 'version =' gradle.properties) == *-SNAPSHOT ]]; then
+            sed -i "s/version = .*/version = ${release_version}/" gradle.properties
+            git add gradle.properties
+            git commit -m "chore: release ${release_version}" --quiet
+          fi
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          commit-message: 'chore: release ${{ env.release_version }}'
+          title: 'chore: release ${{ env.release_version }}'
+          base: 'master'
+          branch: 'release-${{ env.release_version }}'
+
+      - name: Auto merge pull request
+        continue-on-error: true
+        if: steps.cpr.outputs.pull-request-operation == 'created'
+        run: gh pr merge ${{ env.PULL_REQUEST_NUMBER }} --squash --admin
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+
+  bump-snapshot:
+    name: Bump snapshot version
+    needs: [update-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${GITHUB_SHA}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Bump snapshot version
+        run: |
+          release_version=${{ env.release_version }}
+          parts=(${release_version//./ })
+          major=${parts[0]}
+          minor=${parts[1]}
+          patch=${parts[2]}
+          patch=$((patch + 1))
+          snapshot_version=$major.$minor.$patch
+          echo "snapshot_version=${snapshot_version}" >> "${GITHUB_ENV}"
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "github-actions"
+          sed -i "s/version = .*/version = ${snapshot_version}-SNAPSHOT/" gradle.properties
+          git add gradle.properties
+          git commit -m "chore: bump version to ${snapshot_version}-SNAPSHOT"
+
+      - name: Create pull request
+        id: cpr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.ACTION_TOKEN }}
+          commit-message: 'chore: bump version to ${{ env.snapshot_version }}-SNAPSHOT'
+          title: 'chore: bump version to ${{ env.snapshot_version }}-SNAPSHOT'
+          base: 'master'
+          branch: 'bump-${{ env.snapshot_version }}'
+
+      - name: Auto merge pull request
+        continue-on-error: true
+        if: steps.cpr.outputs.pull-request-operation == 'created'
+        run: gh pr merge ${{ env.PULL_REQUEST_NUMBER }} --squash --admin
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+
+  release:
+    name: Release
+    needs: [update-release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${GITHUB_SHA}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: master
+
+      - name: Find release commit
+        run: |
+          echo "release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)" >> "${GITHUB_ENV}"
+
+      - name: Create release tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ secrets.ACTION_TOKEN }}
+          custom_tag: ${{ env.release_version }}
+          commit_sha: ${{ env.release_commit }}
+
+      - name: Create github release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag_version.outputs.new_tag }}
+          name: Release ${{ steps.tag_version.outputs.new_tag }}
+          body: ${{ steps.tag_version.outputs.changelog }}
+
+  publish:
+    name: Publish
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release_version
+        uses: actions/download-artifact@v4
+        with:
+          name: ${GITHUB_SHA}
+          path: /tmp
+
+      - name: Read release version
+        run: |
+          release_version=$(cat /tmp/release_version)
+          echo "release_version=${release_version}" >> "${GITHUB_ENV}"
+          echo "Release version: ${release_version}"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ env.release_version }}
+
+      - name: Setup JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 8
+
+      - name: Build and publish
+        run: ./gradlew publish
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+          NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
+          NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}

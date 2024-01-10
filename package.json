@@ -1,0 +1,35 @@
+{
+  "name": "dev-infa",
+  "version": "0.0.1",
+  "description": "Infrastructure for development",
+  "license": "Apache-2.0",
+  "scripts": {
+    "cz": "cz",
+    "postinstall": "husky install"
+  },
+  "devDependencies": {
+    "@commitlint/config-conventional": "^18.4.4",
+    "@commitlint/cz-commitlint": "^18.4.4",
+    "commitizen": "^4.3.0",
+    "commitlint": "^18.4.4",
+    "husky": "^8.0.3"
+  },
+  "config": {
+    "commitizen": {
+      "path": "@commitlint/cz-commitlint"
+    }
+  },
+  "commitlint": {
+    "extends": "@commitlint/config-conventional",
+    "rules": {
+      "scope-enum": [
+        2,
+        "always",
+        [
+          "deps",
+          "lib"
+        ]
+      ]
+    }
+  }
+}

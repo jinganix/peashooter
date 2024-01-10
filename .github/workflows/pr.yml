@@ -1,0 +1,65 @@
+name: PR
+
+on:
+  merge_group:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  commitlint:
+    name: Check Commit Message
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check-skip.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v5
+        with:
+          configFile: package.json
+          failOnWarnings: true
+      - name: Skip when release
+        id: check-skip
+        env:
+          COMMIT_FILTER: "^chore: (bump version|release)"
+        run: |
+          readonly local last_commit_log=$(git log -1 --pretty=format:"%s")
+          echo "Last commit log: $last_commit_log"
+
+          readonly local filter_count=$(echo "$last_commit_log" | grep -c -E "$COMMIT_FILTER")
+
+          if [[ "$filter_count" -gt 0 ]]; then
+            echo "The last commit log \"$last_commit_log\" contains \"$COMMIT_FILTER\", stopping"
+            echo "skip=true" >> ${GITHUB_OUTPUT}
+          fi
+  build:
+    name: Build
+    needs: [commitlint]
+    if: ${{ needs.commitlint.outputs.skip != 'true' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        jdk: [8,11,21]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK ${{ matrix.jdk }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.jdk }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build with Gradle
+        run: ./gradlew clean build
