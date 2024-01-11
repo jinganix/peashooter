@@ -7,7 +7,7 @@ plugins {
   `maven-publish`
 }
 
-val javaVersion = if (current().isCompatibleWith(VERSION_17)) VERSION_17 else VERSION_1_8
+val javaVersion = if (current().isCompatibleWith(VERSION_19)) VERSION_19 else VERSION_1_8
 
 java {
   sourceCompatibility = javaVersion
@@ -36,6 +36,7 @@ for (key in properties.stringPropertyNames()) {
 }
 
 val versionCoverallsGradlePlugin: String by project
+val versionFreemarker: String by project
 val versionGradleVersionsPlugin: String by project
 val versionJacocoAgent: String by project
 val versionSpotlessPluginGradle: String by project
@@ -44,6 +45,7 @@ dependencies {
   implementation("com.diffplug.spotless:spotless-plugin-gradle:${versionSpotlessPluginGradle}")
   implementation("com.github.ben-manes:gradle-versions-plugin:${versionGradleVersionsPlugin}")
   implementation("com.github.kt3k.coveralls:com.github.kt3k.coveralls.gradle.plugin:${versionCoverallsGradlePlugin}")
+  implementation("org.freemarker:freemarker:${versionFreemarker}")
   implementation("org.jacoco:org.jacoco.agent:${versionJacocoAgent}")
   implementation(kotlin("script-runtime"))
 }

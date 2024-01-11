@@ -65,12 +65,8 @@ class OrderedTraceExecutorTest {
 
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
-      return Stream.of(
-          // TODO: virtual thread executor
-          Arguments.of(SINGLE_THREAD_EXECUTOR, createExecutor(Executors.newSingleThreadExecutor())),
-          Arguments.of("CachedThreadPool", createExecutor(Executors.newCachedThreadPool())),
-          Arguments.of("FixedThreadPool(2)", createExecutor(Executors.newFixedThreadPool(2))),
-          Arguments.of("FixedThreadPool(10)", createExecutor(Executors.newFixedThreadPool(10))));
+      return ExecutorForTests.executors().entrySet().stream()
+          .map(x -> Arguments.of(x.getKey(), createExecutor(x.getValue())));
     }
   }
 

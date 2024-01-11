@@ -11,13 +11,13 @@ import java.util.*
 
 plugins {
   id("conventions.versioning")
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) id("com.diffplug.spotless")
+  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_19)) id("com.diffplug.spotless")
   idea
   jacoco
   java
 }
 
-val javaVersion = if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) JavaVersion.VERSION_17 else JavaVersion.VERSION_1_8
+val javaVersion = if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_19)) JavaVersion.VERSION_19 else JavaVersion.VERSION_1_8
 
 val properties = Properties()
 if (javaVersion == JavaVersion.VERSION_1_8) {
@@ -45,9 +45,10 @@ dependencies {
 
 tasks.test {
   useJUnitPlatform()
+  if (javaVersion == JavaVersion.VERSION_19) jvmArgs("--enable-preview")
 }
 
-if (javaVersion == JavaVersion.VERSION_17) {
+if (javaVersion == JavaVersion.VERSION_19) {
   extensions.findByType<SpotlessExtension>()?.java {
     targetExclude("build/**/*")
     googleJavaFormat()
