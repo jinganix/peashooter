@@ -150,12 +150,54 @@ class TaskQueueTest {
               Executors.newSingleThreadExecutor(),
               () -> {
                 latch.countDown();
-                sleep(100);
+                sleep(200);
               });
           latch.await();
           taskQueue.execute(executor, runnable);
-          verify(executor, after(300).times(1)).execute(any());
+          verify(executor, after(500).times(1)).execute(any());
           verify(runnable, never()).run();
+        }
+      }
+    }
+
+    @Nested
+    @DisplayName("isEmpty")
+    class IsEmpty {
+
+      @Nested
+      @DisplayName("when no tasks and current is null")
+      class WhenNoTasksAndCurrentIsNull {
+
+        @Test
+        @DisplayName("then return true")
+        void thenReturnTrue() {
+          assertThat(new TaskQueue().isEmpty()).isTrue();
+        }
+      }
+
+      @Nested
+      @DisplayName("when has tasks and current is not null")
+      class WhenHasTasksAndCurrentIsNotNull {
+
+        @Test
+        @DisplayName("then return false")
+        void thenReturnFalse() {
+          TaskQueue queue = new TaskQueue();
+          queue.execute(command -> {}, () -> {});
+          assertThat(queue.isEmpty()).isFalse();
+        }
+      }
+
+      @Nested
+      @DisplayName("when no tasks and current is not null")
+      class WhenNoTasksAndCurrentIsNotNull {
+
+        @Test
+        @DisplayName("then return false")
+        void thenReturnFalse() {
+          TaskQueue queue = new TaskQueue();
+          queue.execute(command -> {}, () -> sleep(100));
+          assertThat(queue.isEmpty()).isFalse();
         }
       }
     }

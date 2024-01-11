@@ -26,19 +26,30 @@ import java.util.function.Supplier;
 /** Execute tasks sequentially and trace call chain. */
 public class OrderedTraceExecutor {
 
-  private final TraceExecutor executor;
+  /** {@link TaskQueues} */
+  protected final TaskQueues queues;
 
-  private final TaskQueues queues;
+  /** {@link TraceContextProvider} */
+  protected final TraceContextProvider contextProvider;
 
   /**
    * Constructor.
    *
-   * @param executor {@link TraceExecutor}
    * @param queues {@link TaskQueues}
+   * @param provider {@link TraceContextProvider}
    */
-  public OrderedTraceExecutor(TraceExecutor executor, TaskQueues queues) {
-    this.executor = executor;
+  public OrderedTraceExecutor(TaskQueues queues, TraceContextProvider provider) {
     this.queues = queues;
+    this.contextProvider = provider;
+  }
+
+  /**
+   * Returns true if this executor has been shut down.
+   *
+   * @return true if this executor has been shut down
+   */
+  public boolean isShutdown() {
+    return contextProvider.isShutdown();
   }
 
   /**
@@ -47,7 +58,7 @@ public class OrderedTraceExecutor {
    * @return {@link Tracer}
    */
   public Tracer getTracer() {
-    return executor.getTracer();
+    return contextProvider.getTracer();
   }
 
   /**
@@ -66,39 +77,39 @@ public class OrderedTraceExecutor {
    * @param task {@link Runnable}
    */
   public void executeAsync(String key, Runnable task) {
-    TraceRunnable runnable = new OrderedTraceRunnable(executor.getTracer(), key, false, task);
+    TraceRunnable runnable = new OrderedTraceRunnable(getTracer(), key, false, task);
     TaskQueue queue = queues.get(key);
-    queue.execute(executor, runnable);
+    queue.execute(contextProvider.getExecutor(queue, runnable, false), runnable);
   }
 
   /**
    * Execute synchronously.
    *
    * @param key key to lock
-   * @param runnable {@link Runnable}
+   * @param task {@link Runnable}
    */
-  public void executeSync(String key, Runnable runnable) {
+  public void executeSync(String key, Runnable task) {
     try {
-      if (OrderedSpan.invokedBy(executor.getSpan(), key)) {
-        runnable.run();
+      if (OrderedSpan.invokedBy(getTracer().getSpan(), key)) {
+        task.run();
         return;
       }
       CompletableFuture<Void> future = new CompletableFuture<>();
-      TraceRunnable traceRunnable =
+      TraceRunnable runnable =
           new OrderedTraceRunnable(
-              executor.getTracer(),
+              getTracer(),
               key,
               true,
               () -> {
                 try {
-                  runnable.run();
+                  task.run();
                   future.complete(null);
                 } catch (RuntimeException ex) {
                   future.completeExceptionally(ex);
                 }
               });
       TaskQueue queue = queues.get(key);
-      queue.execute(queue.isEmpty() ? DirectExecutor.INSTANCE : executor, traceRunnable);
+      queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
       // TODO: timeout
       future.get();
     } catch (InterruptedException | ExecutionException e) {
@@ -114,18 +125,18 @@ public class OrderedTraceExecutor {
    *
    * @param key key to lock
    * @param supplier {@link Supplier}
-   * @return result of the {@link Supplier}
    * @param <R> return type
+   * @return result of the {@link Supplier}
    */
   public <R> R supply(String key, Supplier<R> supplier) {
     try {
-      if (OrderedSpan.invokedBy(executor.getSpan(), key)) {
+      if (OrderedSpan.invokedBy(getTracer().getSpan(), key)) {
         return supplier.get();
       }
       CompletableFuture<R> future = new CompletableFuture<>();
       TraceRunnable runnable =
           new OrderedTraceRunnable(
-              executor.getTracer(),
+              getTracer(),
               key,
               true,
               () -> {
@@ -136,8 +147,7 @@ public class OrderedTraceExecutor {
                 }
               });
       TaskQueue queue = queues.get(key);
-      // TODO: DirectExecutor only when same executor
-      queue.execute(queue.isEmpty() ? DirectExecutor.INSTANCE : executor, runnable);
+      queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
       return future.get();
     } catch (InterruptedException | ExecutionException e) {
       if (e instanceof ExecutionException) {
@@ -152,8 +162,8 @@ public class OrderedTraceExecutor {
    *
    * @param keys keys to lock
    * @param supplier {@link Supplier}
-   * @return result of the {@link Supplier}
    * @param <R> return type
+   * @return result of the {@link Supplier}
    */
   public <R> R supply(Collection<String> keys, Supplier<R> supplier) {
     for (String key : keys) {
