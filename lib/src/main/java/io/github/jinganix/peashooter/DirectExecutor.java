@@ -19,7 +19,8 @@ package io.github.jinganix.peashooter;
 import java.util.concurrent.Executor;
 
 /** Execute {@link Runnable} in current thread. */
-enum DirectExecutor implements Executor {
+public enum DirectExecutor implements Executor {
+  /** singleton instance */
   INSTANCE;
 
   @Override

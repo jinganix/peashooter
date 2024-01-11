@@ -24,7 +24,6 @@ import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -49,11 +48,15 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 @DisplayName("OrderedTraceExecutor")
 class OrderedTraceExecutorTest {
 
+  static String SINGLE_THREAD_EXECUTOR = "SingleThreadExecutor";
+
   static OrderedTraceExecutor EXECUTOR = createExecutor(Executors.newFixedThreadPool(5));
 
   static OrderedTraceExecutor createExecutor(ExecutorService executorService) {
-    TraceExecutor traceExecutor = new TraceExecutor(executorService, new DefaultTracer());
-    return spy(new OrderedTraceExecutor(traceExecutor, new DefaultTaskQueues()));
+    Tracer tracer = new DefaultTracer();
+    TraceExecutor traceExecutor = new TraceExecutor(executorService, tracer);
+    DefaultTraceContextProvider supplier = new DefaultTraceContextProvider(traceExecutor);
+    return new OrderedTraceExecutor(new DefaultTaskQueues(), supplier);
   }
 
   static class TestArgumentsProvider implements ArgumentsProvider {
@@ -62,10 +65,32 @@ class OrderedTraceExecutorTest {
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
       return Stream.of(
           // TODO: virtual thread executor
-          Arguments.of("SingleThreadExecutor", createExecutor(Executors.newSingleThreadExecutor())),
+          Arguments.of(SINGLE_THREAD_EXECUTOR, createExecutor(Executors.newSingleThreadExecutor())),
           Arguments.of("CachedThreadPool", createExecutor(Executors.newCachedThreadPool())),
           Arguments.of("FixedThreadPool(2)", createExecutor(Executors.newFixedThreadPool(2))),
           Arguments.of("FixedThreadPool(10)", createExecutor(Executors.newFixedThreadPool(10))));
+    }
+  }
+
+  @Nested
+  @DisplayName("isShutdown")
+  class IsShutdown {
+
+    @Nested
+    @DisplayName("when called")
+    class WhenCalled {
+
+      @Test
+      @DisplayName("then return")
+      void thenReturn() {
+        TraceExecutor executor =
+            new TraceExecutor(Executors.newSingleThreadExecutor(), new DefaultTracer());
+        TaskQueues queues = mock(TaskQueues.class);
+        assertThat(
+                new OrderedTraceExecutor(queues, new DefaultTraceContextProvider(executor))
+                    .isShutdown())
+            .isFalse();
+      }
     }
   }
 
@@ -83,7 +108,7 @@ class OrderedTraceExecutorTest {
         TraceExecutor executor =
             new TraceExecutor(Executors.newSingleThreadExecutor(), new DefaultTracer());
         TaskQueues queues = mock(TaskQueues.class);
-        new OrderedTraceExecutor(executor, queues).remove("a");
+        new OrderedTraceExecutor(queues, new DefaultTraceContextProvider(executor)).remove("a");
         verify(queues, times(1)).remove("a");
       }
     }
@@ -152,7 +177,7 @@ class OrderedTraceExecutorTest {
       @ParameterizedTest(name = "{0}")
       @DisplayName("then run both concurrently")
       @ArgumentsSource(TestArgumentsProvider.class)
-      void thenRunBothConcurrently(String _name, OrderedTraceExecutor executor)
+      void thenRunBothConcurrently(String name, OrderedTraceExecutor executor)
           throws ExecutionException, InterruptedException {
         AtomicReference<Long> start1 = new AtomicReference<>();
         AtomicReference<Long> start2 = new AtomicReference<>();
@@ -174,7 +199,11 @@ class OrderedTraceExecutorTest {
                               sleep(100);
                             })))
             .get();
-        assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
+        if (name.equals(SINGLE_THREAD_EXECUTOR)) {
+          assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
+        } else {
+          assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
+        }
       }
     }
 
@@ -367,7 +396,7 @@ class OrderedTraceExecutorTest {
       @ParameterizedTest(name = "{0}")
       @DisplayName("then run both concurrently")
       @ArgumentsSource(TestArgumentsProvider.class)
-      void thenRunBothConcurrently(String _name, OrderedTraceExecutor executor)
+      void thenRunBothConcurrently(String name, OrderedTraceExecutor executor)
           throws ExecutionException, InterruptedException {
         AtomicReference<Long> start1 = new AtomicReference<>();
         AtomicReference<Long> start2 = new AtomicReference<>();
@@ -389,7 +418,11 @@ class OrderedTraceExecutorTest {
                               return sleep(100);
                             })))
             .get();
-        assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
+        if (name.equals(SINGLE_THREAD_EXECUTOR)) {
+          assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
+        } else {
+          assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
+        }
       }
     }
 

@@ -101,7 +101,7 @@ public class TaskQueue {
    */
   public boolean isEmpty() {
     synchronized (tasks) {
-      return tasks.isEmpty() && current == null;
+      return current == null;
     }
   }
 
