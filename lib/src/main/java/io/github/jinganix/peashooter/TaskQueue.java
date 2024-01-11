@@ -20,6 +20,7 @@ package io.github.jinganix.peashooter;
 
 import java.util.LinkedList;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +54,8 @@ public class TaskQueue {
           current = task.exec;
           try {
             task.exec.execute(runner);
-          } catch (RuntimeException e) {
+          } catch (RejectedExecutionException e) {
+            // tasks will not be invoked unless execute method is called again
             current = null;
           }
           return;
@@ -84,10 +86,10 @@ public class TaskQueue {
     }
     try {
       executor.execute(runner);
-    } catch (RuntimeException e) {
+    } catch (RejectedExecutionException e) {
       synchronized (tasks) {
         tasks.remove(task);
-        // TODO: tasks not empty
+        // tasks will not be invoked unless execute method is called again
         current = null;
         throw e;
       }
