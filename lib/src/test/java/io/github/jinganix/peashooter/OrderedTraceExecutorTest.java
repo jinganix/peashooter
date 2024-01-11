@@ -33,6 +33,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -69,6 +71,26 @@ class OrderedTraceExecutorTest {
           Arguments.of("CachedThreadPool", createExecutor(Executors.newCachedThreadPool())),
           Arguments.of("FixedThreadPool(2)", createExecutor(Executors.newFixedThreadPool(2))),
           Arguments.of("FixedThreadPool(10)", createExecutor(Executors.newFixedThreadPool(10))));
+    }
+  }
+
+  @Nested
+  @DisplayName("setTimeout")
+  class SetTimeout {
+
+    @Nested
+    @DisplayName("when set timeout to 1ms")
+    class WhenSetTimeoutTo1Ms {
+
+      @Test
+      @DisplayName("then sync execution throw exception")
+      void thenSyncExecutionThrowException() {
+        OrderedTraceExecutor executor = createExecutor(Executors.newSingleThreadExecutor());
+        executor.setTimeout(1, TimeUnit.MILLISECONDS);
+        assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
+            .isInstanceOf(RuntimeException.class)
+            .matches(t -> t.getCause() instanceof TimeoutException);
+      }
     }
   }
 
@@ -333,7 +355,7 @@ class OrderedTraceExecutorTest {
                           throw ex;
                         }))
             .isInstanceOf(RuntimeException.class)
-            .matches((Predicate<Throwable>) throwable -> throwable == ex);
+            .matches(t -> t == ex);
       }
     }
 

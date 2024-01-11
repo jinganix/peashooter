@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -126,7 +127,7 @@ class TaskQueueTest {
         void thenThenThrowException() {
           TaskQueue taskQueue = new TaskQueue();
           Executor executor = mock(Executor.class);
-          RuntimeException exception = new RuntimeException();
+          RejectedExecutionException exception = new RejectedExecutionException();
           doThrow(exception).when(executor).execute(any());
 
           assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
@@ -142,7 +143,7 @@ class TaskQueueTest {
         void thenCurrentIsNull() throws InterruptedException {
           TaskQueue taskQueue = new TaskQueue();
           Executor executor = mock(Executor.class);
-          doThrow(new RuntimeException()).when(executor).execute(any());
+          doThrow(new RejectedExecutionException()).when(executor).execute(any());
           Runnable runnable = mock(Runnable.class);
 
           CountDownLatch latch = new CountDownLatch(1);

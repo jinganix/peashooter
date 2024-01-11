@@ -21,6 +21,8 @@ package io.github.jinganix.peashooter;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
 /** Execute tasks sequentially and trace call chain. */
@@ -32,6 +34,12 @@ public class OrderedTraceExecutor {
   /** {@link TraceContextProvider} */
   protected final TraceContextProvider contextProvider;
 
+  /** Sync call timeout */
+  protected long timeout = 10;
+
+  /** {@link TimeUnit} for timeout */
+  protected TimeUnit timeUnit = TimeUnit.SECONDS;
+
   /**
    * Constructor.
    *
@@ -41,6 +49,17 @@ public class OrderedTraceExecutor {
   public OrderedTraceExecutor(TaskQueues queues, TraceContextProvider provider) {
     this.queues = queues;
     this.contextProvider = provider;
+  }
+
+  /**
+   * Set timeout config.
+   *
+   * @param timeout timeout value
+   * @param timeUnit {@link TimeUnit} for timeout
+   */
+  public void setTimeout(long timeout, TimeUnit timeUnit) {
+    this.timeout = timeout;
+    this.timeUnit = timeUnit;
   }
 
   /**
@@ -110,9 +129,8 @@ public class OrderedTraceExecutor {
               });
       TaskQueue queue = queues.get(key);
       queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
-      // TODO: timeout
-      future.get();
-    } catch (InterruptedException | ExecutionException e) {
+      future.get(timeout, timeUnit);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
       if (e instanceof ExecutionException) {
         throw (RuntimeException) e.getCause();
       }
@@ -148,8 +166,8 @@ public class OrderedTraceExecutor {
               });
       TaskQueue queue = queues.get(key);
       queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
-      return future.get();
-    } catch (InterruptedException | ExecutionException e) {
+      return future.get(timeout, timeUnit);
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
       if (e instanceof ExecutionException) {
         throw (RuntimeException) e.getCause();
       }
