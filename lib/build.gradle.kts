@@ -23,3 +23,10 @@ signAndPublish("peashooter") {
     description.set("Call tasks sequentially and prevent deadlocks")
   }
 }
+
+generateSourceTask(
+  projectDir.resolve("src/templates/ExecutorForTests.java.ftl"),
+  projectDir.resolve("src/test/java/io/github/jinganix/peashooter/ExecutorForTests.java"),
+  mapOf("java19" to JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_19))
+)
+tasks.compileTestJava { dependsOn("generateSource") }
