@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  schedule:
+    - cron: '0 10 * * *' # Once per day at 10am UTC
+  workflow_dispatch:
+
+jobs:
+  commitlint:
+    name: Check Commit Message
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check-skip.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v5
+        with:
+          configFile: package.json
+          failOnWarnings: true
+      - name: Skip when release
+        id: check-skip
+        env:
+          COMMIT_FILTER: "^chore: (bump version|release)"
+        run: |
+          readonly local last_commit_log=$(git log -1 --pretty=format:"%s")
+          echo "Last commit log: $last_commit_log"
+
+          readonly local filter_count=$(echo "$last_commit_log" | grep -c -E "$COMMIT_FILTER")
+
+          if [[ "$filter_count" -gt 0 ]]; then
+            echo "The last commit log \"$last_commit_log\" contains \"$COMMIT_FILTER\", stopping"
+            echo "skip=true" >> ${GITHUB_OUTPUT}
+          fi
+  build:
+    name: Build
+    needs: [commitlint]
+    if: ${{ needs.commitlint.outputs.skip != 'true' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        jdk: [8,11,21]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK ${{ matrix.jdk }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: ${{ matrix.jdk }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build with Gradle
+        run: ./gradlew clean build
+  coveralls:
+    name: Update Coveralls
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 8
+      - name: Build with Gradle
+        run: ./gradlew clean coverage
+      - name: Update Coveralls
+        run: ./gradlew coveralls
+  publish:
+    name: Publish
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+      GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
+      NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
+      NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 8
+      - name: Publish to Nexus
+        run: ./gradlew publish
