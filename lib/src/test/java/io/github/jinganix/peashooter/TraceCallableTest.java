@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
@@ -32,12 +33,24 @@ class TraceCallableTest {
   class Call {
 
     @Nested
+    @DisplayName("when delegate has no error")
+    class WhenDelegateHasNoError {
+
+      @Test
+      @DisplayName("then no exception")
+      void thenNoException() {
+        TraceCallable<Integer> traceCallable = new TraceCallable<>(new DefaultTracer(), () -> 0);
+        assertThatCode(traceCallable::call).doesNotThrowAnyException();
+      }
+    }
+
+    @Nested
     @DisplayName("when delegate has error")
     class WhenDelegateHasError {
 
       @Test
-      @DisplayName("then throw the error")
-      void thenThrowTheError() {
+      @DisplayName("then throw exception")
+      void thenThrowException() {
         RuntimeException exception = new RuntimeException();
         TraceCallable<Integer> traceCallable =
             new TraceCallable<>(
