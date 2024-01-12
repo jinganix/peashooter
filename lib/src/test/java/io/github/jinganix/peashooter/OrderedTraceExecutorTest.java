@@ -21,8 +21,10 @@ package io.github.jinganix.peashooter;
 import static io.github.jinganix.peashooter.TestUtils.sleep;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -30,6 +32,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -45,16 +48,19 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.mockito.MockedConstruction;
 
 @DisplayName("OrderedTraceExecutor")
 class OrderedTraceExecutorTest {
+
+  static String DIRECT_EXECUTOR = "DirectExecutor";
 
   static String SINGLE_THREAD_EXECUTOR = "SingleThreadExecutor";
 
   static Tracer TRACER = new DefaultTracer();
 
-  static OrderedTraceExecutor createExecutor(ExecutorService executorService) {
-    TraceExecutor traceExecutor = new TraceExecutor(executorService, TRACER);
+  static OrderedTraceExecutor createExecutor(Executor executor) {
+    TraceExecutor traceExecutor = new TraceExecutor(executor, TRACER);
     DefaultTraceContextProvider supplier = new DefaultTraceContextProvider(traceExecutor);
     return new OrderedTraceExecutor(new DefaultTaskQueues(), supplier);
   }
@@ -69,6 +75,7 @@ class OrderedTraceExecutorTest {
   }
 
   abstract static class SyncCallable {
+
     final OrderedTraceExecutor executor;
 
     SyncCallable(OrderedTraceExecutor executor) {
@@ -110,6 +117,41 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
+  @DisplayName("constructor")
+  class Constructor {
+
+    @Nested
+    @DisplayName("when ExecutorService provided")
+    class WhenExecutorServiceProvided {
+
+      @Test
+      @DisplayName("then context provider concreted")
+      void thenContextProviderConcreted() {
+        try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
+          assertThatCode(() -> new OrderedTraceExecutor(mock(ExecutorService.class)))
+              .doesNotThrowAnyException();
+          assertThat(provider.constructed().size()).isEqualTo(1);
+        }
+      }
+    }
+
+    @Nested
+    @DisplayName("when TraceExecutor provided")
+    class WhenTraceExecutorProvided {
+
+      @Test
+      @DisplayName("then context provider concreted")
+      void thenContextProviderConcreted() {
+        try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
+          assertThatCode(() -> new OrderedTraceExecutor(mock(TraceExecutor.class)))
+              .doesNotThrowAnyException();
+          assertThat(provider.constructed().size()).isEqualTo(0);
+        }
+      }
+    }
+  }
+
+  @Nested
   @DisplayName("setTimeout")
   class SetTimeout {
 
@@ -130,28 +172,6 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("isShutdown")
-  class IsShutdown {
-
-    @Nested
-    @DisplayName("when called")
-    class WhenCalled {
-
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        TraceExecutor executor =
-            new TraceExecutor(Executors.newSingleThreadExecutor(), new DefaultTracer());
-        TaskQueues queues = mock(TaskQueues.class);
-        assertThat(
-                new OrderedTraceExecutor(queues, new DefaultTraceContextProvider(executor))
-                    .isShutdown())
-            .isFalse();
-      }
-    }
-  }
-
-  @Nested
   @DisplayName("remove")
   class Remove {
 
@@ -162,8 +182,7 @@ class OrderedTraceExecutorTest {
       @Test
       @DisplayName("then removed")
       void thenRemoved() {
-        TraceExecutor executor =
-            new TraceExecutor(Executors.newSingleThreadExecutor(), new DefaultTracer());
+        TraceExecutor executor = new TraceExecutor(mock(Executor.class), new DefaultTracer());
         TaskQueues queues = mock(TaskQueues.class);
         new OrderedTraceExecutor(queues, new DefaultTraceContextProvider(executor)).remove("a");
         verify(queues, times(1)).remove("a");
@@ -182,10 +201,14 @@ class OrderedTraceExecutorTest {
       @ParameterizedTest(name = "{0}")
       @DisplayName("then call task async")
       @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenCallDelegate(String _name, OrderedTraceExecutor executor) {
+      void thenCallDelegate(String name, OrderedTraceExecutor executor) {
         long start = System.currentTimeMillis();
         executor.executeAsync("a", () -> sleep(100));
-        assertThat(System.currentTimeMillis() - start).isLessThan(100);
+        if (DIRECT_EXECUTOR.equals(name)) {
+          assertThat(System.currentTimeMillis() - start).isGreaterThanOrEqualTo(100);
+        } else {
+          assertThat(System.currentTimeMillis() - start).isLessThan(100);
+        }
       }
     }
   }
@@ -256,7 +279,7 @@ class OrderedTraceExecutorTest {
                               return sleep(100);
                             })))
             .get();
-        if (name.equals(SINGLE_THREAD_EXECUTOR)) {
+        if (SINGLE_THREAD_EXECUTOR.equals(name)) {
           assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
         } else {
           assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
@@ -404,9 +427,17 @@ class OrderedTraceExecutorTest {
       @DisplayName("then throw exception")
       @ArgumentsSource(CallableArgumentsProvider.class)
       void thenThrowException(String _name, String _key, SyncCallable callable) {
-        callable.executor.executeAsync("a", () -> sleep(200));
+        createExecutor(Executors.newSingleThreadExecutor()).executeAsync("a", () -> sleep(200));
         Thread.currentThread().interrupt();
-        assertThatThrownBy(() -> callable.call("a", () -> 0L)).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(
+                () ->
+                    callable.call(
+                        "a",
+                        () -> {
+                          sleep(100);
+                          return 0L;
+                        }))
+            .isInstanceOf(RuntimeException.class);
       }
     }
   }

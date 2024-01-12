@@ -35,11 +35,6 @@ public class DefaultTraceContextProvider implements TraceContextProvider {
   }
 
   @Override
-  public boolean isShutdown() {
-    return this.traceExecutor.isShutdown();
-  }
-
-  @Override
   public Tracer getTracer() {
     return traceExecutor.getTracer();
   }

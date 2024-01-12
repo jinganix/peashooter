@@ -24,13 +24,6 @@ import java.util.concurrent.Executor;
 public interface TraceContextProvider {
 
   /**
-   * Check whether context is shutdown.
-   *
-   * @return true when context is shutdown.
-   */
-  boolean isShutdown();
-
-  /**
    * Get the {@link Tracer}.
    *
    * @return {@link Tracer}

@@ -18,29 +18,22 @@
 
 package io.github.jinganix.peashooter;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Executor;
 
 /** Executor with tracing. */
-public class TraceExecutor implements ExecutorService {
+public class TraceExecutor implements Executor {
 
-  private final ExecutorService delegate;
+  private final Executor delegate;
 
   private final Tracer tracer;
 
   /**
    * Constructor.
    *
-   * @param delegate delegated {@link ExecutorService}
+   * @param delegate delegated {@link Executor}
    * @param tracer {@link Tracer}
    */
-  public TraceExecutor(ExecutorService delegate, Tracer tracer) {
+  public TraceExecutor(Executor delegate, Tracer tracer) {
     this.delegate = delegate;
     this.tracer = tracer;
   }
@@ -70,79 +63,5 @@ public class TraceExecutor implements ExecutorService {
     } else {
       this.delegate.execute(new TraceRunnable(tracer, runnable));
     }
-  }
-
-  @Override
-  public void shutdown() {
-    this.delegate.shutdown();
-  }
-
-  @Override
-  public List<Runnable> shutdownNow() {
-    return this.delegate.shutdownNow();
-  }
-
-  @Override
-  public boolean isShutdown() {
-    return this.delegate.isShutdown();
-  }
-
-  @Override
-  public boolean isTerminated() {
-    return this.delegate.isTerminated();
-  }
-
-  @Override
-  public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-    return this.delegate.awaitTermination(timeout, unit);
-  }
-
-  @Override
-  public <T> Future<T> submit(Callable<T> task) {
-    if (task instanceof TraceCallable) {
-      return this.delegate.submit(task);
-    }
-    return this.delegate.submit(new TraceCallable<>(tracer, task));
-  }
-
-  @Override
-  public <T> Future<T> submit(Runnable task, T result) {
-    if (task instanceof TraceRunnable) {
-      return this.delegate.submit(task, result);
-    }
-    return this.delegate.submit(new TraceRunnable(tracer, task), result);
-  }
-
-  @Override
-  public Future<?> submit(Runnable task) {
-    if (task instanceof TraceRunnable) {
-      return this.delegate.submit(task);
-    }
-    return this.delegate.submit(new TraceRunnable(tracer, task));
-  }
-
-  @Override
-  public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks)
-      throws InterruptedException {
-    return this.delegate.invokeAll(tasks);
-  }
-
-  @Override
-  public <T> List<Future<T>> invokeAll(
-      Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
-      throws InterruptedException {
-    return this.delegate.invokeAll(tasks, timeout, unit);
-  }
-
-  @Override
-  public <T> T invokeAny(Collection<? extends Callable<T>> tasks)
-      throws InterruptedException, ExecutionException {
-    return this.delegate.invokeAny(tasks);
-  }
-
-  @Override
-  public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
-      throws InterruptedException, ExecutionException, TimeoutException {
-    return this.delegate.invokeAny(tasks, timeout, unit);
   }
 }

@@ -32,7 +32,6 @@ import static org.mockito.Mockito.verify;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +42,7 @@ import org.junit.jupiter.api.Test;
 @DisplayName("OrderedTaskQueue")
 class TaskQueueTest {
 
-  ExecutorService executor() {
+  Executor executor() {
     return Executors.newSingleThreadExecutor();
   }
 
@@ -59,7 +58,7 @@ class TaskQueueTest {
       @DisplayName("then run tasks sequentially")
       void thenRunTasksSequentially() {
         TaskQueue taskQueue = new TaskQueue();
-        ExecutorService executor = executor();
+        Executor executor = executor();
         taskQueue.execute(executor, () -> sleep(100));
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
