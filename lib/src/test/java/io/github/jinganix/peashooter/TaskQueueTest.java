@@ -39,10 +39,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("OrderedTaskQueue")
+@DisplayName("TaskQueue")
 class TaskQueueTest {
 
-  Executor executor() {
+  Executor createExecutor() {
     return Executors.newSingleThreadExecutor();
   }
 
@@ -58,7 +58,7 @@ class TaskQueueTest {
       @DisplayName("then run tasks sequentially")
       void thenRunTasksSequentially() {
         TaskQueue taskQueue = new TaskQueue();
-        Executor executor = executor();
+        Executor executor = createExecutor();
         taskQueue.execute(executor, () -> sleep(100));
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
@@ -78,10 +78,10 @@ class TaskQueueTest {
       @DisplayName("then run tasks sequentially")
       void thenRunTasksSequentially() {
         TaskQueue taskQueue = new TaskQueue();
-        taskQueue.execute(executor(), () -> sleep(100));
+        taskQueue.execute(createExecutor(), () -> sleep(100));
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
-        taskQueue.execute(executor(), () -> ref.set(System.currentTimeMillis() - millis));
+        taskQueue.execute(createExecutor(), () -> ref.set(System.currentTimeMillis() - millis));
 
         await()
             .atMost(Duration.ofSeconds(1))
@@ -98,14 +98,14 @@ class TaskQueueTest {
       void thenRunTasksSequentially() {
         TaskQueue taskQueue = new TaskQueue();
         taskQueue.execute(
-            executor(),
+            createExecutor(),
             () -> {
               sleep(100);
               throw new RuntimeException("error");
             });
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
-        taskQueue.execute(executor(), () -> ref.set(System.currentTimeMillis() - millis));
+        taskQueue.execute(createExecutor(), () -> ref.set(System.currentTimeMillis() - millis));
 
         await()
             .atMost(Duration.ofSeconds(1))

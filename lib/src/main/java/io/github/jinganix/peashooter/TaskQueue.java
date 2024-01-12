@@ -40,33 +40,46 @@ public class TaskQueue {
     runner = this::run;
   }
 
-  private void run() {
+  /** Run tasks. */
+  protected void run() {
     for (; ; ) {
-      final Task task;
-      synchronized (tasks) {
-        task = tasks.poll();
-        if (task == null) {
-          current = null;
-          return;
-        }
-        if (task.exec != current) {
-          tasks.addFirst(task);
-          current = task.exec;
-          try {
-            task.exec.execute(runner);
-          } catch (RejectedExecutionException e) {
-            // tasks will not be invoked unless execute method is called again
-            current = null;
-          }
-          return;
-        }
-      }
-      try {
-        task.runnable.run();
-      } catch (Throwable t) {
-        log.error("Caught unexpected Throwable", t);
+      if (runTask()) {
+        return;
       }
     }
+  }
+
+  /**
+   * Poll a task and run it.
+   *
+   * @return true if it should be stopped
+   */
+  protected boolean runTask() {
+    final Task task;
+    synchronized (tasks) {
+      task = tasks.poll();
+      if (task == null) {
+        current = null;
+        return true;
+      }
+      if (task.exec != current) {
+        tasks.addFirst(task);
+        current = task.exec;
+        try {
+          task.exec.execute(runner);
+        } catch (RejectedExecutionException e) {
+          // tasks will not be invoked unless execute method is called again
+          current = null;
+        }
+        return true;
+      }
+    }
+    try {
+      task.runnable.run();
+    } catch (Throwable t) {
+      log.error("Caught unexpected Throwable", t);
+    }
+    return false;
   }
 
   /**
