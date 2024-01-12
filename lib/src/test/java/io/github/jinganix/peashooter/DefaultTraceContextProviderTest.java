@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class DefaultTraceContextProviderTest {
 
   Tracer tracer = mock(Tracer.class);
 
-  TraceExecutor traceExecutor = new TraceExecutor(mock(ExecutorService.class), tracer);
+  TraceExecutor traceExecutor = new TraceExecutor(mock(Executor.class), tracer);
 
   DefaultTraceContextProvider provider = new DefaultTraceContextProvider(traceExecutor);
 

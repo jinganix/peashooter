@@ -21,6 +21,7 @@ package io.github.jinganix.peashooter;
 import java.util.Collection;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
@@ -43,6 +44,21 @@ public class OrderedTraceExecutor {
   /**
    * Constructor.
    *
+   * @param executor {@link Executor}
+   */
+  public OrderedTraceExecutor(Executor executor) {
+    this.queues = new DefaultTaskQueues();
+    if (TraceExecutor.class.isAssignableFrom(executor.getClass())) {
+      this.contextProvider = new DefaultTraceContextProvider((TraceExecutor) executor);
+    } else {
+      TraceExecutor traceExecutor = new TraceExecutor(executor, new DefaultTracer());
+      this.contextProvider = new DefaultTraceContextProvider(traceExecutor);
+    }
+  }
+
+  /**
+   * Constructor.
+   *
    * @param queues {@link TaskQueues}
    * @param provider {@link TraceContextProvider}
    */
@@ -60,15 +76,6 @@ public class OrderedTraceExecutor {
   public void setTimeout(long timeout, TimeUnit timeUnit) {
     this.timeout = timeout;
     this.timeUnit = timeUnit;
-  }
-
-  /**
-   * Returns true if this executor has been shut down.
-   *
-   * @return true if this executor has been shut down
-   */
-  public boolean isShutdown() {
-    return contextProvider.isShutdown();
   }
 
   /**
