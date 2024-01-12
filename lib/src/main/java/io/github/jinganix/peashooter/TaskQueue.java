@@ -29,11 +29,14 @@ public class TaskQueue {
 
   private static final Logger log = LoggerFactory.getLogger(TaskQueue.class);
 
-  private final LinkedList<Task> tasks = new LinkedList<>();
+  /** task list */
+  protected final LinkedList<Task> tasks = new LinkedList<>();
 
-  private final Runnable runner;
+  /** queue runner */
+  protected final Runnable runner;
 
-  private Executor current;
+  /** current {@link Executor} */
+  protected Executor current;
 
   /** Constructor. */
   public TaskQueue() {
@@ -43,43 +46,31 @@ public class TaskQueue {
   /** Run tasks. */
   protected void run() {
     for (; ; ) {
-      if (runTask()) {
-        return;
-      }
-    }
-  }
-
-  /**
-   * Poll a task and run it.
-   *
-   * @return true if it should be stopped
-   */
-  protected boolean runTask() {
-    final Task task;
-    synchronized (tasks) {
-      task = tasks.poll();
-      if (task == null) {
-        current = null;
-        return true;
-      }
-      if (task.exec != current) {
-        tasks.addFirst(task);
-        current = task.exec;
-        try {
-          task.exec.execute(runner);
-        } catch (RejectedExecutionException e) {
-          // tasks will not be invoked unless execute method is called again
+      final Task task;
+      synchronized (tasks) {
+        task = tasks.poll();
+        if (task == null) {
           current = null;
+          return;
         }
-        return true;
+        if (task.exec != current) {
+          tasks.addFirst(task);
+          current = task.exec;
+          try {
+            task.exec.execute(runner);
+          } catch (RejectedExecutionException e) {
+            // tasks will not be invoked unless execute method is called again
+            current = null;
+          }
+          return;
+        }
+      }
+      try {
+        task.runnable.run();
+      } catch (Throwable t) {
+        log.error("Caught unexpected Throwable", t);
       }
     }
-    try {
-      task.runnable.run();
-    } catch (Throwable t) {
-      log.error("Caught unexpected Throwable", t);
-    }
-    return false;
   }
 
   /**
@@ -120,12 +111,21 @@ public class TaskQueue {
     }
   }
 
-  private static class Task {
+  /** Task. */
+  protected static class Task {
 
-    private final Runnable runnable;
+    /** {@link Runnable} */
+    protected final Runnable runnable;
 
-    private final Executor exec;
+    /** {@link Executor} for this task */
+    protected final Executor exec;
 
+    /**
+     * Constructor.
+     *
+     * @param runnable {@link Runnable}
+     * @param exec {@link Executor}
+     */
     public Task(Runnable runnable, Executor exec) {
       this.runnable = runnable;
       this.exec = exec;

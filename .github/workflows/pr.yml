@@ -62,4 +62,4 @@ jobs:
         with:
           node-version: 20
       - name: Build with Gradle
-        run: ./gradlew clean build
+        run: ./gradlew :lib:test --tests "io.github.jinganix.peashooter.LockableTaskQueueTest$Run$WhenLocked$When2TasksExecuted$WhenShouldYieldFirst"

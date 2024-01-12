@@ -18,6 +18,8 @@
 
 package io.github.jinganix.peashooter;
 
+import java.util.concurrent.Callable;
+
 public class TestUtils {
 
   public static long sleep(long millis) {
@@ -27,5 +29,25 @@ public class TestUtils {
       throw new RuntimeException(e);
     }
     return millis;
+  }
+
+  public static <T> T uncheckedCall(Callable<T> callable) {
+    try {
+      return callable.call();
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static void uncheckedRun(ThrowingRunnable runnable) {
+    try {
+      runnable.run();
+    } catch (RuntimeException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 }

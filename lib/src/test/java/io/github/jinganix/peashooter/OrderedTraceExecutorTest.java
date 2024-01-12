@@ -20,6 +20,7 @@ package io.github.jinganix.peashooter;
 
 import static io.github.jinganix.peashooter.TestUtils.sleep;
 import static java.util.concurrent.CompletableFuture.runAsync;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
@@ -34,7 +35,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,10 +59,10 @@ class OrderedTraceExecutorTest {
 
   static Tracer TRACER = new DefaultTracer();
 
-  static OrderedTraceExecutor createExecutor(Executor executor) {
+  static OrderedTraceExecutor createExecutor(Executor executor, TaskQueues taskQueues) {
     TraceExecutor traceExecutor = new TraceExecutor(executor, TRACER);
     DefaultTraceContextProvider supplier = new DefaultTraceContextProvider(traceExecutor);
-    return new OrderedTraceExecutor(new DefaultTaskQueues(), supplier);
+    return new OrderedTraceExecutor(taskQueues, supplier);
   }
 
   static class ExecutorArgumentsProvider implements ArgumentsProvider {
@@ -70,7 +70,8 @@ class OrderedTraceExecutorTest {
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
       return ExecutorForTests.executors().entrySet().stream()
-          .map(x -> Arguments.of(x.getKey(), createExecutor(x.getValue())));
+          .map(
+              x -> Arguments.of(x.getKey(), createExecutor(x.getValue(), new DefaultTaskQueues())));
     }
   }
 
@@ -87,31 +88,49 @@ class OrderedTraceExecutorTest {
 
   static class CallableArgumentsProvider implements ArgumentsProvider {
 
+    SyncCallable createExecuteSync(Executor executor, TaskQueues taskQueues) {
+      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueues);
+      return new SyncCallable(traceExecutor) {
+        @Override
+        Long call(String key, Supplier<Long> supplier) {
+          this.executor.executeSync(key, supplier::get);
+          return 0L;
+        }
+      };
+    }
+
+    SyncCallable createSupply(Executor executor, TaskQueues taskQueues) {
+      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueues);
+      return new SyncCallable(traceExecutor) {
+        @Override
+        Long call(String key, Supplier<Long> supplier) {
+          return this.executor.supply(key, supplier);
+        }
+      };
+    }
+
     @Override
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
       return ExecutorForTests.executors().entrySet().stream()
           .map(
-              x -> {
-                OrderedTraceExecutor executor = createExecutor(x.getValue());
-                SyncCallable call1 =
-                    new SyncCallable(executor) {
-                      @Override
-                      Long call(String key, Supplier<Long> supplier) {
-                        this.executor.executeSync(key, supplier::get);
-                        return 0L;
-                      }
-                    };
-                SyncCallable call2 =
-                    new SyncCallable(executor) {
-                      @Override
-                      Long call(String key, Supplier<Long> supplier) {
-                        return this.executor.supply(key, supplier);
-                      }
-                    };
-                return Arrays.asList(
-                    Arguments.of(x.getKey(), "executeSync", call1),
-                    Arguments.of(x.getKey(), "supply", call2));
-              })
+              x ->
+                  Arrays.asList(
+                      Arguments.of(
+                          x.getKey(),
+                          "executeSync",
+                          createExecuteSync(x.getValue(), new DefaultTaskQueues())),
+                      Arguments.of(
+                          x.getKey(),
+                          "executeSync.lockable",
+                          createExecuteSync(x.getValue(), new LockableTaskQueues())),
+                      Arguments.of(
+                          x.getKey(),
+                          "supply",
+                          createSupply(x.getValue(), new DefaultTaskQueues())),
+                      Arguments.of(
+                          x.getKey(),
+                          "supply.lockable",
+                          createSupply(x.getValue(), new LockableTaskQueues()))))
           .flatMap(List::stream);
     }
   }
@@ -162,7 +181,8 @@ class OrderedTraceExecutorTest {
       @Test
       @DisplayName("then sync execution throw exception")
       void thenSyncExecutionThrowException() {
-        OrderedTraceExecutor executor = createExecutor(Executors.newSingleThreadExecutor());
+        OrderedTraceExecutor executor =
+            createExecutor(newSingleThreadExecutor(), new DefaultTaskQueues());
         executor.setTimeout(1, TimeUnit.MILLISECONDS);
         assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
             .isInstanceOf(RuntimeException.class)
@@ -313,7 +333,7 @@ class OrderedTraceExecutorTest {
 
       void executeSync(Runnable runnable) {
         try {
-          runAsync(runnable, Executors.newSingleThreadExecutor()).get();
+          runAsync(runnable, newSingleThreadExecutor()).get();
         } catch (InterruptedException | ExecutionException e) {
           throw new RuntimeException(e);
         }
@@ -427,7 +447,8 @@ class OrderedTraceExecutorTest {
       @DisplayName("then throw exception")
       @ArgumentsSource(CallableArgumentsProvider.class)
       void thenThrowException(String _name, String _key, SyncCallable callable) {
-        createExecutor(Executors.newSingleThreadExecutor()).executeAsync("a", () -> sleep(200));
+        createExecutor(newSingleThreadExecutor(), new DefaultTaskQueues())
+            .executeAsync("a", () -> sleep(200));
         Thread.currentThread().interrupt();
         assertThatThrownBy(
                 () ->

@@ -18,8 +18,16 @@
 
 package io.github.jinganix.peashooter;
 
+import java.util.concurrent.RejectedExecutionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** Ordered task queue that could be locked. */
 public abstract class LockableTaskQueue extends TaskQueue {
+
+  private static final Logger log = LoggerFactory.getLogger(TaskQueue.class);
+
+  private boolean locked = false;
 
   /** Constructor. */
   public LockableTaskQueue() {
@@ -29,20 +37,54 @@ public abstract class LockableTaskQueue extends TaskQueue {
   @Override
   protected void run() {
     int index = 0;
-    while (tryLock(index)) {
-      try {
-        for (; ; index++) {
-          if (super.runTask()) {
-            return;
-          }
-          if (shouldYield(index)) {
+    while (cacheTryLock(index)) {
+      for (; ; ) {
+        final Task task;
+        synchronized (tasks) {
+          task = tasks.poll();
+          if (task == null) {
+            current = null;
             break;
           }
+          if (task.exec != current) {
+            tasks.addFirst(task);
+            current = task.exec;
+            try {
+              task.exec.execute(runner);
+            } catch (RejectedExecutionException e) {
+              // tasks will not be invoked unless execute method is called again
+              current = null;
+            }
+            return;
+          }
         }
-      } finally {
-        unlock();
+        try {
+          task.runnable.run();
+        } catch (Throwable t) {
+          log.error("Caught unexpected Throwable", t);
+        }
+        if (shouldYield(index)) {
+          break;
+        }
+      }
+      cacheUnlock();
+      if (isEmpty()) {
+        return;
       }
     }
+  }
+
+  private boolean cacheTryLock(int index) {
+    if (this.locked) {
+      return true;
+    }
+    this.locked = tryLock(index);
+    return this.locked;
+  }
+
+  private void cacheUnlock() {
+    unlock();
+    this.locked = false;
   }
 
   /**

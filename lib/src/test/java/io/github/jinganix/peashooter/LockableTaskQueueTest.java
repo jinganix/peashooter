@@ -19,7 +19,15 @@
 package io.github.jinganix.peashooter;
 
 import static io.github.jinganix.peashooter.TestUtils.sleep;
+import static io.github.jinganix.peashooter.TestUtils.uncheckedRun;
+import static java.util.concurrent.Executors.newSingleThreadExecutor;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -27,7 +35,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -127,23 +138,25 @@ class LockableTaskQueueTest {
           CountDownLatch latch1 = new CountDownLatch(1);
           CountDownLatch latch2 = new CountDownLatch(1);
           CountDownLatch latch3 = new CountDownLatch(1);
-          Executors.newSingleThreadExecutor()
-              .submit(
+
+          new Thread(
                   () ->
                       taskQueue.execute(
-                          DirectExecutor.INSTANCE,
-                          () -> {
+                          command -> {
                             latch1.countDown();
-                            try {
-                              latch2.await();
-                              sleep(100);
-                            } catch (InterruptedException e) {
-                              throw new RuntimeException(e);
-                            }
-                          }));
+                            uncheckedRun(latch2::await);
+                            command.run();
+                          },
+                          () -> {}))
+              .start();
           latch1.await();
 
-          taskQueue.execute(DirectExecutor.INSTANCE, latch3::countDown);
+          taskQueue.execute(
+              command -> {
+                command.run();
+                latch3.countDown();
+              },
+              () -> {});
           latch2.countDown();
           latch3.await();
         }
@@ -184,6 +197,88 @@ class LockableTaskQueueTest {
             verify(taskQueue, times(1)).tryLock(anyInt());
             verify(taskQueue, times(1)).unlock();
           }
+        }
+      }
+    }
+
+    @Nested
+    @DisplayName("when first task throw errors")
+    class WhenFirstTaskThrowErrors {
+
+      @Test
+      @DisplayName("then run tasks sequentially")
+      void thenRunTasksSequentially() throws InterruptedException {
+        LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+        when(taskQueue.tryLock(anyInt())).thenReturn(true);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        taskQueue.execute(
+            newSingleThreadExecutor(),
+            () -> {
+              sleep(100);
+              throw new RuntimeException("error");
+            });
+
+        AtomicReference<Long> ref = new AtomicReference<>();
+        long millis = System.currentTimeMillis();
+        taskQueue.execute(
+            newSingleThreadExecutor(),
+            () -> {
+              ref.set(System.currentTimeMillis() - millis);
+              latch.countDown();
+            });
+
+        latch.await();
+        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
+      }
+    }
+
+    @Nested
+    @DisplayName("when executor throw errors")
+    class WhenExecutorThrowErrors {
+
+      @Nested
+      @DisplayName("when tasks is empty")
+      class WhenTasksIsEmpty {
+
+        @Test
+        @DisplayName("then throw exception")
+        void thenThenThrowException() {
+          LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+          when(taskQueue.tryLock(anyInt())).thenReturn(true);
+
+          Executor executor = mock(Executor.class);
+          RejectedExecutionException exception = new RejectedExecutionException();
+          doThrow(exception).when(executor).execute(any());
+
+          assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
+        }
+      }
+
+      @Nested
+      @DisplayName("when tasks is not empty")
+      class WhenTasksIsNotEmpty {
+
+        @Test
+        @DisplayName("then current is null")
+        void thenCurrentIsNull() throws InterruptedException {
+          LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+          when(taskQueue.tryLock(anyInt())).thenReturn(true);
+          Executor executor = mock(Executor.class);
+          doThrow(new RejectedExecutionException()).when(executor).execute(any());
+          Runnable runnable = mock(Runnable.class);
+
+          CountDownLatch latch = new CountDownLatch(1);
+          taskQueue.execute(
+              Executors.newSingleThreadExecutor(),
+              () -> {
+                latch.countDown();
+                sleep(200);
+              });
+          latch.await();
+          taskQueue.execute(executor, runnable);
+          verify(executor, after(500).times(1)).execute(any());
+          verify(runnable, never()).run();
         }
       }
     }
