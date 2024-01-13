@@ -20,8 +20,8 @@ package io.github.jinganix.peashooter;
 
 import java.util.concurrent.Executor;
 
-/** Provide trace executor context. */
-public class DefaultTraceContextProvider implements TraceContextProvider {
+/** Default implementation for {@link ExecutorSelector}. */
+public class DefaultExecutorSelector implements ExecutorSelector {
 
   private final TraceExecutor traceExecutor;
 
@@ -30,13 +30,8 @@ public class DefaultTraceContextProvider implements TraceContextProvider {
    *
    * @param traceExecutor {@link TraceExecutor}
    */
-  public DefaultTraceContextProvider(TraceExecutor traceExecutor) {
+  public DefaultExecutorSelector(TraceExecutor traceExecutor) {
     this.traceExecutor = traceExecutor;
-  }
-
-  @Override
-  public Tracer getTracer() {
-    return traceExecutor.getTracer();
   }
 
   @Override

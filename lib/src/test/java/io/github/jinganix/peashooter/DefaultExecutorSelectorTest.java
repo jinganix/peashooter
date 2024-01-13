@@ -27,8 +27,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("DefaultTraceContextProvider")
-class DefaultTraceContextProviderTest {
+@DisplayName("DefaultTraceExecutorProvider")
+class DefaultExecutorSelectorTest {
 
   TaskQueue queue = mock(TaskQueue.class);
 
@@ -38,7 +38,7 @@ class DefaultTraceContextProviderTest {
 
   TraceExecutor traceExecutor = new TraceExecutor(mock(Executor.class), tracer);
 
-  DefaultTraceContextProvider provider = new DefaultTraceContextProvider(traceExecutor);
+  DefaultExecutorSelector provider = new DefaultExecutorSelector(traceExecutor);
 
   @Nested
   @DisplayName("getExecutor")

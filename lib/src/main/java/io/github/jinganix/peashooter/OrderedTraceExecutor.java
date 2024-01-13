@@ -32,8 +32,11 @@ public class OrderedTraceExecutor {
   /** {@link TaskQueues} */
   protected final TaskQueues queues;
 
-  /** {@link TraceContextProvider} */
-  protected final TraceContextProvider contextProvider;
+  /** {@link ExecutorSelector} */
+  protected final ExecutorSelector selector;
+
+  /** {@link Tracer} */
+  protected final Tracer tracer;
 
   /** Sync call timeout */
   protected long timeout = 10;
@@ -49,10 +52,13 @@ public class OrderedTraceExecutor {
   public OrderedTraceExecutor(Executor executor) {
     this.queues = new DefaultTaskQueues();
     if (TraceExecutor.class.isAssignableFrom(executor.getClass())) {
-      this.contextProvider = new DefaultTraceContextProvider((TraceExecutor) executor);
+      TraceExecutor traceExecutor = (TraceExecutor) executor;
+      this.tracer = traceExecutor.getTracer();
+      this.selector = new DefaultExecutorSelector(traceExecutor);
     } else {
-      TraceExecutor traceExecutor = new TraceExecutor(executor, new DefaultTracer());
-      this.contextProvider = new DefaultTraceContextProvider(traceExecutor);
+      this.tracer = new DefaultTracer();
+      TraceExecutor traceExecutor = new TraceExecutor(executor, this.tracer);
+      this.selector = new DefaultExecutorSelector(traceExecutor);
     }
   }
 
@@ -60,11 +66,13 @@ public class OrderedTraceExecutor {
    * Constructor.
    *
    * @param queues {@link TaskQueues}
-   * @param provider {@link TraceContextProvider}
+   * @param selector {@link ExecutorSelector}
+   * @param tracer {@link Tracer}
    */
-  public OrderedTraceExecutor(TaskQueues queues, TraceContextProvider provider) {
+  public OrderedTraceExecutor(TaskQueues queues, ExecutorSelector selector, Tracer tracer) {
     this.queues = queues;
-    this.contextProvider = provider;
+    this.selector = selector;
+    this.tracer = tracer;
   }
 
   /**
@@ -84,7 +92,7 @@ public class OrderedTraceExecutor {
    * @return {@link Tracer}
    */
   public Tracer getTracer() {
-    return contextProvider.getTracer();
+    return tracer;
   }
 
   /**
@@ -105,7 +113,7 @@ public class OrderedTraceExecutor {
   public void executeAsync(String key, Runnable task) {
     TraceRunnable runnable = new OrderedTraceRunnable(getTracer(), key, false, task);
     TaskQueue queue = queues.get(key);
-    queue.execute(contextProvider.getExecutor(queue, runnable, false), runnable);
+    queue.execute(selector.getExecutor(queue, runnable, false), runnable);
   }
 
   /**
@@ -135,7 +143,7 @@ public class OrderedTraceExecutor {
                 }
               });
       TaskQueue queue = queues.get(key);
-      queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
+      queue.execute(selector.getExecutor(queue, runnable, true), runnable);
       future.get(timeout, timeUnit);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       if (e instanceof ExecutionException) {
@@ -172,7 +180,7 @@ public class OrderedTraceExecutor {
                 }
               });
       TaskQueue queue = queues.get(key);
-      queue.execute(contextProvider.getExecutor(queue, runnable, true), runnable);
+      queue.execute(selector.getExecutor(queue, runnable, true), runnable);
       return future.get(timeout, timeUnit);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
       if (e instanceof ExecutionException) {

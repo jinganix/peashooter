@@ -61,8 +61,8 @@ class OrderedTraceExecutorTest {
 
   static OrderedTraceExecutor createExecutor(Executor executor, TaskQueues taskQueues) {
     TraceExecutor traceExecutor = new TraceExecutor(executor, TRACER);
-    DefaultTraceContextProvider supplier = new DefaultTraceContextProvider(traceExecutor);
-    return new OrderedTraceExecutor(taskQueues, supplier);
+    DefaultExecutorSelector selector = new DefaultExecutorSelector(traceExecutor);
+    return new OrderedTraceExecutor(taskQueues, selector, TRACER);
   }
 
   static class ExecutorArgumentsProvider implements ArgumentsProvider {
@@ -204,7 +204,7 @@ class OrderedTraceExecutorTest {
       void thenRemoved() {
         TraceExecutor executor = new TraceExecutor(mock(Executor.class), new DefaultTracer());
         TaskQueues queues = mock(TaskQueues.class);
-        new OrderedTraceExecutor(queues, new DefaultTraceContextProvider(executor)).remove("a");
+        new OrderedTraceExecutor(queues, new DefaultExecutorSelector(executor), TRACER).remove("a");
         verify(queues, times(1)).remove("a");
       }
     }
