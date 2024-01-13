@@ -30,3 +30,10 @@ generateSourceTask(
   mapOf("java19" to JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_19))
 )
 tasks.compileTestJava { dependsOn("generateSource") }
+
+tasks.test {
+  testLogging {
+    events("passed", "failed", "skipped")
+    showStandardStreams = true
+  }
+}

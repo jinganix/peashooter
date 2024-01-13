@@ -19,9 +19,9 @@
 package io.github.jinganix.peashooter;
 
 import static io.github.jinganix.peashooter.TestUtils.sleep;
+import static io.github.jinganix.peashooter.TestUtils.uncheckedRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.doThrow;
@@ -29,7 +29,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -39,10 +38,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("OrderedTaskQueue")
+@DisplayName("TaskQueue")
 class TaskQueueTest {
 
-  Executor executor() {
+  Executor createExecutor() {
     return Executors.newSingleThreadExecutor();
   }
 
@@ -56,17 +55,23 @@ class TaskQueueTest {
 
       @Test
       @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() {
+      void thenRunTasksSequentially() throws InterruptedException {
         TaskQueue taskQueue = new TaskQueue();
-        Executor executor = executor();
+        Executor executor = createExecutor();
         taskQueue.execute(executor, () -> sleep(100));
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
-        taskQueue.execute(executor, () -> ref.set(System.currentTimeMillis() - millis));
 
-        await()
-            .atMost(Duration.ofSeconds(1))
-            .untilAsserted(() -> assertThat(ref.get()).isGreaterThanOrEqualTo(100));
+        CountDownLatch latch = new CountDownLatch(1);
+        taskQueue.execute(
+            createExecutor(),
+            () -> {
+              ref.set(System.currentTimeMillis() - millis);
+              latch.countDown();
+            });
+        latch.await();
+
+        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
       }
     }
 
@@ -76,16 +81,22 @@ class TaskQueueTest {
 
       @Test
       @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() {
+      void thenRunTasksSequentially() throws InterruptedException {
         TaskQueue taskQueue = new TaskQueue();
-        taskQueue.execute(executor(), () -> sleep(100));
+        taskQueue.execute(createExecutor(), () -> sleep(100));
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
-        taskQueue.execute(executor(), () -> ref.set(System.currentTimeMillis() - millis));
 
-        await()
-            .atMost(Duration.ofSeconds(1))
-            .untilAsserted(() -> assertThat(ref.get()).isGreaterThanOrEqualTo(100));
+        CountDownLatch latch = new CountDownLatch(1);
+        taskQueue.execute(
+            createExecutor(),
+            () -> {
+              ref.set(System.currentTimeMillis() - millis);
+              latch.countDown();
+            });
+        latch.await();
+
+        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
       }
     }
 
@@ -95,21 +106,28 @@ class TaskQueueTest {
 
       @Test
       @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() {
+      void thenRunTasksSequentially() throws InterruptedException {
         TaskQueue taskQueue = new TaskQueue();
         taskQueue.execute(
-            executor(),
+            createExecutor(),
             () -> {
               sleep(100);
               throw new RuntimeException("error");
             });
+
         AtomicReference<Long> ref = new AtomicReference<>();
         long millis = System.currentTimeMillis();
-        taskQueue.execute(executor(), () -> ref.set(System.currentTimeMillis() - millis));
 
-        await()
-            .atMost(Duration.ofSeconds(1))
-            .untilAsserted(() -> assertThat(ref.get()).isGreaterThanOrEqualTo(100));
+        CountDownLatch latch = new CountDownLatch(1);
+        taskQueue.execute(
+            createExecutor(),
+            () -> {
+              ref.set(System.currentTimeMillis() - millis);
+              latch.countDown();
+            });
+        latch.await();
+
+        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
       }
     }
 
@@ -196,8 +214,10 @@ class TaskQueueTest {
         @DisplayName("then return false")
         void thenReturnFalse() {
           TaskQueue queue = new TaskQueue();
-          queue.execute(command -> {}, () -> sleep(100));
+          CountDownLatch latch = new CountDownLatch(1);
+          queue.execute(command -> {}, () -> uncheckedRun(latch::await));
           assertThat(queue.isEmpty()).isFalse();
+          latch.countDown();
         }
       }
     }
