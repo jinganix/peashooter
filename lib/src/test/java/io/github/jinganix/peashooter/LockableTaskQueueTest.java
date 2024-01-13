@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,7 +35,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -260,25 +258,35 @@ class LockableTaskQueueTest {
       class WhenTasksIsNotEmpty {
 
         @Test
-        @DisplayName("then current is null")
-        void thenCurrentIsNull() throws InterruptedException {
+        @DisplayName("then task not called")
+        void thenTaskNotCalled() throws InterruptedException {
           LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
           when(taskQueue.tryLock(anyInt())).thenReturn(true);
           Executor executor = mock(Executor.class);
           doThrow(new RejectedExecutionException()).when(executor).execute(any());
-          Runnable runnable = mock(Runnable.class);
+          Runnable task = mock(Runnable.class);
 
-          CountDownLatch latch = new CountDownLatch(1);
-          taskQueue.execute(
-              Executors.newSingleThreadExecutor(),
-              () -> {
-                latch.countDown();
-                sleep(200);
-              });
-          latch.await();
-          taskQueue.execute(executor, runnable);
-          verify(executor, after(500).times(1)).execute(any());
-          verify(runnable, never()).run();
+          CountDownLatch latch1 = new CountDownLatch(1);
+          CountDownLatch latch2 = new CountDownLatch(1);
+          CountDownLatch latch3 = new CountDownLatch(1);
+          new Thread(
+                  () ->
+                      taskQueue.execute(
+                          command -> {
+                            latch1.countDown();
+                            uncheckedRun(latch2::await);
+                            command.run();
+                            latch3.countDown();
+                          },
+                          () -> {}))
+              .start();
+          latch1.await();
+          taskQueue.execute(executor, task);
+          latch2.countDown();
+          latch3.await();
+
+          verify(executor, times(1)).execute(any());
+          verify(task, never()).run();
         }
       }
     }
