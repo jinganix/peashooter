@@ -24,8 +24,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("DefaultTaskQueues")
-class DefaultTaskQueuesTest {
+@DisplayName("DefaultTaskQueueProvider")
+class DefaultTaskQueueProviderTest {
 
   @Nested
   @DisplayName("when remove the key")
@@ -34,7 +34,7 @@ class DefaultTaskQueuesTest {
     @Test
     @DisplayName("then get the new queue")
     void thenReturnNull() {
-      DefaultTaskQueues queues = new DefaultTaskQueues();
+      DefaultTaskQueueProvider queues = new DefaultTaskQueueProvider();
       TaskQueue queue = queues.get("a");
       queues.remove("a");
       assertThat(queues.get("a")).isNotEqualTo(queue);

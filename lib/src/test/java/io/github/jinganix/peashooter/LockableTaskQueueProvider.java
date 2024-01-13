@@ -3,7 +3,7 @@ package io.github.jinganix.peashooter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class LockableTaskQueues implements TaskQueues {
+public class LockableTaskQueueProvider implements TaskQueueProvider {
 
   private final Map<String, TaskQueue> queues = new ConcurrentHashMap<>();
 

@@ -18,21 +18,24 @@
 
 package io.github.jinganix.peashooter;
 
-/** {@link TaskQueue} collection holder. */
-public interface TaskQueues {
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-  /**
-   * Remove a {@link TaskQueue} by key.
-   *
-   * @param key key of the {@link TaskQueue}
-   */
-  void remove(String key);
+/** Default implementation for {@link TaskQueueProvider}. */
+public class DefaultTaskQueueProvider implements TaskQueueProvider {
 
-  /**
-   * Get a {@link TaskQueue} by key.
-   *
-   * @param key key of the {@link TaskQueue}
-   * @return {@link TaskQueue}
-   */
-  TaskQueue get(String key);
+  private final Map<String, TaskQueue> queues = new ConcurrentHashMap<>();
+
+  /** Constructor. */
+  public DefaultTaskQueueProvider() {}
+
+  @Override
+  public void remove(String key) {
+    this.queues.remove(key);
+  }
+
+  @Override
+  public TaskQueue get(String key) {
+    return queues.computeIfAbsent(key, x -> new TaskQueue());
+  }
 }

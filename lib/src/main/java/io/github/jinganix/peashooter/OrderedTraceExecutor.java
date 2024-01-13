@@ -29,8 +29,8 @@ import java.util.function.Supplier;
 /** Execute tasks sequentially and trace call chain. */
 public class OrderedTraceExecutor {
 
-  /** {@link TaskQueues} */
-  protected final TaskQueues queues;
+  /** {@link TaskQueueProvider} */
+  protected final TaskQueueProvider queues;
 
   /** {@link ExecutorSelector} */
   protected final ExecutorSelector selector;
@@ -50,7 +50,7 @@ public class OrderedTraceExecutor {
    * @param executor {@link Executor}
    */
   public OrderedTraceExecutor(Executor executor) {
-    this.queues = new DefaultTaskQueues();
+    this.queues = new DefaultTaskQueueProvider();
     if (TraceExecutor.class.isAssignableFrom(executor.getClass())) {
       TraceExecutor traceExecutor = (TraceExecutor) executor;
       this.tracer = traceExecutor.getTracer();
@@ -65,11 +65,11 @@ public class OrderedTraceExecutor {
   /**
    * Constructor.
    *
-   * @param queues {@link TaskQueues}
+   * @param queues {@link TaskQueueProvider}
    * @param selector {@link ExecutorSelector}
    * @param tracer {@link Tracer}
    */
-  public OrderedTraceExecutor(TaskQueues queues, ExecutorSelector selector, Tracer tracer) {
+  public OrderedTraceExecutor(TaskQueueProvider queues, ExecutorSelector selector, Tracer tracer) {
     this.queues = queues;
     this.selector = selector;
     this.tracer = tracer;
