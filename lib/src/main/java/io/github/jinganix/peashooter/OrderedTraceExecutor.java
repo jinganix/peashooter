@@ -105,7 +105,21 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Execute asynchronously.
+   * Run {@link Runnable} asynchronously ordered by multiple keys.
+   *
+   * @param keys keys to lock
+   * @param task {@link Runnable}
+   */
+  public void executeAsync(Collection<String> keys, Runnable task) {
+    for (String key : keys) {
+      Runnable innerRunnable = task;
+      task = () -> executeSync(key, innerRunnable);
+    }
+    task.run();
+  }
+
+  /**
+   * Run {@link Runnable} asynchronously ordered by key.
    *
    * @param key key to lock
    * @param task {@link Runnable}
@@ -117,7 +131,7 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Execute synchronously.
+   * Run {@link Runnable} synchronously ordered by key.
    *
    * @param key key to lock
    * @param task {@link Runnable}
@@ -154,7 +168,21 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Lock the key and return result of the {@link Supplier}
+   * Run {@link Runnable} synchronously ordered by multiple keys.
+   *
+   * @param keys keys to lock
+   * @param task {@link Runnable}
+   */
+  public void executeSync(Collection<String> keys, Runnable task) {
+    for (String key : keys) {
+      Runnable innerRunnable = task;
+      task = () -> executeSync(key, innerRunnable);
+    }
+    task.run();
+  }
+
+  /**
+   * Get result of the {@link Supplier} ordered by key.
    *
    * @param key key to lock
    * @param supplier {@link Supplier}
@@ -191,7 +219,7 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Lock keys and return result of the {@link Supplier}
+   * Get result of the {@link Supplier} ordered by multiple keys.
    *
    * @param keys keys to lock
    * @param supplier {@link Supplier}
