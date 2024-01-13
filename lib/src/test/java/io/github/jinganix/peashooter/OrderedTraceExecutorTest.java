@@ -59,10 +59,11 @@ class OrderedTraceExecutorTest {
 
   static Tracer TRACER = new DefaultTracer();
 
-  static OrderedTraceExecutor createExecutor(Executor executor, TaskQueues taskQueues) {
+  static OrderedTraceExecutor createExecutor(
+      Executor executor, TaskQueueProvider taskQueueProvider) {
     TraceExecutor traceExecutor = new TraceExecutor(executor, TRACER);
     DefaultExecutorSelector selector = new DefaultExecutorSelector(traceExecutor);
-    return new OrderedTraceExecutor(taskQueues, selector, TRACER);
+    return new OrderedTraceExecutor(taskQueueProvider, selector, TRACER);
   }
 
   static class ExecutorArgumentsProvider implements ArgumentsProvider {
@@ -71,7 +72,9 @@ class OrderedTraceExecutorTest {
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
       return ExecutorForTests.executors().entrySet().stream()
           .map(
-              x -> Arguments.of(x.getKey(), createExecutor(x.getValue(), new DefaultTaskQueues())));
+              x ->
+                  Arguments.of(
+                      x.getKey(), createExecutor(x.getValue(), new DefaultTaskQueueProvider())));
     }
   }
 
@@ -88,8 +91,8 @@ class OrderedTraceExecutorTest {
 
   static class CallableArgumentsProvider implements ArgumentsProvider {
 
-    SyncCallable createExecuteSync(Executor executor, TaskQueues taskQueues) {
-      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueues);
+    SyncCallable createExecuteSync(Executor executor, TaskQueueProvider taskQueueProvider) {
+      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueueProvider);
       return new SyncCallable(traceExecutor) {
         @Override
         Long call(String key, Supplier<Long> supplier) {
@@ -99,8 +102,8 @@ class OrderedTraceExecutorTest {
       };
     }
 
-    SyncCallable createSupply(Executor executor, TaskQueues taskQueues) {
-      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueues);
+    SyncCallable createSupply(Executor executor, TaskQueueProvider taskQueueProvider) {
+      OrderedTraceExecutor traceExecutor = createExecutor(executor, taskQueueProvider);
       return new SyncCallable(traceExecutor) {
         @Override
         Long call(String key, Supplier<Long> supplier) {
@@ -118,19 +121,19 @@ class OrderedTraceExecutorTest {
                       Arguments.of(
                           x.getKey(),
                           "executeSync",
-                          createExecuteSync(x.getValue(), new DefaultTaskQueues())),
+                          createExecuteSync(x.getValue(), new DefaultTaskQueueProvider())),
                       Arguments.of(
                           x.getKey(),
                           "executeSync.lockable",
-                          createExecuteSync(x.getValue(), new LockableTaskQueues())),
+                          createExecuteSync(x.getValue(), new LockableTaskQueueProvider())),
                       Arguments.of(
                           x.getKey(),
                           "supply",
-                          createSupply(x.getValue(), new DefaultTaskQueues())),
+                          createSupply(x.getValue(), new DefaultTaskQueueProvider())),
                       Arguments.of(
                           x.getKey(),
                           "supply.lockable",
-                          createSupply(x.getValue(), new LockableTaskQueues()))))
+                          createSupply(x.getValue(), new LockableTaskQueueProvider()))))
           .flatMap(List::stream);
     }
   }
@@ -182,7 +185,7 @@ class OrderedTraceExecutorTest {
       @DisplayName("then sync execution throw exception")
       void thenSyncExecutionThrowException() {
         OrderedTraceExecutor executor =
-            createExecutor(newSingleThreadExecutor(), new DefaultTaskQueues());
+            createExecutor(newSingleThreadExecutor(), new DefaultTaskQueueProvider());
         executor.setTimeout(1, TimeUnit.MILLISECONDS);
         assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
             .isInstanceOf(RuntimeException.class)
@@ -203,7 +206,7 @@ class OrderedTraceExecutorTest {
       @DisplayName("then removed")
       void thenRemoved() {
         TraceExecutor executor = new TraceExecutor(mock(Executor.class), new DefaultTracer());
-        TaskQueues queues = mock(TaskQueues.class);
+        TaskQueueProvider queues = mock(TaskQueueProvider.class);
         new OrderedTraceExecutor(queues, new DefaultExecutorSelector(executor), TRACER).remove("a");
         verify(queues, times(1)).remove("a");
       }
@@ -447,7 +450,7 @@ class OrderedTraceExecutorTest {
       @DisplayName("then throw exception")
       @ArgumentsSource(CallableArgumentsProvider.class)
       void thenThrowException(String _name, String _key, SyncCallable callable) {
-        createExecutor(newSingleThreadExecutor(), new DefaultTaskQueues())
+        createExecutor(newSingleThreadExecutor(), new DefaultTaskQueueProvider())
             .executeAsync("a", () -> sleep(200));
         Thread.currentThread().interrupt();
         assertThatThrownBy(
