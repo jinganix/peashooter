@@ -20,15 +20,8 @@ package io.github.jinganix.peashooter;
 
 import java.util.concurrent.Executor;
 
-/** Provide trace executor context. */
-public interface TraceContextProvider {
-
-  /**
-   * Get the {@link Tracer}.
-   *
-   * @return {@link Tracer}
-   */
-  Tracer getTracer();
+/** Select a {@link Executor} for next execution. */
+public interface ExecutorSelector {
 
   /**
    * Get executor.
