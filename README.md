@@ -6,6 +6,42 @@
 
 Call tasks sequentially and prevent deadlocks
 
+## Installation
+
+### Maven
+
+```xml
+<dependency>
+  <groupId>io.github.jinganix.peashooter</groupId>
+  <artifactId>peashooter</artifactId>
+  <version>0.0.3</version>
+</dependency>
+```
+
+### Gradle (Groovy)
+
+```groovy
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.3'
+```
+
+### Gradle (Kotlin)
+
+```kotlin
+implementation("io.github.jinganix.peashooter:peashooter:0.0.3")
+```
+
+## Basic usage
+
+```java
+OrderedTraceExecutor executor = new OrderedTraceExecutor(Executors.newFixedThreadPool(8));
+List<String> values = new ArrayList<>();
+executor.executeAsync("foo", () -> values.add("1"));
+executor.supply("foo", () -> values.add("2"));
+executor.executeAsync("foo", () -> values.add("3"));
+executor.executeSync("foo", () -> values.add("4"));
+System.out.println("Values: [" + String.join(", ", values) + "]"); // Values: [1, 2, 3, 4]
+```
+
 ## Contributing
 
 If you are interested in reporting/fixing issues and contributing directly to the code base, please see [CONTRIBUTING.md](CONTRIBUTING.md) for more information on what we're looking for and how to get started.
