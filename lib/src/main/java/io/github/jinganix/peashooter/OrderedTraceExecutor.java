@@ -105,20 +105,6 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Run {@link Runnable} asynchronously ordered by multiple keys.
-   *
-   * @param keys keys to lock
-   * @param task {@link Runnable}
-   */
-  public void executeAsync(Collection<String> keys, Runnable task) {
-    for (String key : keys) {
-      Runnable innerRunnable = task;
-      task = () -> executeSync(key, innerRunnable);
-    }
-    task.run();
-  }
-
-  /**
    * Run {@link Runnable} asynchronously ordered by key.
    *
    * @param key key to lock
