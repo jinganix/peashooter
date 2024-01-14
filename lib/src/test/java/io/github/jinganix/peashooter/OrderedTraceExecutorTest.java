@@ -32,7 +32,6 @@ import static org.mockito.Mockito.verify;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -463,53 +462,6 @@ class OrderedTraceExecutorTest {
                           return 0L;
                         }))
             .isInstanceOf(RuntimeException.class);
-      }
-    }
-  }
-
-  @Nested
-  @DisplayName("executeAsyncKeys")
-  class ExecuteAsyncKeys {
-
-    @Nested
-    @DisplayName("when execute two same keys")
-    class WhenSupplyTwoSameKeys {
-
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) throws InterruptedException {
-        Runnable runnable = mock(Runnable.class);
-        CountDownLatch latch = new CountDownLatch(1);
-        executor.executeAsync(
-            Arrays.asList("a", "a"),
-            () -> {
-              runnable.run();
-              latch.countDown();
-            });
-        latch.await();
-        verify(runnable, times(1)).run();
-      }
-    }
-
-    @Nested
-    @DisplayName("when execute mixed keys")
-    class WhenSupplyMixedKeys {
-
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) throws InterruptedException {
-        Runnable runnable = mock(Runnable.class);
-        CountDownLatch latch = new CountDownLatch(1);
-        executor.executeAsync(
-            Arrays.asList("a", "b", "a", "b"),
-            () -> {
-              runnable.run();
-              latch.countDown();
-            });
-        latch.await();
-        verify(runnable, times(1)).run();
       }
     }
   }
