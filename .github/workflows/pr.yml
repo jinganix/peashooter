@@ -10,40 +10,18 @@ jobs:
   commitlint:
     name: Check Commit Message
     runs-on: ubuntu-latest
-    outputs:
-      skip: ${{ steps.check-skip.outputs.skip }}
+    if: "${{ !startsWith(github.event.pull_request.title, 'chore: release') && !startsWith(github.event.pull_request.title, 'chore: bump version to') }}"
     steps:
       - uses: actions/checkout@v4
-        if: github.event_name == 'pull_request'
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-      - uses: actions/checkout@v4
-        if: github.event_name == 'push'
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v5
         with:
           configFile: package.json
           failOnWarnings: true
-      - name: Skip when release
-        id: check-skip
-        env:
-          COMMIT_FILTER: "^chore: (bump version|release)"
-        run: |
-          readonly local last_commit_log=$(git log -1 --pretty=format:"%s")
-          echo "Last commit log: $last_commit_log"
-
-          readonly local filter_count=$(echo "$last_commit_log" | grep -c -E "$COMMIT_FILTER")
-
-          if [[ "$filter_count" -gt 0 ]]; then
-            echo "The last commit log \"$last_commit_log\" contains \"$COMMIT_FILTER\", stopping"
-            echo "skip=true" >> ${GITHUB_OUTPUT}
-          fi
   build:
     name: Build
     needs: [commitlint]
-    if: ${{ needs.commitlint.outputs.skip != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
