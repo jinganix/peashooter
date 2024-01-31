@@ -98,7 +98,7 @@ jobs:
 
       - name: Create pull request
         id: cpr
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.ACTION_TOKEN }}
           commit-message: 'chore: release ${{ env.release_version }}'
@@ -154,7 +154,7 @@ jobs:
 
       - name: Create pull request
         id: cpr
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.ACTION_TOKEN }}
           commit-message: 'chore: bump version to ${{ env.snapshot_version }}-SNAPSHOT'
