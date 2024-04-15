@@ -2,6 +2,7 @@ import com.diffplug.gradle.spotless.SpotlessExtension
 import utils.Props
 import utils.Vers
 import utils.Vers.versionAssertj
+import utils.Vers.versionGoogleJavaFormat
 import utils.Vers.versionJacocoAgent
 import utils.Vers.versionMockitoCore
 import utils.Vers.versionMockitoInline
@@ -51,7 +52,7 @@ tasks.test {
 if (javaVersion == JavaVersion.VERSION_19) {
   extensions.findByType<SpotlessExtension>()?.java {
     targetExclude("build/**/*")
-    googleJavaFormat()
+    googleJavaFormat(versionGoogleJavaFormat)
   }
 
   tasks.check {
