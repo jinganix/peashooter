@@ -34,7 +34,7 @@ jobs:
             if [ ${p1[0]} -lt ${p2[0]} ] \
               || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -lt ${p2[1]} ]] \
               || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -eq ${p2[1]} && ${p1[2]} -lt ${p2[2]} ]]; then
-              echo "ERROR: Input version is less than current version"
+              echo "ERROR: Input version is less than the current version"
               exit 1
             fi
             release_version=${input_version}
@@ -240,7 +240,7 @@ jobs:
           java-version: 8
 
       - name: Build and publish
-        run: ./gradlew publish
+        run: ./gradlew publish -Dorg.gradle.parallel=false
         env:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
