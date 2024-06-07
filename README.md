@@ -14,20 +14,20 @@ Call tasks sequentially and prevent deadlocks
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.3</version>
+  <version>0.0.5</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.3'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.5'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.3")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.5")
 ```
 
 ## Basic usage

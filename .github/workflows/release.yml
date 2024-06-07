@@ -149,7 +149,7 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           sed -i "s/version = .*/version = ${snapshot_version}-SNAPSHOT/" gradle.properties
-          sed -E 's/\b([:>])[0-9]+\.[0-9]+\.[0-9]+\b/\1${release_version}/g' README.md
+          sed -i -E "s/\b([:>])[0-9]+\.[0-9]+\.[0-9]+\b/\1${release_version}/g" README.md
           git add gradle.properties
           git commit -m "chore: bump version to ${snapshot_version}-SNAPSHOT"
 
