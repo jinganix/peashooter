@@ -30,6 +30,20 @@ public class OrderedSpan extends Span {
   /**
    * Constructor.
    *
+   * @param traceId trace id
+   * @param parent parent {@link Span}
+   * @param key trace key
+   * @param sync true if a sync call
+   */
+  public OrderedSpan(String traceId, Span parent, String key, boolean sync) {
+    super(traceId, parent);
+    this.key = key;
+    this.sync = sync;
+  }
+
+  /**
+   * Constructor.
+   *
    * @param traceIdGenerator {@link TraceIdGenerator}
    * @param parent parent {@link Span}
    * @param key trace key

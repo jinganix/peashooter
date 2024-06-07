@@ -28,6 +28,23 @@ import org.junit.jupiter.api.Test;
 class OrderedSpanTest {
 
   @Nested
+  @DisplayName("constructor")
+  class Constructor {
+
+    @Nested
+    @DisplayName("when concrete with trace id")
+    class WhenConcreteWithTraceId {
+
+      @Test
+      @DisplayName("then get the trace id")
+      void thenGetTheTraceId() {
+        OrderedSpan span = new OrderedSpan("trace", null, "key", true);
+        assertThat(span.getTraceId()).isEqualTo("trace");
+      }
+    }
+  }
+
+  @Nested
   @DisplayName("invokedBy")
   class InvokedBy {
 

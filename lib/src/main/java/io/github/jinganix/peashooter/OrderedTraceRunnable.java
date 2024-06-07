@@ -21,9 +21,19 @@ package io.github.jinganix.peashooter;
 /** Task with ordered key and sync flag. */
 public class OrderedTraceRunnable extends TraceRunnable {
 
-  private final String key;
+  private final Span span;
 
-  private final boolean sync;
+  /**
+   * Constructor.
+   *
+   * @param tracer {@link Tracer}
+   * @param span {@link Span}
+   * @param delegate {@link Runnable}
+   */
+  public OrderedTraceRunnable(Tracer tracer, Span span, Runnable delegate) {
+    super(tracer, delegate);
+    this.span = span;
+  }
 
   /**
    * Constructor.
@@ -35,12 +45,11 @@ public class OrderedTraceRunnable extends TraceRunnable {
    */
   public OrderedTraceRunnable(Tracer tracer, String key, boolean sync, Runnable delegate) {
     super(tracer, delegate);
-    this.key = key;
-    this.sync = sync;
+    this.span = new OrderedSpan(this.tracer, this.parent, key, sync);
   }
 
   @Override
-  protected Span createSpan() {
-    return new OrderedSpan(this.tracer, this.parent, this.key, this.sync);
+  public Span createSpan() {
+    return this.span;
   }
 }

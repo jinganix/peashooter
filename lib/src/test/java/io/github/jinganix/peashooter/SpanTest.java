@@ -35,6 +35,18 @@ class SpanTest {
   class Constructor {
 
     @Nested
+    @DisplayName("when concrete with trace id")
+    class WhenConcreteWithTraceId {
+
+      @Test
+      @DisplayName("then get the trace id")
+      void thenGetTheTraceId() {
+        Span span = new Span("trace", null);
+        assertThat(span.getTraceId()).isEqualTo("trace");
+      }
+    }
+
+    @Nested
     @DisplayName("when parent is null")
     class WhenParentIsNull {
 

@@ -28,6 +28,17 @@ public class Span {
   /**
    * Constructor.
    *
+   * @param traceId trace id
+   * @param parent {@link Span}
+   */
+  public Span(String traceId, Span parent) {
+    this.parent = parent;
+    this.traceId = traceId;
+  }
+
+  /**
+   * Constructor.
+   *
    * @param traceIdGenerator {@link TraceIdGenerator}
    * @param parent {@link Span}
    */
