@@ -78,7 +78,7 @@ jobs:
           java-version: 8
 
       - name: Build and publish
-        run: ./gradlew publish -Dorg.gradle.parallel=false
+        run: ./gradlew publish -Dorg.gradle.parallel=false --info
         env:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
