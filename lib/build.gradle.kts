@@ -1,7 +1,9 @@
 import utils.Vers.versionAssertj
 import utils.Vers.versionAwaitility
 import utils.Vers.versionJupiter
+import utils.Vers.versionRedisson
 import utils.Vers.versionSlf4j
+import utils.Vers.versionTestContainers
 import utils.signAndPublish
 
 plugins {
@@ -14,6 +16,8 @@ dependencies {
   testImplementation("org.awaitility:awaitility:${versionAwaitility}")
   testImplementation("org.junit.jupiter:junit-jupiter-api:${versionJupiter}")
   testImplementation("org.junit.jupiter:junit-jupiter-params:${versionJupiter}")
+  testImplementation("org.redisson:redisson:$versionRedisson")
+  testImplementation("org.testcontainers:testcontainers:$versionTestContainers")
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${versionJupiter}")
 }
 

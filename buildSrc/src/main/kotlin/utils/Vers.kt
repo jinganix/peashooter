@@ -36,8 +36,10 @@ object Vers {
   lateinit var versionJupiter: String
   lateinit var versionMockitoCore: String
   lateinit var versionMockitoInline: String
+  lateinit var versionRedisson: String
   lateinit var versionSlf4j: String
   lateinit var versionSpotlessPluginGradle: String
+  lateinit var versionTestContainers: String
 
   fun initialize(project: Project, override: Properties) {
     if (initialized) {

@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 /** Ordered task queue that could be locked. */
 public abstract class LockableTaskQueue extends TaskQueue {
 
-  private static final Logger log = LoggerFactory.getLogger(TaskQueue.class);
+  private static final Logger log = LoggerFactory.getLogger(LockableTaskQueue.class);
 
   private boolean locked = false;
 
@@ -36,8 +36,8 @@ public abstract class LockableTaskQueue extends TaskQueue {
 
   @Override
   protected void run() {
-    int index = 0;
-    while (cacheTryLock(index)) {
+    int taskExecutionCount = 0;
+    while (cacheTryLock(taskExecutionCount)) {
       for (; ; ) {
         final Task task;
         synchronized (tasks) {
@@ -60,10 +60,11 @@ public abstract class LockableTaskQueue extends TaskQueue {
         }
         try {
           task.runnable.run();
+          taskExecutionCount++;
         } catch (Throwable t) {
           log.error("Caught unexpected Throwable", t);
         }
-        if (shouldYield(index)) {
+        if (shouldYield(taskExecutionCount)) {
           break;
         }
       }
@@ -74,11 +75,11 @@ public abstract class LockableTaskQueue extends TaskQueue {
     }
   }
 
-  private boolean cacheTryLock(int index) {
+  private boolean cacheTryLock(int executedCount) {
     if (this.locked) {
       return true;
     }
-    this.locked = tryLock(index);
+    this.locked = tryLock(executedCount);
     return this.locked;
   }
 

@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.IntFunction;
@@ -95,8 +96,8 @@ class DefaultTracerTest {
                             })
                 .collect(Collectors.toList());
 
-        List<Future<List<String>>> futureList =
-            Executors.newFixedThreadPool(8).invokeAll(callables);
+        ExecutorService executorService = Executors.newFixedThreadPool(8);
+        List<Future<List<String>>> futureList = executorService.invokeAll(callables);
         List<String> values = new ArrayList<>();
         for (Future<List<String>> future : futureList) {
           values.addAll(future.get());
