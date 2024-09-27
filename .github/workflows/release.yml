@@ -109,7 +109,14 @@ jobs:
       - name: Auto merge pull request
         continue-on-error: true
         if: steps.cpr.outputs.pull-request-operation == 'created'
-        run: gh pr merge ${{ env.PULL_REQUEST_NUMBER }} --squash --admin
+        run: |
+          pr_number=${{ steps.cpr.outputs.pull-request-number }}
+          echo "Pull Request number: ${pr_number}"
+          if [ -z "$pr_number" ]; then
+            echo "Error: pull Request number is empty or does not exist"
+            exit 1
+          fi
+          gh pr merge ${pr_number} --squash --admin
         env:
           GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
 
@@ -136,6 +143,16 @@ jobs:
           fetch-depth: 0
           ref: master
 
+      - name: Find release commit
+        run: |
+          release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)
+          echo "Release commit: ${release_commit}"
+          if [ -z "$release_commit" ]; then
+            echo "Error: release_commit is empty or does not exist"
+            exit 1
+          fi
+          echo "release_commit=${release_commit}" >> "${GITHUB_ENV}"
+
       - name: Bump snapshot version
         run: |
           release_version=${{ env.release_version }}
@@ -149,7 +166,6 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           sed -i "s/version = .*/version = ${snapshot_version}-SNAPSHOT/" gradle.properties
-          sed -i -E "s/\b([:>])[0-9]+\.[0-9]+\.[0-9]+\b/\1${release_version}/g" README.md
           git add gradle.properties
           git commit -m "chore: bump version to ${snapshot_version}-SNAPSHOT"
 
@@ -166,7 +182,7 @@ jobs:
       - name: Auto merge pull request
         continue-on-error: true
         if: steps.cpr.outputs.pull-request-operation == 'created'
-        run: gh pr merge ${{ env.PULL_REQUEST_NUMBER }} --squash --admin
+        run: gh pr merge ${{ steps.cpr.outputs.pull-request-number }} --squash --admin
         env:
           GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
 
@@ -195,7 +211,12 @@ jobs:
 
       - name: Find release commit
         run: |
-          echo "release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)" >> "${GITHUB_ENV}"
+          release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)
+          if [ -z "$release_commit" ]; then
+            echo "Error: release_commit is empty or does not exist"
+            exit 1
+          fi
+          echo "release_commit=${release_commit}" >> "${GITHUB_ENV}"
 
       - name: Create release tag
         id: tag_version
@@ -241,7 +262,7 @@ jobs:
           java-version: 8
 
       - name: Build and publish
-        run: ./gradlew publish -Dorg.gradle.parallel=false
+        run: ./gradlew publish -Dorg.gradle.parallel=false --info
         env:
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
