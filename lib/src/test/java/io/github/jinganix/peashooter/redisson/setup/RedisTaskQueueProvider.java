@@ -18,13 +18,10 @@
 
 package io.github.jinganix.peashooter.redisson.setup;
 
-import io.github.jinganix.peashooter.LockableTaskQueue;
 import io.github.jinganix.peashooter.TaskQueue;
 import io.github.jinganix.peashooter.TaskQueueProvider;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import org.redisson.api.RLock;
 
 public class RedisTaskQueueProvider implements TaskQueueProvider {
 
@@ -40,27 +37,15 @@ public class RedisTaskQueueProvider implements TaskQueueProvider {
     return queues.computeIfAbsent(
         key,
         x ->
-            new LockableTaskQueue() {
-              private final RLock rLock = RedisClient.client.getFairLock(key);
-
-              @Override
-              protected boolean tryLock(int executedCount) {
-                try {
-                  return rLock.tryLock(5, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                  return false;
-                }
-              }
-
+            new RedisLockableTaskQueue(key) {
               @Override
               protected boolean shouldYield(int executedCount) {
-                return executedCount > 0 && executedCount % 5 == 0;
-              }
-
-              @Override
-              protected void unlock() {
-                rLock.forceUnlock();
+                return RedisTaskQueueProvider.this.shouldYield(executedCount);
               }
             });
+  }
+
+  protected boolean shouldYield(int executedCount) {
+    return executedCount > 0 && executedCount % 5 == 0;
   }
 }
