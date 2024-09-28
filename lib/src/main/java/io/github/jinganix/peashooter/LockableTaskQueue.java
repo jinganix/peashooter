@@ -36,73 +36,76 @@ public abstract class LockableTaskQueue extends TaskQueue {
 
   @Override
   protected void run() {
-    int taskExecutionCount = 0;
-    while (cacheTryLock(taskExecutionCount)) {
-      for (; ; ) {
-        final Task task;
-        synchronized (tasks) {
-          task = tasks.poll();
-          if (task == null) {
-            current = null;
+    int executedCount = 0;
+    for (; ; ) {
+      try {
+        while (cachedTryLock(executedCount)) {
+          final Task task;
+          synchronized (tasks) {
+            task = tasks.poll();
+            if (task == null) {
+              current = null;
+              return;
+            }
+            if (task.exec != current) {
+              tasks.addFirst(task);
+              current = task.exec;
+              try {
+                task.exec.execute(runner);
+              } catch (RejectedExecutionException e) {
+                // tasks will not be invoked unless execute method is called again
+                current = null;
+              }
+              return;
+            }
+          }
+          try {
+            task.runnable.run();
+          } catch (Throwable t) {
+            log.error("Caught unexpected Throwable", t);
+          }
+          if (shouldYield(++executedCount)) {
             break;
           }
-          if (task.exec != current) {
-            tasks.addFirst(task);
-            current = task.exec;
-            try {
-              task.exec.execute(runner);
-            } catch (RejectedExecutionException e) {
-              // tasks will not be invoked unless execute method is called again
-              current = null;
-            }
-            return;
-          }
         }
-        try {
-          task.runnable.run();
-          taskExecutionCount++;
-        } catch (Throwable t) {
-          log.error("Caught unexpected Throwable", t);
+        if (!this.locked) {
+          return;
         }
-        if (shouldYield(taskExecutionCount)) {
-          break;
-        }
-      }
-      cacheUnlock();
-      if (isEmpty()) {
-        return;
+      } finally {
+        cachedUnlock();
       }
     }
   }
 
-  private boolean cacheTryLock(int executedCount) {
-    if (this.locked) {
-      return true;
+  private boolean cachedTryLock(int executedCount) {
+    if (!this.locked) {
+      this.locked = tryLock(executedCount);
     }
-    this.locked = tryLock(executedCount);
     return this.locked;
   }
 
-  private void cacheUnlock() {
-    unlock();
-    this.locked = false;
+  private void cachedUnlock() {
+    if (this.locked) {
+      unlock();
+      this.locked = false;
+    }
   }
 
   /**
    * Try lock.
    *
-   * @param index tasks iteration index in this loop
+   * @param executedCount task to executed in this loop
    * @return true if locked
    */
-  protected abstract boolean tryLock(int index);
+  protected abstract boolean tryLock(int executedCount);
 
   /**
    * Should yield and reLock.
    *
-   * @param index tasks iteration index in this loop
+   * @param executedCount task executed count in this loop
    * @return true when should yield
    */
-  protected abstract boolean shouldYield(int index);
+  protected abstract boolean shouldYield(int executedCount);
 
   /** Unlock. */
   protected abstract void unlock();
