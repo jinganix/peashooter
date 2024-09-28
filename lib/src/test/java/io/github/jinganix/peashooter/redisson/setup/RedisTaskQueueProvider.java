@@ -44,7 +44,7 @@ public class RedisTaskQueueProvider implements TaskQueueProvider {
               private final RLock rLock = RedisClient.client.getFairLock(key);
 
               @Override
-              protected boolean tryLock(int taskExecutionCount) {
+              protected boolean tryLock(int executedCount) {
                 try {
                   return rLock.tryLock(5, TimeUnit.SECONDS);
                 } catch (InterruptedException e) {
@@ -53,8 +53,8 @@ public class RedisTaskQueueProvider implements TaskQueueProvider {
               }
 
               @Override
-              protected boolean shouldYield(int taskExecutionCount) {
-                return taskExecutionCount > 0 && taskExecutionCount % 5 == 0;
+              protected boolean shouldYield(int executedCount) {
+                return executedCount > 0 && executedCount % 5 == 0;
               }
 
               @Override
