@@ -6,6 +6,36 @@
 
 Call tasks sequentially and prevent deadlocks
 
+## Description
+
+### Call tasks sequentially
+
+We have an executor:
+```java
+OrderedTraceExecutor executor = new OrderedTraceExecutor(Executors.newFixedThreadPool(8));
+```
+
+The following three lines of code (named L1, L2, L3) have the same key "foo". When they are executed in different threads in the order L2 -> L3 -> L1, we can guarantee that:
+- Tasks will be executed in the order they are called in the code, with the execution order being task2 -> task3 -> task1.
+- Tasks will not be executed sequentially, task3 will only execute after task2 has completed.
+```java
+executor.executeAsync("foo", task1);
+executor.executeAsync("foo", task2);
+executor.executeAsync("foo", task3);
+```
+
+### Prevent deadlocks
+
+We have an executor:
+```java
+OrderedTraceExecutor executor = new OrderedTraceExecutor(Executors.newFixedThreadPool(8));
+```
+
+Using `executor.supply` to synchronously execute a `Supplier`, the following code will not deadlock, and the value will be assigned to 1:
+```java
+int value = executor.supply("foo", () -> executor.supply("bar", () -> executor.supply("foo", () -> 1)));
+```
+
 ## Installation
 
 ### Maven
