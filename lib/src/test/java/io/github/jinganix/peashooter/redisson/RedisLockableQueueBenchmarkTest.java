@@ -21,6 +21,7 @@ package io.github.jinganix.peashooter.redisson;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import io.github.jinganix.peashooter.ExecutionStats;
+import io.github.jinganix.peashooter.queue.ExecutionCountStats;
 import io.github.jinganix.peashooter.redisson.setup.RedisClient;
 import io.github.jinganix.peashooter.redisson.setup.RedisExtension;
 import io.github.jinganix.peashooter.redisson.setup.RedisLockableTaskQueue;
@@ -75,7 +76,8 @@ public class RedisLockableQueueBenchmarkTest {
             // acquiring the Redis lock once allows for the consecutive execution of 50 tasks.
             @Override
             protected boolean shouldYield(ExecutionStats stats) {
-              return true;
+              int executionCount = ((ExecutionCountStats) stats).getExecutionCount();
+              return executionCount > 0 && executionCount % 50 == 0;
             }
           };
       Counter counter = new Counter();
