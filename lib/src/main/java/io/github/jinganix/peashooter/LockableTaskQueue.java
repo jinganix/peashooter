@@ -100,7 +100,8 @@ public abstract class LockableTaskQueue extends TaskQueue {
   protected abstract boolean tryLock(int executedCount);
 
   /**
-   * Should yield and reLock.
+   * Should yield, it will unlock then reLock. Fewer yields allow tasks to execute more
+   * consecutively. Reduce the number of lock acquisitions and improving performance.
    *
    * @param executedCount task executed count in this loop
    * @return true when should yield

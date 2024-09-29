@@ -29,11 +29,17 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 
-@DisplayName("TaskQueue")
+@DisplayName("TaskQueueBenchmark")
+@DisabledIfEnvironmentVariable(named = "skip_benchmark", matches = "true")
 class TaskQueueBenchmarkTest {
 
   private static final ExecutorService executorService = Executors.newFixedThreadPool(8);
+
+  static class Counter {
+    int count = 0;
+  }
 
   @AfterAll
   static void clear() {
@@ -41,7 +47,7 @@ class TaskQueueBenchmarkTest {
   }
 
   @Nested
-  @DisplayName("when execute 10000 tasks")
+  @DisplayName("when execute 5,000,000 tasks")
   class WhenExecuteTasks {
 
     int taskCount = 5_000_000;
@@ -51,7 +57,7 @@ class TaskQueueBenchmarkTest {
       latch.countDown();
     }
 
-    private long peashooterTest() throws InterruptedException {
+    private long taskQueueTest() throws InterruptedException {
       CountDownLatch latch = new CountDownLatch(taskCount);
 
       TaskQueue taskQueue = new TaskQueue();
@@ -72,11 +78,11 @@ class TaskQueueBenchmarkTest {
       String KEY = "lock_test";
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
-          () -> {
-            synchronized (KEY) {
-              count(latch, counter);
-            }
-          });
+            () -> {
+              synchronized (KEY) {
+                count(latch, counter);
+              }
+            });
       }
       latch.await();
       assertThat(counter.count).isEqualTo(taskCount);
@@ -90,14 +96,14 @@ class TaskQueueBenchmarkTest {
       ReentrantLock lock = new ReentrantLock();
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
-          () -> {
-            lock.lock();
-            try {
-              count(latch, counter);
-            } finally {
-              lock.unlock();
-            }
-          });
+            () -> {
+              lock.lock();
+              try {
+                count(latch, counter);
+              } finally {
+                lock.unlock();
+              }
+            });
       }
       latch.await();
       assertThat(counter.count).isEqualTo(taskCount);
@@ -107,19 +113,17 @@ class TaskQueueBenchmarkTest {
     @Test
     @DisplayName("then task is executed")
     void thenTaskIsExecuted() throws InterruptedException {
-      long time1 = peashooterTest();
+      long time1 = taskQueueTest();
       long time2 = synchronizedTest();
       long time3 = reentrantLockTest();
       System.out.printf(
-        "task count: %d, benchmark: peashooter(%dms), synchronized(%dms), reentrantLock(%dms)",
-        taskCount, TimeUnit.NANOSECONDS.toMillis(time1), TimeUnit.NANOSECONDS.toMillis(time2), TimeUnit.NANOSECONDS.toMillis(time3));
+          "task count: %d, benchmark: peashooter(%dms), synchronized(%dms), reentrantLock(%dms)",
+          taskCount,
+          TimeUnit.NANOSECONDS.toMillis(time1),
+          TimeUnit.NANOSECONDS.toMillis(time2),
+          TimeUnit.NANOSECONDS.toMillis(time3));
       assertThat(time1).isLessThan(time2);
       assertThat(time1).isLessThan(time3);
-    }
-
-    static class Counter {
-
-      int count = 0;
     }
   }
 }

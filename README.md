@@ -36,6 +36,33 @@ Using `executor.supply` to synchronously execute a `Supplier`, the following cod
 int value = executor.supply("foo", () -> executor.supply("bar", () -> executor.supply("foo", () -> 1)));
 ```
 
+## Benchmark
+
+Perform benchmark using following machine:
+```
+Model Name: MacBook Pro
+Model Identifier: MacBookPro18,1
+Chip: Apple M1 Pro
+Total Number of Cores: 10 (8 performance and 2 efficiency)
+Memory: 16 GB
+System Firmware Version: 11881.1.1
+OS Loader Version: 10151.140.19.700.2
+Activation Lock Status: Disabled
+```
+
+### [TaskQueue Benchmark](lib/src/test/java/io/github/jinganix/peashooter/TaskQueueBenchmarkTest.java)
+
+Execute 5,000,000 counting tasks and measure the execution time.
+
+- [TaskQueue](lib/src/main/java/io/github/jinganix/peashooter/TaskQueue.java): 620ms
+- synchronized: 2336ms
+- ReentrantLock: 2412ms
+
+### [RedisLockableQueue Benchmark](lib/src/test/java/io/github/jinganix/peashooter/redisson/RedisLockableQueueBenchmarkTest.java)
+
+- [RedisLockableTaskQueue](lib/src/test/java/io/github/jinganix/peashooter/redisson/setup/RedisLockableTaskQueue.java): 84ms
+- Lock per task: 1268ms
+
 ## Installation
 
 ### Maven
