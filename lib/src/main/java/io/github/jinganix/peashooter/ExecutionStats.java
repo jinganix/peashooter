@@ -18,23 +18,12 @@
 
 package io.github.jinganix.peashooter;
 
-import io.github.jinganix.peashooter.trace.Span;
+/** Stat execution, mainly for yield check. */
+public interface ExecutionStats {
 
-/** Traced task callback. */
-public interface TraceCallback {
+  /** Reset stats. */
+  void reset();
 
-  /**
-   * Before task called.
-   *
-   * @param span {@link Span}
-   */
-  void beforeCall(Span span);
-
-  /**
-   * After task called.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
-   */
-  void afterCall(Span span, Exception e);
+  /** Record stats. */
+  void record();
 }

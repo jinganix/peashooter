@@ -1,4 +1,4 @@
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.executor;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

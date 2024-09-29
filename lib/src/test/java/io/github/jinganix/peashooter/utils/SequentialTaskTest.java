@@ -21,7 +21,6 @@ package io.github.jinganix.peashooter.utils;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.jinganix.peashooter.TestUtils;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;

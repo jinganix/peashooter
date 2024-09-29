@@ -18,8 +18,8 @@
 
 package io.github.jinganix.peashooter.redisson.setup;
 
-import io.github.jinganix.peashooter.TaskQueue;
 import io.github.jinganix.peashooter.TaskQueueProvider;
+import io.github.jinganix.peashooter.queue.TaskQueue;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

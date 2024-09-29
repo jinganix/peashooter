@@ -16,25 +16,19 @@
  * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.queue;
 
-import io.github.jinganix.peashooter.trace.Span;
+import io.github.jinganix.peashooter.ExecutionStats;
 
-/** Traced task callback. */
-public interface TraceCallback {
+/** Dummy stats. */
+public class ExecutionDummyStats implements ExecutionStats {
 
-  /**
-   * Before task called.
-   *
-   * @param span {@link Span}
-   */
-  void beforeCall(Span span);
+  /** Constructor. */
+  public ExecutionDummyStats() {}
 
-  /**
-   * After task called.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
-   */
-  void afterCall(Span span, Exception e);
+  @Override
+  public void reset() {}
+
+  @Override
+  public void record() {}
 }

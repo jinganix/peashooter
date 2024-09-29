@@ -16,25 +16,27 @@
  * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.queue;
 
-import io.github.jinganix.peashooter.trace.Span;
+import io.github.jinganix.peashooter.TaskQueueProvider;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-/** Traced task callback. */
-public interface TraceCallback {
+/** Default implementation for {@link TaskQueueProvider}. */
+public class DefaultTaskQueueProvider implements TaskQueueProvider {
 
-  /**
-   * Before task called.
-   *
-   * @param span {@link Span}
-   */
-  void beforeCall(Span span);
+  private final Map<String, TaskQueue> queues = new ConcurrentHashMap<>();
 
-  /**
-   * After task called.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
-   */
-  void afterCall(Span span, Exception e);
+  /** Constructor. */
+  public DefaultTaskQueueProvider() {}
+
+  @Override
+  public void remove(String key) {
+    this.queues.remove(key);
+  }
+
+  @Override
+  public TaskQueue get(String key) {
+    return queues.computeIfAbsent(key, x -> new TaskQueue());
+  }
 }

@@ -16,25 +16,28 @@
  * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.queue;
 
-import io.github.jinganix.peashooter.trace.Span;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-/** Traced task callback. */
-public interface TraceCallback {
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 
-  /**
-   * Before task called.
-   *
-   * @param span {@link Span}
-   */
-  void beforeCall(Span span);
+@DisplayName("DefaultTaskQueueProvider")
+class DefaultTaskQueueProviderTest {
 
-  /**
-   * After task called.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
-   */
-  void afterCall(Span span, Exception e);
+  @Nested
+  @DisplayName("when remove the key")
+  class WhenRemoveTheKey {
+
+    @Test
+    @DisplayName("then get the new queue")
+    void thenReturnNull() {
+      DefaultTaskQueueProvider queues = new DefaultTaskQueueProvider();
+      TaskQueue queue = queues.get("a");
+      queues.remove("a");
+      assertThat(queues.get("a")).isNotEqualTo(queue);
+    }
+  }
 }

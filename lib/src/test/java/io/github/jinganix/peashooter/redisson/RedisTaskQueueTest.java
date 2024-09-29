@@ -20,15 +20,15 @@ package io.github.jinganix.peashooter.redisson;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-import io.github.jinganix.peashooter.DefaultExecutorSelector;
-import io.github.jinganix.peashooter.DefaultTracer;
-import io.github.jinganix.peashooter.OrderedTraceExecutor;
-import io.github.jinganix.peashooter.TraceExecutor;
 import io.github.jinganix.peashooter.Tracer;
+import io.github.jinganix.peashooter.executor.DefaultExecutorSelector;
+import io.github.jinganix.peashooter.executor.OrderedTraceExecutor;
+import io.github.jinganix.peashooter.executor.TraceExecutor;
 import io.github.jinganix.peashooter.redisson.setup.RedisClient;
 import io.github.jinganix.peashooter.redisson.setup.RedisExtension;
 import io.github.jinganix.peashooter.redisson.setup.RedisTaskQueueProvider;
 import io.github.jinganix.peashooter.redisson.setup.TestItem;
+import io.github.jinganix.peashooter.trace.DefaultTracer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;

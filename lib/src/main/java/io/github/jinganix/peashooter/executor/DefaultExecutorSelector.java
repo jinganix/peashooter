@@ -16,22 +16,32 @@
  * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.executor;
 
+import io.github.jinganix.peashooter.ExecutorSelector;
 import io.github.jinganix.peashooter.queue.TaskQueue;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
 
-/** Select a {@link Executor} for next execution. */
-public interface ExecutorSelector {
+/** Default implementation for {@link ExecutorSelector}. */
+public class DefaultExecutorSelector implements ExecutorSelector {
+
+  private final TraceExecutor traceExecutor;
 
   /**
-   * Get executor.
+   * Constructor.
    *
-   * @param queue {@link TaskQueue}
-   * @param task {@link TraceRunnable}
-   * @param sync true if a sync call
-   * @return {@link Executor}
+   * @param traceExecutor {@link TraceExecutor}
    */
-  Executor getExecutor(TaskQueue queue, TraceRunnable task, boolean sync);
+  public DefaultExecutorSelector(TraceExecutor traceExecutor) {
+    this.traceExecutor = traceExecutor;
+  }
+
+  @Override
+  public Executor getExecutor(TaskQueue queue, TraceRunnable task, boolean sync) {
+    if (sync && traceExecutor.getTracer().getSpan() != null && queue.isEmpty()) {
+      return DirectExecutor.INSTANCE;
+    }
+    return traceExecutor;
+  }
 }

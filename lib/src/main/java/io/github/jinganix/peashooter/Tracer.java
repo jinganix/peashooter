@@ -18,6 +18,8 @@
 
 package io.github.jinganix.peashooter;
 
+import io.github.jinganix.peashooter.trace.Span;
+
 /** Tracer to trace task call chain. */
 public interface Tracer extends TraceIdGenerator, TraceCallback {
 
