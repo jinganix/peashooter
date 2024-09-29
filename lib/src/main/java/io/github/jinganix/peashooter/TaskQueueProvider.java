@@ -18,6 +18,8 @@
 
 package io.github.jinganix.peashooter;
 
+import io.github.jinganix.peashooter.queue.TaskQueue;
+
 /** {@link TaskQueue} collection holder. */
 public interface TaskQueueProvider {
 

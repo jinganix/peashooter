@@ -12,29 +12,19 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter;
+package io.github.jinganix.peashooter.executor;
 
-import io.github.jinganix.peashooter.trace.Span;
+import java.util.concurrent.Executor;
 
-/** Traced task callback. */
-public interface TraceCallback {
+/** Execute {@link Runnable} in current thread. */
+public enum DirectExecutor implements Executor {
+  /** singleton instance */
+  INSTANCE;
 
-  /**
-   * Before task called.
-   *
-   * @param span {@link Span}
-   */
-  void beforeCall(Span span);
-
-  /**
-   * After task called.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
-   */
-  void afterCall(Span span, Exception e);
+  @Override
+  public void execute(Runnable runnable) {
+    runnable.run();
+  }
 }

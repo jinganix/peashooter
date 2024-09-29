@@ -32,7 +32,7 @@ signAndPublish("peashooter") {
 
 generateSourceTask(
   projectDir.resolve("src/templates/ExecutorForTests.java.ftl"),
-  projectDir.resolve("src/test/java/io/github/jinganix/peashooter/ExecutorForTests.java"),
+  projectDir.resolve("src/test/java/io/github/jinganix/peashooter/executor/ExecutorForTests.java"),
   mapOf("java19" to JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_19))
 )
 tasks.compileTestJava { dependsOn("generateSource") }
