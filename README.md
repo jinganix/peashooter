@@ -50,11 +50,11 @@ OS Loader Version: 10151.140.19.700.2
 Activation Lock Status: Disabled
 ```
 
-### [TaskQueue Benchmark](lib/src/test/java/io/github/jinganix/peashooter/TaskQueueBenchmarkTest.java)
+### [TaskQueue Benchmark](lib/src/test/java/io/github/jinganix/peashooter/queue/TaskQueueBenchmarkTest.java)
 
 Execute 5,000,000 counting tasks and measure the execution time.
 
-- [TaskQueue](lib/src/main/java/io/github/jinganix/peashooter/TaskQueue.java): 620ms
+- [TaskQueue](lib/src/main/java/io/github/jinganix/peashooter/queue/TaskQueue.java): 620ms
 - synchronized: 2336ms
 - ReentrantLock: 2412ms
 
