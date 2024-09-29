@@ -24,7 +24,11 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Call tasks in order. */
+/**
+ * Call tasks in order. The {@link TaskQueue} locks when submitting tasks and is lock-free during
+ * task execution. By having a few threads submit tasks while the majority execute them, it can
+ * reduce lock contention.
+ */
 public class TaskQueue {
 
   private static final Logger log = LoggerFactory.getLogger(TaskQueue.class);

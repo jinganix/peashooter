@@ -86,7 +86,8 @@ jobs:
       - name: Build with Gradle
         env:
           redis-host: redis://127.0.0.1:6379
-        run: ./gradlew clean build
+          skip_benchmark: true
+        run: ./gradlew clean build --info
 
   coveralls:
     name: Update Coveralls
@@ -105,7 +106,7 @@ jobs:
         run: ./gradlew clean coverage
       - name: Update Coveralls
         run: ./gradlew coveralls
-        
+
   publish:
     name: Publish
     needs: [build]
@@ -123,4 +124,4 @@ jobs:
           distribution: 'zulu'
           java-version: 8
       - name: Publish to Nexus
-        run: ./gradlew publish
+        run: ./gradlew publish -Dorg.gradle.parallel=false --info

@@ -34,18 +34,6 @@ public class RedisTaskQueueProvider implements TaskQueueProvider {
 
   @Override
   public TaskQueue get(String key) {
-    return queues.computeIfAbsent(
-        key,
-        x ->
-            new RedisLockableTaskQueue(key) {
-              @Override
-              protected boolean shouldYield(int executedCount) {
-                return RedisTaskQueueProvider.this.shouldYield(executedCount);
-              }
-            });
-  }
-
-  protected boolean shouldYield(int executedCount) {
-    return executedCount > 0 && executedCount % 5 == 0;
+    return queues.computeIfAbsent(key, x -> new RedisLockableTaskQueue(key));
   }
 }

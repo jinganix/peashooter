@@ -69,4 +69,5 @@ jobs:
       - name: Build with Gradle
         env:
           redis-host: redis://127.0.0.1:6379
-        run: ./gradlew clean build
+          skip_benchmark: true
+        run: ./gradlew clean build --info

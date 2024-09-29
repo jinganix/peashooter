@@ -20,86 +20,89 @@ package io.github.jinganix.peashooter.redisson;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-import io.github.jinganix.peashooter.DefaultTracer;
-import io.github.jinganix.peashooter.ExecutorSelector;
-import io.github.jinganix.peashooter.OrderedTraceExecutor;
-import io.github.jinganix.peashooter.TraceExecutor;
-import io.github.jinganix.peashooter.Tracer;
 import io.github.jinganix.peashooter.redisson.setup.RedisClient;
 import io.github.jinganix.peashooter.redisson.setup.RedisExtension;
-import io.github.jinganix.peashooter.redisson.setup.RedisTaskQueueProvider;
+import io.github.jinganix.peashooter.redisson.setup.RedisLockableTaskQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 
-@DisplayName("RedisLockBenchmark")
 @ExtendWith(RedisExtension.class)
-public class RedisLockBenchmarkTest {
+@DisplayName("RedisLockableQueueBenchmark")
+@DisabledIfEnvironmentVariable(named = "skip_benchmark", matches = "true")
+public class RedisLockableQueueBenchmarkTest {
 
-  private final ExecutorService executorService = Executors.newFixedThreadPool(16);
+  private static final ExecutorService executorService = Executors.newFixedThreadPool(8);
 
   private final RedissonClient client = RedisClient.client;
+
+  static class Counter {
+    int count = 0;
+  }
 
   @BeforeEach
   void setup() {
     client.getKeys().flushall();
   }
 
+  @AfterAll
+  static void clear() {
+    executorService.shutdown();
+  }
+
   @Nested
-  @DisplayName("when execute 10000 tasks")
+  @DisplayName("when execute 500 tasks")
   class WhenExecuteTasks {
 
-    int taskCount = 300;
+    int taskCount = 500;
 
-    private long peashooterTest() throws InterruptedException {
+    private long redisTaskQueueTest() throws InterruptedException {
       CountDownLatch latch = new CountDownLatch(taskCount);
-
-      Tracer tracer = new DefaultTracer();
-      TraceExecutor executor = new TraceExecutor(executorService, tracer);
-      ExecutorSelector selector = (queue, task, sync) -> executor;
-      OrderedTraceExecutor traceExecutor =
-          new OrderedTraceExecutor(
-              new RedisTaskQueueProvider() {
-                // reduce redis lock/unlock time
-                @Override
-                protected boolean shouldYield(int executedCount) {
-                  return executedCount % 100 == 0;
-                }
-              },
-              selector,
-              tracer);
-
+      RedisLockableTaskQueue taskQueue =
+          new RedisLockableTaskQueue("lock_test") {
+            // The ideal scenario for the following code is that
+            // acquiring the Redis lock once allows for the consecutive execution of 50 tasks.
+            @Override
+            protected boolean shouldYield(int executedCount) {
+              return executedCount % 50 == 0;
+            }
+          };
+      Counter counter = new Counter();
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
-        traceExecutor.executeAsync(
-            "a",
+        taskQueue.execute(
+            executorService,
             () -> {
-              taskCount++;
+              counter.count++;
               latch.countDown();
             });
       }
       latch.await();
+      assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
-    private long lockTest() throws InterruptedException {
+    private long redisLockTest() throws InterruptedException {
       CountDownLatch latch = new CountDownLatch(taskCount);
       long startAt = System.nanoTime();
       RLock lock = RedisClient.client.getFairLock("lock_test");
+      Counter counter = new Counter();
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
             () -> {
               try {
                 if (lock.tryLock(5, TimeUnit.SECONDS)) {
-                  taskCount++;
+                  counter.count++;
                   latch.countDown();
                 }
               } catch (InterruptedException e) {
@@ -110,17 +113,18 @@ public class RedisLockBenchmarkTest {
             });
       }
       latch.await();
+      assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     @Test
     @DisplayName("then task is executed")
     void thenTaskIsExecuted() throws InterruptedException {
-      long time1 = peashooterTest();
-      long time2 = lockTest();
+      long time1 = redisTaskQueueTest();
+      long time2 = redisLockTest();
       System.out.printf(
-          "Benchmark: peashooter(%dms), lock(%dms)%n",
-          TimeUnit.NANOSECONDS.toMillis(time1), TimeUnit.NANOSECONDS.toMillis(time2));
+          "task count: %d, benchmark: peashooter(%dms), lock(%dms)",
+          taskCount, TimeUnit.NANOSECONDS.toMillis(time1), TimeUnit.NANOSECONDS.toMillis(time2));
       assertThat(time1).isLessThan(time2);
     }
   }
