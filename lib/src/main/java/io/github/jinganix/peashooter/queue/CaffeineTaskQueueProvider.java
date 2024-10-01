@@ -18,25 +18,33 @@
 
 package io.github.jinganix.peashooter.queue;
 
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 import io.github.jinganix.peashooter.TaskQueueProvider;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
-/** Default implementation for {@link TaskQueueProvider}. */
-public class DefaultTaskQueueProvider implements TaskQueueProvider {
+/** {@link TaskQueueProvider} implemented with {@link Caffeine}. */
+public class CaffeineTaskQueueProvider implements TaskQueueProvider {
 
-  private final Map<String, TaskQueue> queues = new ConcurrentHashMap<>();
+  private final LoadingCache<String, TaskQueue> queues;
 
   /** Constructor. */
-  public DefaultTaskQueueProvider() {}
+  public CaffeineTaskQueueProvider() {
+    this(Duration.ofMinutes(5));
+  }
 
-  @Override
-  public void remove(String key) {
-    this.queues.remove(key);
+  /**
+   * Expire a queue after access.
+   *
+   * @param expireAfterAccess {@link Duration}
+   */
+  public CaffeineTaskQueueProvider(Duration expireAfterAccess) {
+    this.queues =
+        Caffeine.newBuilder().expireAfterAccess(expireAfterAccess).build(key -> new TaskQueue());
   }
 
   @Override
   public TaskQueue get(String key) {
-    return queues.computeIfAbsent(key, x -> new TaskQueue());
+    return queues.get(key);
   }
 }

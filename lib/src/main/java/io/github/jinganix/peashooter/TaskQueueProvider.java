@@ -24,13 +24,6 @@ import io.github.jinganix.peashooter.queue.TaskQueue;
 public interface TaskQueueProvider {
 
   /**
-   * Remove a {@link TaskQueue} by key.
-   *
-   * @param key key of the {@link TaskQueue}
-   */
-  void remove(String key);
-
-  /**
    * Get a {@link TaskQueue} by key.
    *
    * @param key key of the {@link TaskQueue}
