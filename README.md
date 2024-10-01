@@ -71,20 +71,20 @@ Execute 5,000,000 counting tasks and measure the execution time.
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.5</version>
+  <version>0.0.7</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.5'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.7'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.5")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.7")
 ```
 
 ## Basic usage
