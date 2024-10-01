@@ -31,7 +31,7 @@ import static org.mockito.Mockito.verify;
 
 import io.github.jinganix.peashooter.TaskQueueProvider;
 import io.github.jinganix.peashooter.Tracer;
-import io.github.jinganix.peashooter.queue.DefaultTaskQueueProvider;
+import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.queue.LockableTaskQueueProvider;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
@@ -80,7 +80,7 @@ class OrderedTraceExecutorTest {
           .map(
               x ->
                   Arguments.of(
-                      x.getKey(), createExecutor(x.getValue(), new DefaultTaskQueueProvider())));
+                      x.getKey(), createExecutor(x.getValue(), new CaffeineTaskQueueProvider())));
     }
   }
 
@@ -127,7 +127,7 @@ class OrderedTraceExecutorTest {
                       Arguments.of(
                           x.getKey(),
                           "executeSync",
-                          createExecuteSync(x.getValue(), new DefaultTaskQueueProvider())),
+                          createExecuteSync(x.getValue(), new CaffeineTaskQueueProvider())),
                       Arguments.of(
                           x.getKey(),
                           "executeSync.lockable",
@@ -135,7 +135,7 @@ class OrderedTraceExecutorTest {
                       Arguments.of(
                           x.getKey(),
                           "supply",
-                          createSupply(x.getValue(), new DefaultTaskQueueProvider())),
+                          createSupply(x.getValue(), new CaffeineTaskQueueProvider())),
                       Arguments.of(
                           x.getKey(),
                           "supply.lockable",
@@ -191,30 +191,11 @@ class OrderedTraceExecutorTest {
       @DisplayName("then sync execution throw exception")
       void thenSyncExecutionThrowException() {
         OrderedTraceExecutor executor =
-            createExecutor(newSingleThreadExecutor(), new DefaultTaskQueueProvider());
+            createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
         executor.setTimeout(1, TimeUnit.MILLISECONDS);
         assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
             .isInstanceOf(RuntimeException.class)
             .matches(t -> t.getCause() instanceof TimeoutException);
-      }
-    }
-  }
-
-  @Nested
-  @DisplayName("remove")
-  class Remove {
-
-    @Nested
-    @DisplayName("when called")
-    class WhenCalled {
-
-      @Test
-      @DisplayName("then removed")
-      void thenRemoved() {
-        TraceExecutor executor = new TraceExecutor(mock(Executor.class), new DefaultTracer());
-        TaskQueueProvider queues = mock(TaskQueueProvider.class);
-        new OrderedTraceExecutor(queues, new DefaultExecutorSelector(executor), TRACER).remove("a");
-        verify(queues, times(1)).remove("a");
       }
     }
   }
@@ -456,7 +437,7 @@ class OrderedTraceExecutorTest {
       @DisplayName("then throw exception")
       @ArgumentsSource(CallableArgumentsProvider.class)
       void thenThrowException(String _name, String _key, SyncCallable callable) {
-        createExecutor(newSingleThreadExecutor(), new DefaultTaskQueueProvider())
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider())
             .executeAsync("a", () -> sleep(200));
         Thread.currentThread().interrupt();
         assertThatThrownBy(

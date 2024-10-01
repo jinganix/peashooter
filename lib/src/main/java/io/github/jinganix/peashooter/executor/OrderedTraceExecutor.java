@@ -21,7 +21,7 @@ package io.github.jinganix.peashooter.executor;
 import io.github.jinganix.peashooter.ExecutorSelector;
 import io.github.jinganix.peashooter.TaskQueueProvider;
 import io.github.jinganix.peashooter.Tracer;
-import io.github.jinganix.peashooter.queue.DefaultTaskQueueProvider;
+import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.queue.TaskQueue;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
 import io.github.jinganix.peashooter.trace.OrderedSpan;
@@ -59,7 +59,7 @@ public class OrderedTraceExecutor {
    * @param executor {@link Executor}
    */
   public OrderedTraceExecutor(Executor executor) {
-    this.queues = new DefaultTaskQueueProvider();
+    this.queues = new CaffeineTaskQueueProvider();
     if (TraceExecutor.class.isAssignableFrom(executor.getClass())) {
       TraceExecutor traceExecutor = (TraceExecutor) executor;
       this.tracer = traceExecutor.getTracer();
@@ -102,15 +102,6 @@ public class OrderedTraceExecutor {
    */
   public Tracer getTracer() {
     return tracer;
-  }
-
-  /**
-   * Remove a queue by key.
-   *
-   * @param key key of the queue
-   */
-  public void remove(String key) {
-    this.queues.remove(key);
   }
 
   /**
@@ -170,8 +161,8 @@ public class OrderedTraceExecutor {
    */
   public void executeSync(Collection<String> keys, Runnable task) {
     for (String key : keys) {
-      Runnable innerRunnable = task;
-      task = () -> executeSync(key, innerRunnable);
+      Runnable finalTask = task;
+      task = () -> executeSync(key, finalTask);
     }
     task.run();
   }
@@ -223,8 +214,8 @@ public class OrderedTraceExecutor {
    */
   public <R> R supply(Collection<String> keys, Supplier<R> supplier) {
     for (String key : keys) {
-      Supplier<R> innerSupplier = supplier;
-      supplier = () -> supply(key, innerSupplier);
+      Supplier<R> finalSupplier = supplier;
+      supplier = () -> supply(key, finalSupplier);
     }
     return supplier.get();
   }

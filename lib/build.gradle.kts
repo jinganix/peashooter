@@ -1,5 +1,6 @@
 import utils.Vers.versionAssertj
 import utils.Vers.versionAwaitility
+import utils.Vers.versionCaffeine
 import utils.Vers.versionJupiter
 import utils.Vers.versionNetty
 import utils.Vers.versionRedisson
@@ -12,6 +13,7 @@ plugins {
 }
 
 dependencies {
+  implementation("com.github.ben-manes.caffeine:caffeine:$versionCaffeine")
   implementation("io.netty:netty-resolver-dns-native-macos:${versionNetty}:osx-aarch_64")
   implementation("org.slf4j:slf4j-api:${versionSlf4j}")
   testImplementation("org.assertj:assertj-core:${versionAssertj}")

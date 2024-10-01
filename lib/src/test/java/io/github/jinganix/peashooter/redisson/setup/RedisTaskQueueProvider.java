@@ -28,11 +28,6 @@ public class RedisTaskQueueProvider implements TaskQueueProvider {
   private final Map<String, TaskQueue> queues = new ConcurrentHashMap<>();
 
   @Override
-  public void remove(String key) {
-    this.queues.remove(key);
-  }
-
-  @Override
   public TaskQueue get(String key) {
     return queues.computeIfAbsent(key, x -> new RedisLockableTaskQueue(key));
   }
