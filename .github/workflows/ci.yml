@@ -123,6 +123,8 @@ jobs:
       NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
       NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Skip release version
         run: |
           release_version=$(grep -m1 'version =' gradle.properties | grep -oE '([0-9]+\.[0-9]+\.[0-9]+$)')
@@ -130,8 +132,6 @@ jobs:
             echo "Skip publish release version: ${release_version}"
             exit 1
           fi
-
-      - uses: actions/checkout@v4
 
       - name: Setup JDK
         uses: actions/setup-java@v4
