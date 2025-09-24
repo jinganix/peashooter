@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download publish_version
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: ${GITHUB_SHA}
           path: /tmp
