@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup JDK ${{ matrix.jdk }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.jdk }}
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: 8
@@ -132,7 +132,7 @@ jobs:
 
       - name: Setup JDK
         if: "${{ endsWith(env.current_version, '-SNAPSHOT') }}"
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: 8
