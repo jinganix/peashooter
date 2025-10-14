@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: "${{ !startsWith(github.event.pull_request.title, 'chore: release') && !startsWith(github.event.pull_request.title, 'chore: bump version to') }}"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
@@ -53,7 +53,7 @@ jobs:
           wsl sudo apt-get install -y redis-server
           wsl sudo service redis-server start
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v4
