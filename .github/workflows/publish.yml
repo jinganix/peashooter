@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: master
@@ -67,7 +67,7 @@ jobs:
           echo "Publish version: ${publish_version}"
 
       - name: Checkout publish tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/v${{ env.publish_version }}
 

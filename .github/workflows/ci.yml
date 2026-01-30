@@ -15,7 +15,7 @@ jobs:
     outputs:
       skip: ${{ steps.check-skip.outputs.skip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -73,7 +73,7 @@ jobs:
           wsl sudo apt-get install -y redis-server
           wsl sudo service redis-server start
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v4
@@ -99,7 +99,7 @@ jobs:
     env:
       COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup JDK
         uses: actions/setup-java@v4
@@ -122,7 +122,7 @@ jobs:
       NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
       NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Skip release version
         run: |
