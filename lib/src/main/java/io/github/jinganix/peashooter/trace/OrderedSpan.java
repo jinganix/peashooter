@@ -69,7 +69,10 @@ public class OrderedSpan extends Span {
     }
     if (span instanceof OrderedSpan) {
       OrderedSpan orderedSpan = (OrderedSpan) span;
-      if (orderedSpan.sync && Objects.equals(orderedSpan.key, key)) {
+      if (!orderedSpan.sync && !Objects.equals(orderedSpan.key, key)) {
+        return false;
+      }
+      if (Objects.equals(orderedSpan.key, key)) {
         return true;
       }
     }

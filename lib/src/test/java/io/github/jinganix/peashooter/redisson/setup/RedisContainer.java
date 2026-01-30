@@ -23,14 +23,14 @@ import org.testcontainers.utility.DockerImageName;
 public class RedisContainer extends GenericContainer<RedisContainer> {
 
   /** REDIS_PORT. */
-  public static final Integer REDIS_PORT = 8379;
+  public static final Integer REDIS_PORT = 6379;
 
-  private static final String VERSION = "7.4.0-alpine";
+  private static final String VERSION = "8.2.1-alpine";
 
   /** Constructor. */
   public RedisContainer() {
     super(DockerImageName.parse((isArm64() ? "arm64v8/redis:" : "redis:") + VERSION));
-    this.addFixedExposedPort(REDIS_PORT, 6379);
+    this.addExposedPort(REDIS_PORT);
   }
 
   private static boolean isArm64() {
@@ -45,6 +45,6 @@ public class RedisContainer extends GenericContainer<RedisContainer> {
   }
 
   private String getUrl() {
-    return "redis://" + this.getHost() + ":" + REDIS_PORT;
+    return "redis://" + this.getHost() + ":" + getMappedPort(REDIS_PORT);
   }
 }

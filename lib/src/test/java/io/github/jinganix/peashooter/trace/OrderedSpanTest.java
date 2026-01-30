@@ -20,9 +20,17 @@ package io.github.jinganix.peashooter.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.stream.Stream;
+import org.assertj.core.util.Lists;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.ArgumentsProvider;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 
 @DisplayName("OrderedSpan")
 class OrderedSpanTest {
@@ -63,40 +71,58 @@ class OrderedSpanTest {
     @DisplayName("when span is OrderedSpan")
     class WhenSpanIsOrderedSpan {
 
-      @Nested
-      @DisplayName("when is sync and key equals")
-      class WhenIsSyncAndKeyEquals {
+      static class SpanArg {
+        String key;
+        boolean sync;
 
-        @Test
-        @DisplayName("then return true")
-        void thenReturnTrue() {
-          OrderedSpan orderedSpan = new OrderedSpan(new DefaultTracer(), null, "key", true);
-          assertThat(OrderedSpan.invokedBy(orderedSpan, "key")).isTrue();
+        SpanArg(String key, boolean sync) {
+          this.key = key;
+          this.sync = sync;
+        }
+
+        static SpanArg sync(String key) {
+          return new SpanArg(key, true);
+        }
+
+        static SpanArg async(String key) {
+          return new SpanArg(key, false);
+        }
+
+        @Override
+        public String toString() {
+          return "SpanKeyArg(" + key + ", " + sync + ")";
         }
       }
 
-      @Nested
-      @DisplayName("when is sync but key not equal")
-      class WhenIsSyncButKeyNotEqual {
+      static class SpanArgumentsProvider implements ArgumentsProvider {
 
-        @Test
-        @DisplayName("then return false")
-        void thenReturnTrue() {
-          OrderedSpan orderedSpan = new OrderedSpan(new DefaultTracer(), null, "key", true);
-          assertThat(OrderedSpan.invokedBy(orderedSpan, "key1")).isFalse();
+        @Override
+        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+          return Stream.of(
+              Arguments.of(Lists.list(SpanArg.sync("foo")), SpanArg.sync("foo")),
+              Arguments.of(Lists.list(SpanArg.async("foo")), SpanArg.sync("foo")),
+              Arguments.of(
+                  Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
+              Arguments.of(
+                  Lists.list(SpanArg.async("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
+              Arguments.of(
+                  Lists.list(SpanArg.sync("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
+              Arguments.of(
+                  Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
+              Arguments.of(
+                  Lists.list(SpanArg.async("foo"), SpanArg.sync("bar")), SpanArg.sync("foo")));
         }
       }
 
-      @Nested
-      @DisplayName("when key equals but not sync")
-      class WhenKeyEqualsButNotSync {
-
-        @Test
-        @DisplayName("then return false")
-        void thenReturnTrue() {
-          OrderedSpan orderedSpan = new OrderedSpan(new DefaultTracer(), null, "key", false);
-          assertThat(OrderedSpan.invokedBy(orderedSpan, "key")).isFalse();
+      @ParameterizedTest(name = "{0} => {1}")
+      @ArgumentsSource(SpanArgumentsProvider.class)
+      void thenRun(List<SpanArg> args, SpanArg expected) {
+        OrderedSpan span = null;
+        DefaultTracer tracer = new DefaultTracer();
+        for (SpanArg arg : args) {
+          span = new OrderedSpan(tracer, span, arg.key, arg.sync);
         }
+        assertThat(OrderedSpan.invokedBy(span, expected.key)).isEqualTo(expected.sync);
       }
     }
   }

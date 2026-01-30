@@ -38,6 +38,7 @@ import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -46,6 +47,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -219,6 +221,33 @@ class OrderedTraceExecutorTest {
         } else {
           assertThat(System.currentTimeMillis() - start).isLessThan(100);
         }
+      }
+    }
+
+    @Nested
+    @DisplayName("when call sync")
+    class WhenCallSync {
+
+      @ParameterizedTest(name = "{0}")
+      @DisplayName("then should not timeout")
+      @ArgumentsSource(ExecutorArgumentsProvider.class)
+      void thenShouldNotTimeout(String name, OrderedTraceExecutor executor)
+          throws InterruptedException {
+        long millis = System.currentTimeMillis();
+        AtomicReference<Long> ref = new AtomicReference<>();
+        CountDownLatch latch = new CountDownLatch(1);
+        executor.executeAsync(
+            "a",
+            () ->
+                executor.executeSync(
+                    "a",
+                    () -> {
+                      ref.set(System.currentTimeMillis() - millis);
+                      latch.countDown();
+                    }));
+
+        latch.await();
+        Assertions.assertThat(ref.get()).isLessThan(100);
       }
     }
   }

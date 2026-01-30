@@ -90,7 +90,7 @@ fun Project.createConfiguration(
   configuration: Action<Configuration>
 ): Configuration {
   val conf = configurations.create(name) {
-    isVisible = false
+    isCanBeResolved = false
     attributes {
       attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
       attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.DOCUMENTATION))
