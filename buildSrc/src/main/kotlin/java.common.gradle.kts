@@ -18,7 +18,7 @@ plugins {
   java
 }
 
-val javaVersion = JavaVersion.VERSION_17
+val javaVersion = JavaVersion.VERSION_21
 
 val properties = Properties()
 Props.initialize(project)
