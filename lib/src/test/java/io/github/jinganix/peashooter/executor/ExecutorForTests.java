@@ -9,7 +9,7 @@ public class ExecutorForTests {
 
   public static Map<String, Executor> executors() {
     Map<String, Executor> executors = new LinkedHashMap<>();
-    <#if java19>executors.put("VirtualThreadPerTaskExecutor", Executors.newVirtualThreadPerTaskExecutor());</#if>
+    executors.put("VirtualThreadPerTaskExecutor", Executors.newVirtualThreadPerTaskExecutor());
     executors.put("DirectExecutor", DirectExecutor.INSTANCE);
     executors.put("SingleThreadExecutor", Executors.newSingleThreadExecutor());
     executors.put("CachedThreadPool", Executors.newCachedThreadPool());

@@ -87,7 +87,7 @@ class DefaultTracerTest {
             IntStream.range(0, 5)
                 .mapToObj(
                     (IntFunction<Callable<List<String>>>)
-                        _ ->
+                        x ->
                             () -> {
                               List<String> values = new ArrayList<>(1000);
                               for (int i = 0; i < 1000; i++) {

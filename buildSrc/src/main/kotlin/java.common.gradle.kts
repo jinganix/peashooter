@@ -12,18 +12,15 @@ import java.util.*
 
 plugins {
   id("conventions.versioning")
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_24)) id("com.diffplug.spotless")
+  id("com.diffplug.spotless")
   idea
   jacoco
   java
 }
 
-val javaVersion = if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_24)) JavaVersion.VERSION_24 else JavaVersion.VERSION_1_8
+val javaVersion = JavaVersion.VERSION_17
 
 val properties = Properties()
-if (javaVersion == JavaVersion.VERSION_1_8) {
-  FileInputStream(file("../gradle.java8.properties")).use(properties::load)
-}
 Props.initialize(project)
 Vers.initialize(project, properties)
 
@@ -46,18 +43,15 @@ dependencies {
 
 tasks.test {
   useJUnitPlatform()
-  if (javaVersion == JavaVersion.VERSION_24) jvmArgs("--enable-preview")
 }
 
-if (javaVersion == JavaVersion.VERSION_24) {
-  extensions.findByType<SpotlessExtension>()?.java {
-    targetExclude("build/**/*")
-    googleJavaFormat(versionGoogleJavaFormat)
-  }
+extensions.findByType<SpotlessExtension>()?.java {
+  targetExclude("build/**/*")
+  googleJavaFormat(versionGoogleJavaFormat)
+}
 
-  tasks.named<Task>("check") {
-    dependsOn(tasks.named("spotlessCheck"))
-  }
+tasks.named<Task>("check") {
+  dependsOn(tasks.named("spotlessCheck"))
 }
 
 jacoco {
