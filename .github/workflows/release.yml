@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: master
@@ -80,7 +80,7 @@ jobs:
           echo "Release version: ${release_version}"
 
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: master
@@ -138,7 +138,7 @@ jobs:
           echo "Release version: ${release_version}"
 
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: master
@@ -205,7 +205,7 @@ jobs:
           echo "Release version: ${release_version}"
 
       - name: Checkout master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: master
@@ -252,7 +252,7 @@ jobs:
           echo "Release version: ${release_version}"
 
       - name: Checkout release tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/v${{ env.release_version }}
 
