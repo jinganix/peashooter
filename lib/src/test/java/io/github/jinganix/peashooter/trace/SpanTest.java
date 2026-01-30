@@ -19,14 +19,11 @@
 package io.github.jinganix.peashooter.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mockStatic;
 
 import io.github.jinganix.peashooter.TraceIdGenerator;
-import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
 
 @DisplayName("Span")
 class SpanTest {
@@ -54,12 +51,9 @@ class SpanTest {
       @Test
       @DisplayName("then gen new trace id")
       void thenGenNewTraceId() {
-        try (MockedStatic<UUID> uuid = mockStatic(UUID.class)) {
-          uuid.when(UUID::randomUUID).thenReturn(new UUID(0, 0));
-          Span span = new Span(new DefaultTracer(), null);
-          assertThat(span.getParent()).isNull();
-          assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
-        }
+        Span span = new Span(new DefaultTracer(), null);
+        assertThat(span.getParent()).isNull();
+        assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
       }
     }
 

@@ -1,4 +1,5 @@
 import org.gradle.api.JavaVersion.*
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.konan.properties.Properties
 import java.io.FileInputStream
 
@@ -7,7 +8,7 @@ plugins {
   `maven-publish`
 }
 
-val javaVersion = if (current().isCompatibleWith(VERSION_19)) VERSION_19 else VERSION_1_8
+val javaVersion = if (current().isCompatibleWith(VERSION_24)) VERSION_24 else VERSION_1_8
 
 java {
   sourceCompatibility = javaVersion
@@ -15,8 +16,8 @@ java {
 }
 
 tasks.compileKotlin {
-  kotlinOptions {
-    jvmTarget = javaVersion.toString()
+  compilerOptions {
+    jvmTarget.set(JvmTarget.fromTarget(javaVersion.toString()))
   }
 }
 

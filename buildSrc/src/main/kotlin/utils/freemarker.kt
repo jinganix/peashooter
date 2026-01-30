@@ -23,7 +23,7 @@ import java.io.File
 fun Project.generateSourceTask(input: File, output: File, data: Map<String, Any>) {
   val taskName = "generateSource"
 
-  task(taskName) {
+  tasks.register(taskName) {
     doLast {
       val cfg = Configuration(Configuration.VERSION_2_3_32)
 

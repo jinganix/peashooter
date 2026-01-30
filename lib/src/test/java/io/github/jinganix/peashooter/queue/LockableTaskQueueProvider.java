@@ -13,7 +13,7 @@ public class LockableTaskQueueProvider implements TaskQueueProvider {
   public TaskQueue get(String key) {
     return queues.computeIfAbsent(
         key,
-        x ->
+        _ ->
             new LockableTaskQueue() {
               @Override
               protected boolean tryLock(ExecutionStats stats) {

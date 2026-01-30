@@ -211,7 +211,7 @@ class TaskQueueTest {
         @DisplayName("then return false")
         void thenReturnFalse() {
           TaskQueue queue = new TaskQueue();
-          queue.execute(command -> {}, () -> {});
+          queue.execute(_ -> {}, () -> {});
           assertThat(queue.isEmpty()).isFalse();
         }
       }
@@ -225,7 +225,7 @@ class TaskQueueTest {
         void thenReturnFalse() {
           TaskQueue queue = new TaskQueue();
           CountDownLatch latch = new CountDownLatch(1);
-          queue.execute(command -> {}, () -> uncheckedRun(latch::await));
+          queue.execute(_ -> {}, () -> uncheckedRun(latch::await));
           assertThat(queue.isEmpty()).isFalse();
           latch.countDown();
         }
