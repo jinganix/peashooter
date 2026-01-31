@@ -109,7 +109,7 @@ jobs:
         run: ./gradlew clean coverage
 
       - name: Update Coveralls
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           coverage-format: jacoco
