@@ -31,12 +31,13 @@ for (key in properties.stringPropertyNames()) {
   ext.set(key, properties.getProperty(key))
 }
 
+val versionGradleMavenPublishPlugin: String by project
 val versionGradleVersionsPlugin: String by project
 val versionJacocoAgent: String by project
 val versionSpotlessPluginGradle: String by project
 
 dependencies {
-  implementation("com.vanniktech:gradle-maven-publish-plugin:0.36.0")
+  implementation("com.vanniktech:gradle-maven-publish-plugin:${versionGradleMavenPublishPlugin}")
   implementation("com.diffplug.spotless:spotless-plugin-gradle:${versionSpotlessPluginGradle}")
   implementation("com.github.ben-manes:gradle-versions-plugin:${versionGradleVersionsPlugin}")
   implementation("org.jacoco:org.jacoco.agent:${versionJacocoAgent}")

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,14 +18,21 @@
 
 package utils
 
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.DocsType
 import org.gradle.api.attributes.Usage
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.named
+import org.gradle.kotlin.dsl.the
+import org.gradle.plugins.signing.SigningExtension
 import java.io.File
+import java.util.Locale
 
 fun Project.createConfiguration(
   name: String,
@@ -57,4 +64,78 @@ fun Project.extractDependencies(file: File): List<String> {
       "$artifact${project.property(property) as String}"
     }
     .toList()
+}
+
+fun Project.signAndPublish1(artifactId: String, configuration: Action<MavenPublication>) {
+  val extension = project.the<PublishingExtension>()
+  val publicationName = "[_-]+[a-zA-Z]".toRegex().replace(artifactId) {
+    it.value.replace("_", "").replace("-", "")
+      .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+  }
+  val publication = extension.publications.create(publicationName, MavenPublication::class.java)
+  publication.artifactId = artifactId
+  publication.pom {
+    name.set(publicationName)
+    url.set("https://github.com/jinganix/peashooter")
+    licenses {
+      license {
+        name.set("The Apache License, Version 2.0")
+        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+      }
+    }
+    developers {
+      developer {
+        id.set("gan.jin")
+        name.set("JinGan")
+        email.set("jinganix@gmail.com")
+      }
+    }
+    scm {
+      connection.set("scm:git:git://github.com/jinganix/peashooter.git")
+      developerConnection.set("scm:git:ssh://github.com/jinganix/peashooter.git")
+      url.set("https://github.com/jinganix/peashooter")
+    }
+  }
+}
+
+fun Project.signAndPublish(artifactId: String, desc: String) {
+  val extension = extensions.getByType<MavenPublishBaseExtension>()
+
+  if (System.getenv("GITHUB_ACTIONS")?.toBoolean() == true) {
+    extension.publishToMavenCentral()
+    extension.signAllPublications()
+  }
+
+  val publicationName = "[_-]+[a-zA-Z]".toRegex().replace(artifactId) { it ->
+    it.value.replace("_", "").replace("-", "")
+      .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+  }
+
+  extension.coordinates(group.toString(), artifactId, version.toString())
+
+  val publishing = project.the<PublishingExtension>()
+  val publication = publishing.publications.create(publicationName, MavenPublication::class.java)
+  publication.artifactId = artifactId
+  publication.pom {
+    name.set(publicationName)
+    url.set("https://github.com/jinganix/peashooter")
+    licenses {
+      license {
+        name.set("The Apache License, Version 2.0")
+        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+      }
+    }
+    developers {
+      developer {
+        id.set("gan.jin")
+        name.set("JinGan")
+        email.set("jinganix@gmail.com")
+      }
+    }
+    scm {
+      connection.set("scm:git:git://github.com/jinganix/peashooter.git")
+      developerConnection.set("scm:git:ssh://github.com/jinganix/peashooter.git")
+      url.set("https://github.com/jinganix/peashooter")
+    }
+  }
 }
