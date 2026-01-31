@@ -3,7 +3,6 @@ import utils.createConfiguration
 import utils.extractDependencies
 
 plugins {
-  id("com.github.kt3k.coveralls")
   id("java")
   jacoco
 }
@@ -74,21 +73,6 @@ val coverage by tasks.registering(JacocoReport::class) {
     html.required.set(true)
     xml.required.set(true)
   }
-}
-
-val configCoveralls by tasks.registering(DefaultTask::class) {
-  group = "verification"
-  coveralls {
-    sourceDirs = incomingSourceDirs.incoming.artifactView { lenient(true) }.files.map {
-      it.absolutePath
-    }
-    jacocoReportPath = "build/reports/jacoco/coverage/coverage.xml"
-  }
-}
-
-tasks.coveralls {
-  group = "verification"
-  dependsOn(configCoveralls)
 }
 
 tasks.check {

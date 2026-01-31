@@ -96,8 +96,6 @@ jobs:
     name: Update Coveralls
     needs: [build]
     runs-on: ubuntu-latest
-    env:
-      COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
     steps:
       - uses: actions/checkout@v6
 
@@ -111,16 +109,20 @@ jobs:
         run: ./gradlew clean coverage
 
       - name: Update Coveralls
-        run: ./gradlew coveralls
+        uses: codecov/codecov-action@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          coverage-format: jacoco
+          path: build/reports/jacoco/coverage/coverage.xml
 
   publish:
     name: Publish
     runs-on: ubuntu-latest
     env:
-      GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
-      GPG_SIGNING_PASSWORD: ${{ secrets.GPG_SIGNING_PASSWORD }}
-      NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
-      NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}
+      ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.GPG_SIGNING_KEY }}
+      ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_SIGNING_PASSWORD }}
+      ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.NEXUS_REPO_USERNAME }}
+      ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.NEXUS_REPO_PASSWORD }}
     steps:
       - uses: actions/checkout@v6
 
