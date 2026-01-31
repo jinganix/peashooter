@@ -4,7 +4,6 @@ import java.io.FileInputStream
 
 plugins {
   `kotlin-dsl`
-  `maven-publish`
 }
 
 val javaVersion = JavaVersion.VERSION_21
@@ -38,6 +37,7 @@ val versionJacocoAgent: String by project
 val versionSpotlessPluginGradle: String by project
 
 dependencies {
+  implementation("com.vanniktech:gradle-maven-publish-plugin:0.36.0")
   implementation("com.diffplug.spotless:spotless-plugin-gradle:${versionSpotlessPluginGradle}")
   implementation("com.github.ben-manes:gradle-versions-plugin:${versionGradleVersionsPlugin}")
   implementation("com.github.kt3k.coveralls:com.github.kt3k.coveralls.gradle.plugin:${versionCoverallsGradlePlugin}")
