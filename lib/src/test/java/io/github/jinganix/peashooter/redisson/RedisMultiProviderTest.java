@@ -37,7 +37,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,7 +107,7 @@ public class RedisMultiProviderTest {
           Stream.of(getTasks(0, latch, lock, client), getTasks(1, latch, lock, client2))
               .flatMap(List::stream)
               .map(CompletableFuture::runAsync)
-              .collect(Collectors.toList());
+              .toList();
       CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
       latch.await();
       RList<TestItem> list = client.getList("list");

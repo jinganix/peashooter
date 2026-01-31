@@ -30,7 +30,6 @@ object Vers {
   lateinit var versionAssertj: String
   lateinit var versionAwaitility: String
   lateinit var versionCaffeine: String
-  lateinit var versionCoverallsGradlePlugin: String
   lateinit var versionGoogleJavaFormat: String
   lateinit var versionGradleVersionsPlugin: String
   lateinit var versionJacocoAgent: String

@@ -6,7 +6,6 @@ import utils.Vers.versionNetty
 import utils.Vers.versionRedisson
 import utils.Vers.versionSlf4j
 import utils.Vers.versionTestContainers
-import utils.signAndPublish
 
 plugins {
   id("java.library")
@@ -23,11 +22,4 @@ dependencies {
   testImplementation("org.redisson:redisson:$versionRedisson")
   testImplementation("org.testcontainers:testcontainers:$versionTestContainers")
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${versionJupiter}")
-}
-
-signAndPublish("peashooter") {
-  from(components["java"])
-  pom {
-    description.set("Call tasks sequentially and prevent deadlocks")
-  }
 }
