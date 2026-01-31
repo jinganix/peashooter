@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,6 +30,7 @@ import io.github.jinganix.peashooter.redisson.setup.RedisTaskQueueProvider;
 import io.github.jinganix.peashooter.redisson.setup.TestItem;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
 import io.github.jinganix.peashooter.utils.SequentialTask;
+import io.github.jinganix.peashooter.utils.TestUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -37,7 +38,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -89,6 +89,7 @@ public class RedisMultiProviderTest {
             new SequentialTask(
                 lock,
                 () -> {
+                  TestUtils.sleep(10);
                   item.setMillis(System.currentTimeMillis());
                   list.add(item);
                   latch.countDown();
@@ -103,12 +104,9 @@ public class RedisMultiProviderTest {
     void thenTasksAreExecuted() throws InterruptedException {
       CountDownLatch latch = new CountDownLatch(20);
       AtomicBoolean lock = new AtomicBoolean(false);
-      List<CompletableFuture<Void>> futures =
-          Stream.of(getTasks(0, latch, lock, client), getTasks(1, latch, lock, client2))
-              .flatMap(List::stream)
-              .map(CompletableFuture::runAsync)
-              .toList();
-      CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+      CompletableFuture.runAsync(() -> getTasks(0, latch, lock, client).forEach(Runnable::run));
+      TestUtils.sleep(5);
+      CompletableFuture.runAsync(() -> getTasks(1, latch, lock, client2).forEach(Runnable::run));
       latch.await();
       RList<TestItem> list = client.getList("list");
       List<TestItem> items = list.readAll();
