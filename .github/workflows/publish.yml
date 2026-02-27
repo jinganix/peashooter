@@ -43,7 +43,7 @@ jobs:
           echo "${publish_version}" >> /tmp/publish_version
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${GITHUB_SHA}
           path: /tmp/publish_version
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download publish_version
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${GITHUB_SHA}
           path: /tmp
