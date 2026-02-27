@@ -57,7 +57,7 @@ jobs:
           echo "${release_version}" >> /tmp/release_version
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${GITHUB_SHA}
           path: /tmp/release_version
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${GITHUB_SHA}
           path: /tmp
@@ -128,7 +128,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${GITHUB_SHA}
           path: /tmp
@@ -196,7 +196,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${GITHUB_SHA}
           path: /tmp
@@ -244,7 +244,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download release_version
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${GITHUB_SHA}
           path: /tmp
