@@ -63,9 +63,9 @@ jobs:
 
       - name: Setup wsl on Windows
         if: matrix.os == 'windows-latest'
-        uses: Vampire/setup-wsl@v3
+        uses: Vampire/setup-wsl@v6
         with:
-          distribution: Debian
+          distribution: Ubuntu-24.04
 
       - name: Setup redis on Windows
         if: matrix.os == 'windows-latest'
