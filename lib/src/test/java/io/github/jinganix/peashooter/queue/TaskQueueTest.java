@@ -33,6 +33,7 @@ import static org.mockito.Mockito.verify;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -175,6 +176,102 @@ class TaskQueueTest {
       // Then
       verify(executor, times(1)).execute(any());
       verify(task, never()).run();
+    }
+
+    @Test
+    @DisplayName("Given runner active and rejected submit -> prior queued tasks still complete")
+    void givenRunnerActiveAndRejectedSubmit_priorQueuedTasksStillComplete()
+        throws InterruptedException {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
+      AtomicInteger completed = new AtomicInteger(0);
+      Executor rejecting = mock(Executor.class);
+      doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
+      Runnable rejected = mock(Runnable.class);
+
+      CountDownLatch runnerScheduled = new CountDownLatch(1);
+      CountDownLatch releaseRunner = new CountDownLatch(1);
+      CountDownLatch priorTasksDone = new CountDownLatch(3);
+
+      new Thread(
+              () ->
+                  taskQueue.execute(
+                      command -> {
+                        runnerScheduled.countDown();
+                        uncheckedRun(releaseRunner::await);
+                        command.run();
+                      },
+                      () -> {}))
+          .start();
+      runnerScheduled.await();
+
+      Executor worker = createExecutor();
+      Runnable countAndSignal =
+          () -> {
+            completed.incrementAndGet();
+            priorTasksDone.countDown();
+          };
+      taskQueue.execute(worker, countAndSignal);
+      taskQueue.execute(worker, countAndSignal);
+      taskQueue.execute(worker, countAndSignal);
+
+      // When: submit on test thread while runner is held; task is only enqueued
+      taskQueue.execute(rejecting, rejected);
+      releaseRunner.countDown();
+      priorTasksDone.await();
+
+      // Then: prior tasks finished; rejected task stalled on executor switch, not run
+      assertThat(completed.get()).isEqualTo(3);
+      verify(rejected, never()).run();
+    }
+
+    @Test
+    @DisplayName(
+        "Given rejected submit throws on idle queue -> other thread tasks already completed")
+    void givenRejectedSubmitThrows_otherThreadTasksAlreadyCompleted() throws InterruptedException {
+      // Given: other thread drains three tasks first
+      TaskQueue taskQueue = new TaskQueue();
+      AtomicInteger completed = new AtomicInteger(0);
+      Executor rejecting = mock(Executor.class);
+      RejectedExecutionException exception = new RejectedExecutionException();
+      doThrow(exception).when(rejecting).execute(any());
+
+      CountDownLatch runnerScheduled = new CountDownLatch(1);
+      CountDownLatch releaseRunner = new CountDownLatch(1);
+      CountDownLatch priorTasksDone = new CountDownLatch(3);
+
+      new Thread(
+              () ->
+                  taskQueue.execute(
+                      command -> {
+                        runnerScheduled.countDown();
+                        uncheckedRun(releaseRunner::await);
+                        command.run();
+                      },
+                      () -> {}))
+          .start();
+      runnerScheduled.await();
+
+      Executor worker = createExecutor();
+      Runnable countAndSignal =
+          () -> {
+            completed.incrementAndGet();
+            priorTasksDone.countDown();
+          };
+      taskQueue.execute(worker, countAndSignal);
+      taskQueue.execute(worker, countAndSignal);
+      taskQueue.execute(worker, countAndSignal);
+      releaseRunner.countDown();
+      priorTasksDone.await();
+
+      assertThat(completed.get()).isEqualTo(3);
+
+      Runnable rejected = mock(Runnable.class);
+
+      // When / Then: idle queue rejects only this submission; prior work is unchanged
+      assertThatThrownBy(() -> taskQueue.execute(rejecting, rejected)).isEqualTo(exception);
+      verify(rejected, never()).run();
+      assertThat(completed.get()).isEqualTo(3);
     }
   }
 
