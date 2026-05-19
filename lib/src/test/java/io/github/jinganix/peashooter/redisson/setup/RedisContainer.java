@@ -25,7 +25,7 @@ public class RedisContainer extends GenericContainer<RedisContainer> {
   /** REDIS_PORT. */
   public static final Integer REDIS_PORT = 6379;
 
-  private static final String VERSION = "8.2.1-alpine";
+  private static final String VERSION = "8.6.0-alpine";
 
   /** Constructor. */
   public RedisContainer() {

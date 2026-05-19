@@ -50,31 +50,32 @@ jobs:
         jdk: [21, 25]
       fail-fast: false
     steps:
-      - name: Setup redis on MacOS
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install redis
-          brew services start redis
+      - uses: actions/checkout@v6
 
       - name: Setup redis on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          docker run --name redis -p6379:6379 -d redis:7.4.0-alpine
+          docker run --name redis -p 6379:6379 -d redis:7.4.0-alpine
+          until docker exec redis redis-cli ping | grep -q PONG; do sleep 1; done
 
-      - name: Setup wsl on Windows
-        if: matrix.os == 'windows-latest'
-        uses: Vampire/setup-wsl@v3
-        with:
-          distribution: Debian
+      - name: Setup redis on macOS
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install redis
+          brew services start redis
+          until redis-cli ping 2>/dev/null | grep -q PONG; do sleep 1; done
 
       - name: Setup redis on Windows
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          wsl sudo apt-get update
-          wsl sudo apt-get install -y redis-server
-          wsl sudo service redis-server start
-
-      - uses: actions/checkout@v6
+          docker run --name redis -p 6379:6379 -d redis:7.4.0-alpine
+          for ($i = 0; $i -lt 30; $i++) {
+            $result = docker exec redis redis-cli ping 2>$null
+            if ($result -match 'PONG') { break }
+            Start-Sleep -Seconds 1
+          }
+          if ($result -notmatch 'PONG') { throw 'Redis did not become ready' }
 
       - name: Setup JDK ${{ matrix.jdk }}
         uses: actions/setup-java@v5
