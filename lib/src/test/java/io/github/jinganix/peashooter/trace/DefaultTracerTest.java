@@ -32,82 +32,66 @@ import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("DefaultTracer")
 class DefaultTracerTest {
 
-  @Nested
-  @DisplayName("span when not set")
-  class SpanWhenNotSet {
+  @Test
+  @DisplayName("Given span is not set -> should return null")
+  void givenSpanIsNotSet() {
+    // Given
+    Tracer tracer = new DefaultTracer();
+    tracer.clearSpan();
 
-    @Test
-    @DisplayName("Given span is not set -> should return null")
-    void givenSpanIsNotSet() {
-      // Given
-      Tracer tracer = new DefaultTracer();
-      tracer.clearSpan();
-
-      // When / Then
-      assertThat(tracer.getSpan()).isNull();
-    }
+    // When / Then
+    assertThat(tracer.getSpan()).isNull();
   }
 
-  @Nested
-  @DisplayName("span when set")
-  class SpanWhenSet {
+  @Test
+  @DisplayName("Given span is set -> should return the span")
+  void givenSpanIsSet() {
+    // Given
+    Tracer tracer = new DefaultTracer();
+    tracer.clearSpan();
+    Span span = new Span(new DefaultTracer(), null);
 
-    @Test
-    @DisplayName("Given span is set -> should return the span")
-    void givenSpanIsSet() {
-      // Given
-      Tracer tracer = new DefaultTracer();
-      tracer.clearSpan();
-      Span span = new Span(new DefaultTracer(), null);
+    // When
+    tracer.setSpan(span);
 
-      // When
-      tracer.setSpan(span);
-
-      // Then
-      assertThat(tracer.getSpan()).isEqualTo(span);
-    }
+    // Then
+    assertThat(tracer.getSpan()).isEqualTo(span);
   }
 
-  @Nested
-  @DisplayName("nextId when called in multi threads")
-  class NextIdWhenCalledInMultiThreads {
+  @Test
+  @DisplayName("Given called in multi threads -> should have no duplicated")
+  void givenCalledInMultiThreads() throws InterruptedException, ExecutionException {
+    // Given
+    Tracer tracer = new DefaultTracer();
+    List<Callable<List<String>>> callables =
+        IntStream.range(0, 5)
+            .mapToObj(
+                (IntFunction<Callable<List<String>>>)
+                    x ->
+                        () -> {
+                          List<String> values = new ArrayList<>(1000);
+                          for (int i = 0; i < 1000; i++) {
+                            values.add(tracer.nextId());
+                          }
+                          return values;
+                        })
+            .collect(Collectors.toList());
 
-    @Test
-    @DisplayName("Given called in multi threads -> should have no duplicated")
-    void givenCalledInMultiThreads() throws InterruptedException, ExecutionException {
-      // Given
-      Tracer tracer = new DefaultTracer();
-      List<Callable<List<String>>> callables =
-          IntStream.range(0, 5)
-              .mapToObj(
-                  (IntFunction<Callable<List<String>>>)
-                      x ->
-                          () -> {
-                            List<String> values = new ArrayList<>(1000);
-                            for (int i = 0; i < 1000; i++) {
-                              values.add(tracer.nextId());
-                            }
-                            return values;
-                          })
-              .collect(Collectors.toList());
+    ExecutorService executorService = Executors.newFixedThreadPool(8);
 
-      ExecutorService executorService = Executors.newFixedThreadPool(8);
-
-      // When
-      List<Future<List<String>>> futureList = executorService.invokeAll(callables);
-      List<String> values = new ArrayList<>();
-      for (Future<List<String>> future : futureList) {
-        values.addAll(future.get());
-      }
-
-      // Then
-      assertThat(values.stream().distinct().count()).isEqualTo(values.size());
+    // When
+    List<Future<List<String>>> futureList = executorService.invokeAll(callables);
+    List<String> values = new ArrayList<>();
+    for (Future<List<String>> future : futureList) {
+      values.addAll(future.get());
     }
+
+    // Then
+    assertThat(values.stream().distinct().count()).isEqualTo(values.size());
   }
 }

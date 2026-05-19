@@ -31,6 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.support.ParameterDeclarations;
 
 @DisplayName("OrderedSpan")
 class OrderedSpanTest {
@@ -50,21 +51,16 @@ class OrderedSpanTest {
     }
   }
 
-  @Nested
-  @DisplayName("invokedBy when span is null")
-  class InvokedByWhenSpanIsNull {
-
-    @Test
-    @DisplayName("Given span is null -> should return false")
-    void givenSpanIsNull() {
-      // When / Then
-      assertThat(OrderedSpan.invokedBy(null, "")).isFalse();
-    }
+  @Test
+  @DisplayName("Given span is null -> should return false")
+  void givenSpanIsNull() {
+    // When / Then
+    assertThat(OrderedSpan.invokedBy(null, "")).isFalse();
   }
 
   @Nested
-  @DisplayName("invokedBy when span is OrderedSpan")
-  class InvokedByWhenSpanIsOrderedSpan {
+  @DisplayName("invokedBy")
+  class InvokedBy {
 
     static class SpanArg {
       String key;
@@ -92,7 +88,8 @@ class OrderedSpanTest {
     static class SpanArgumentsProvider implements ArgumentsProvider {
 
       @Override
-      public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+      public Stream<? extends Arguments> provideArguments(
+          ParameterDeclarations parameters, ExtensionContext context) {
         return Stream.of(
             Arguments.of(Lists.list(SpanArg.sync("foo")), SpanArg.sync("foo")),
             Arguments.of(Lists.list(SpanArg.async("foo")), SpanArg.sync("foo")),

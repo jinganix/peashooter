@@ -35,13 +35,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
 
-@DisplayName("MultiProcess")
+@DisplayName("RedisTaskQueue")
 @ExtendWith(RedisExtension.class)
 public class RedisTaskQueueTest {
 
@@ -61,59 +60,49 @@ public class RedisTaskQueueTest {
     client.getKeys().flushall();
   }
 
-  @Nested
-  @DisplayName("when execute 1 task")
-  class WhenExecute1Task {
+  @Test
+  @DisplayName("Given execute 1 task -> should execute task correctly")
+  void givenExecute1Task() {
+    // Given
+    RList<TestItem> list = client.getList("list");
 
-    @Test
-    @DisplayName("Given execute 1 task -> should execute task correctly")
-    void givenExecute1Task() {
-      // Given
-      RList<TestItem> list = client.getList("list");
-
-      // When
-      TestItem value =
-          traceExecutor.supply(
-              "a",
-              () -> {
-                TestItem item = new TestItem(0, 1).setMillis(System.currentTimeMillis());
-                list.add(item);
-                return item;
-              });
-
-      // Then
-      assertThat(list.get(0)).usingRecursiveComparison().isEqualTo(value);
-    }
-  }
-
-  @Nested
-  @DisplayName("when execute 10 tasks")
-  class WhenExecute10Tasks {
-
-    @Test
-    @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
-    void givenExecute10Tasks() throws InterruptedException {
-      // Given
-      RList<TestItem> list = client.getList("list");
-      List<TestItem> items = new ArrayList<>();
-      CountDownLatch latch = new CountDownLatch(10);
-
-      // When
-      for (int i = 0; i < 10; i++) {
-        TestItem item = new TestItem(0, i);
-        items.add(item);
-        traceExecutor.executeAsync(
+    // When
+    TestItem value =
+        traceExecutor.supply(
             "a",
             () -> {
-              item.setMillis(System.currentTimeMillis());
+              TestItem item = new TestItem(0, 1).setMillis(System.currentTimeMillis());
               list.add(item);
-              latch.countDown();
+              return item;
             });
-      }
-      latch.await();
 
-      // Then
-      assertThat(list.readAll()).usingRecursiveComparison().isEqualTo(items);
+    // Then
+    assertThat(list.get(0)).usingRecursiveComparison().isEqualTo(value);
+  }
+
+  @Test
+  @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
+  void givenExecute10Tasks() throws InterruptedException {
+    // Given
+    RList<TestItem> list = client.getList("list");
+    List<TestItem> items = new ArrayList<>();
+    CountDownLatch latch = new CountDownLatch(10);
+
+    // When
+    for (int i = 0; i < 10; i++) {
+      TestItem item = new TestItem(0, i);
+      items.add(item);
+      traceExecutor.executeAsync(
+          "a",
+          () -> {
+            item.setMillis(System.currentTimeMillis());
+            list.add(item);
+            latch.countDown();
+          });
     }
+    latch.await();
+
+    // Then
+    assertThat(list.readAll()).usingRecursiveComparison().isEqualTo(items);
   }
 }

@@ -27,9 +27,12 @@ import io.github.jinganix.peashooter.queue.TaskQueue;
 import io.github.jinganix.peashooter.trace.Span;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @DisplayName("DefaultTraceExecutorProvider")
 class DefaultExecutorSelectorTest {
@@ -45,66 +48,47 @@ class DefaultExecutorSelectorTest {
   DefaultExecutorSelector provider = new DefaultExecutorSelector(traceExecutor);
 
   @Nested
-  @DisplayName("getExecutor when is sync and span not null and queue is empty")
-  class GetExecutorWhenIsSyncAndSpanNotNullAndQueueIsEmpty {
+  @DisplayName("getExecutor")
+  class GetExecutor {
 
-    @Test
-    @DisplayName("Given is sync and span not null and queue empty -> should return DirectExecutor")
-    void givenIsSyncAndSpanNotNullAndQueueEmpty() {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("provideGetExecutorScenarios")
+    @DisplayName("should return correct executor based on conditions")
+    void testGetExecutor(
+        String scenario, Span span, boolean queueEmpty, boolean sync, Executor expectedExecutor) {
       // Given
-      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-      when(queue.isEmpty()).thenReturn(true);
+      when(traceExecutor.getSpan()).thenReturn(span);
+      when(queue.isEmpty()).thenReturn(queueEmpty);
 
-      // When / Then
-      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(DirectExecutor.INSTANCE);
+      // When
+      Executor result = provider.getExecutor(queue, task, sync);
+
+      // Then
+      if (expectedExecutor == null) {
+        assertThat(result).isEqualTo(traceExecutor);
+      } else {
+        assertThat(result).isEqualTo(expectedExecutor);
+      }
     }
-  }
 
-  @Nested
-  @DisplayName("getExecutor when sync is false")
-  class GetExecutorWhenSyncIsFalse {
-
-    @Test
-    @DisplayName("Given sync is false -> should return traceExecutor")
-    void givenSyncIsFalse() {
-      // Given
-      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-      when(queue.isEmpty()).thenReturn(true);
-
-      // When / Then
-      assertThat(provider.getExecutor(queue, task, false)).isEqualTo(traceExecutor);
-    }
-  }
-
-  @Nested
-  @DisplayName("getExecutor when span is null")
-  class GetExecutorWhenSpanIsNull {
-
-    @Test
-    @DisplayName("Given span is null -> should return traceExecutor")
-    void givenSpanIsNull() {
-      // Given
-      when(traceExecutor.getSpan()).thenReturn(null);
-      when(queue.isEmpty()).thenReturn(true);
-
-      // When / Then
-      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
-    }
-  }
-
-  @Nested
-  @DisplayName("getExecutor when queue is not empty")
-  class GetExecutorWhenQueueIsNotEmpty {
-
-    @Test
-    @DisplayName("Given queue is not empty -> should return traceExecutor")
-    void givenQueueIsNotEmpty() {
-      // Given
-      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-      when(queue.isEmpty()).thenReturn(false);
-
-      // When / Then
-      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
+    private static Stream<Arguments> provideGetExecutorScenarios() {
+      Span mockSpan = mock(Span.class);
+      return Stream.of(
+          Arguments.of(
+              "Given is sync and span not null and queue empty -> should return DirectExecutor",
+              mockSpan,
+              true,
+              true,
+              DirectExecutor.INSTANCE),
+          Arguments.of(
+              "Given sync is false -> should return traceExecutor", mockSpan, true, false, null),
+          Arguments.of("Given span is null -> should return traceExecutor", null, true, true, null),
+          Arguments.of(
+              "Given queue is not empty -> should return traceExecutor",
+              mockSpan,
+              false,
+              true,
+              null));
     }
   }
 }

@@ -41,13 +41,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.redisson.api.RList;
 import org.redisson.api.RedissonClient;
 
-@DisplayName("MultiProcess")
+@DisplayName("RedisMultiProvider")
 @ExtendWith(RedisExtension.class)
 public class RedisMultiProviderTest {
 
@@ -74,54 +73,49 @@ public class RedisMultiProviderTest {
     executorService.shutdown();
   }
 
-  @Nested
-  @DisplayName("when execute 10 tasks")
-  class WhenExecute10Tasks {
-
-    private List<Runnable> getTasks(
-        int taskId, CountDownLatch latch, AtomicBoolean lock, RedissonClient client) {
-      RList<TestItem> list = client.getList("list");
-      OrderedTraceExecutor traceExecutor = createExecutor();
-      List<Runnable> tasks = new ArrayList<>();
-      for (int i = 0; i < 10; i++) {
-        TestItem item = new TestItem(taskId, i);
-        Runnable task =
-            new SequentialTask(
-                lock,
-                () -> {
-                  TestUtils.sleep(10);
-                  item.setMillis(System.currentTimeMillis());
-                  list.add(item);
-                  latch.countDown();
-                });
-        tasks.add(() -> traceExecutor.executeAsync("a", task));
-      }
-      return tasks;
+  private List<Runnable> getTasks(
+      int taskId, CountDownLatch latch, AtomicBoolean lock, RedissonClient client) {
+    RList<TestItem> list = client.getList("list");
+    OrderedTraceExecutor traceExecutor = createExecutor();
+    List<Runnable> tasks = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      TestItem item = new TestItem(taskId, i);
+      Runnable task =
+          new SequentialTask(
+              lock,
+              () -> {
+                TestUtils.sleep(10);
+                item.setMillis(System.currentTimeMillis());
+                list.add(item);
+                latch.countDown();
+              });
+      tasks.add(() -> traceExecutor.executeAsync("a", task));
     }
+    return tasks;
+  }
 
-    @Test
-    @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
-    void givenExecute10Tasks() throws InterruptedException {
-      // Given
-      CountDownLatch latch = new CountDownLatch(20);
-      AtomicBoolean lock = new AtomicBoolean(false);
+  @Test
+  @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
+  void givenExecute10Tasks() throws InterruptedException {
+    // Given
+    CountDownLatch latch = new CountDownLatch(20);
+    AtomicBoolean lock = new AtomicBoolean(false);
 
-      // When
-      CompletableFuture.runAsync(() -> getTasks(0, latch, lock, client).forEach(Runnable::run));
-      TestUtils.sleep(5);
-      CompletableFuture.runAsync(() -> getTasks(1, latch, lock, client2).forEach(Runnable::run));
-      latch.await();
+    // When
+    CompletableFuture.runAsync(() -> getTasks(0, latch, lock, client).forEach(Runnable::run));
+    TestUtils.sleep(5);
+    CompletableFuture.runAsync(() -> getTasks(1, latch, lock, client2).forEach(Runnable::run));
+    latch.await();
 
-      RList<TestItem> list = client.getList("list");
-      List<TestItem> items = list.readAll();
+    RList<TestItem> list = client.getList("list");
+    List<TestItem> items = list.readAll();
 
-      // Then
-      for (int i = 0; i < items.size() - 1; i++) {
-        if ((i + 1) % 5 == 0) {
-          assertThat(items.get(i).getTask()).isNotEqualTo(items.get(i + 1).getTask());
-        } else {
-          assertThat(items.get(i).getTask()).isEqualTo(items.get(i + 1).getTask());
-        }
+    // Then
+    for (int i = 0; i < items.size() - 1; i++) {
+      if ((i + 1) % 5 == 0) {
+        assertThat(items.get(i).getTask()).isNotEqualTo(items.get(i + 1).getTask());
+      } else {
+        assertThat(items.get(i).getTask()).isEqualTo(items.get(i + 1).getTask());
       }
     }
   }

@@ -46,8 +46,8 @@ class TaskQueueTest {
   }
 
   @Nested
-  @DisplayName("execute when run two tasks")
-  class ExecuteWhenRunTwoTasks {
+  @DisplayName("execute")
+  class Execute {
 
     @Test
     @DisplayName("Given run two tasks -> should run tasks sequentially")
@@ -73,11 +73,6 @@ class TaskQueueTest {
       // Then
       assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
-  }
-
-  @Nested
-  @DisplayName("execute when run two executors")
-  class ExecuteWhenRunTwoExecutors {
 
     @Test
     @DisplayName("Given run two executors -> should run tasks sequentially")
@@ -102,15 +97,10 @@ class TaskQueueTest {
       // Then
       assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
-  }
-
-  @Nested
-  @DisplayName("execute when first task throws errors")
-  class ExecuteWhenFirstTaskThrowsErrors {
 
     @Test
-    @DisplayName("Given first task throws error -> should run tasks sequentially")
-    void givenFirstTaskThrowsError() throws InterruptedException {
+    @DisplayName("Given first task throws errors -> should run tasks sequentially")
+    void givenFirstTaskThrowsErrors() throws InterruptedException {
       // Given
       TaskQueue taskQueue = new TaskQueue();
 
@@ -137,15 +127,10 @@ class TaskQueueTest {
       // Then
       assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
-  }
-
-  @Nested
-  @DisplayName("execute when executor throws errors with empty tasks")
-  class ExecuteWhenExecutorThrowsErrorsWithEmptyTasks {
 
     @Test
-    @DisplayName("Given executor throws error and tasks empty -> should throw exception")
-    void givenExecutorThrowsErrorAndTasksEmpty() {
+    @DisplayName("Given executor throws errors with empty tasks -> should throw exception")
+    void givenExecutorThrowsErrorsWithEmptyTasks() {
       // Given
       TaskQueue taskQueue = new TaskQueue();
       Executor executor = mock(Executor.class);
@@ -155,15 +140,10 @@ class TaskQueueTest {
       // When / Then
       assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
     }
-  }
-
-  @Nested
-  @DisplayName("execute when executor throws errors with non-empty tasks")
-  class ExecuteWhenExecutorThrowsErrorsWithNonEmptyTasks {
 
     @Test
-    @DisplayName("Given executor throws error and tasks not empty -> should not call task")
-    void givenExecutorThrowsErrorAndTasksNotEmpty() throws InterruptedException {
+    @DisplayName("Given executor throws errors with non-empty tasks -> should not call task")
+    void givenExecutorThrowsErrorsWithNonEmptyTasks() throws InterruptedException {
       // Given
       TaskQueue taskQueue = new TaskQueue();
       Executor executor = mock(Executor.class);
@@ -199,8 +179,8 @@ class TaskQueueTest {
   }
 
   @Nested
-  @DisplayName("isEmpty when no tasks and current is null")
-  class IsEmptyWhenNoTasksAndCurrentIsNull {
+  @DisplayName("isEmpty")
+  class IsEmpty {
 
     @Test
     @DisplayName("Given no tasks and current is null -> should return true")
@@ -208,11 +188,6 @@ class TaskQueueTest {
       // When / Then
       assertThat(new TaskQueue().isEmpty()).isTrue();
     }
-  }
-
-  @Nested
-  @DisplayName("isEmpty when has tasks and current is not null")
-  class IsEmptyWhenHasTasksAndCurrentIsNotNull {
 
     @Test
     @DisplayName("Given has tasks and current is not null -> should return false")
@@ -226,11 +201,6 @@ class TaskQueueTest {
       // Then
       assertThat(queue.isEmpty()).isFalse();
     }
-  }
-
-  @Nested
-  @DisplayName("isEmpty when no tasks and current is not null")
-  class IsEmptyWhenNoTasksAndCurrentIsNotNull {
 
     @Test
     @DisplayName("Given no tasks and current is not null -> should return false")
