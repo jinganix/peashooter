@@ -36,94 +36,92 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 class OrderedSpanTest {
 
   @Nested
-  @DisplayName("constructor")
-  class Constructor {
+  @DisplayName("constructor with concrete trace id")
+  class ConstructorWithConcreteTraceId {
 
-    @Nested
-    @DisplayName("when concrete with trace id")
-    class WhenConcreteWithTraceId {
+    @Test
+    @DisplayName("Given concrete with trace id -> should get the trace id")
+    void givenConcreteWithTraceId() {
+      // When
+      OrderedSpan span = new OrderedSpan("trace", null, "key", true);
 
-      @Test
-      @DisplayName("then get the trace id")
-      void thenGetTheTraceId() {
-        OrderedSpan span = new OrderedSpan("trace", null, "key", true);
-        assertThat(span.getTraceId()).isEqualTo("trace");
-      }
+      // Then
+      assertThat(span.getTraceId()).isEqualTo("trace");
     }
   }
 
   @Nested
-  @DisplayName("invokedBy")
-  class InvokedBy {
+  @DisplayName("invokedBy when span is null")
+  class InvokedByWhenSpanIsNull {
 
-    @Nested
-    @DisplayName("when span is null")
-    class WhenSpanIsNull {
+    @Test
+    @DisplayName("Given span is null -> should return false")
+    void givenSpanIsNull() {
+      // When / Then
+      assertThat(OrderedSpan.invokedBy(null, "")).isFalse();
+    }
+  }
 
-      @Test
-      @DisplayName("then return false")
-      void thenReturnFalse() {
-        assertThat(OrderedSpan.invokedBy(null, "")).isFalse();
+  @Nested
+  @DisplayName("invokedBy when span is OrderedSpan")
+  class InvokedByWhenSpanIsOrderedSpan {
+
+    static class SpanArg {
+      String key;
+      boolean sync;
+
+      SpanArg(String key, boolean sync) {
+        this.key = key;
+        this.sync = sync;
+      }
+
+      static SpanArg sync(String key) {
+        return new SpanArg(key, true);
+      }
+
+      static SpanArg async(String key) {
+        return new SpanArg(key, false);
+      }
+
+      @Override
+      public String toString() {
+        return "SpanKeyArg(" + key + ", " + sync + ")";
       }
     }
 
-    @Nested
-    @DisplayName("when span is OrderedSpan")
-    class WhenSpanIsOrderedSpan {
+    static class SpanArgumentsProvider implements ArgumentsProvider {
 
-      static class SpanArg {
-        String key;
-        boolean sync;
+      @Override
+      public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+        return Stream.of(
+            Arguments.of(Lists.list(SpanArg.sync("foo")), SpanArg.sync("foo")),
+            Arguments.of(Lists.list(SpanArg.async("foo")), SpanArg.sync("foo")),
+            Arguments.of(
+                Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
+            Arguments.of(
+                Lists.list(SpanArg.async("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
+            Arguments.of(
+                Lists.list(SpanArg.sync("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
+            Arguments.of(
+                Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
+            Arguments.of(
+                Lists.list(SpanArg.async("foo"), SpanArg.sync("bar")), SpanArg.sync("foo")));
+      }
+    }
 
-        SpanArg(String key, boolean sync) {
-          this.key = key;
-          this.sync = sync;
-        }
-
-        static SpanArg sync(String key) {
-          return new SpanArg(key, true);
-        }
-
-        static SpanArg async(String key) {
-          return new SpanArg(key, false);
-        }
-
-        @Override
-        public String toString() {
-          return "SpanKeyArg(" + key + ", " + sync + ")";
-        }
+    @ParameterizedTest(name = "{0} => {1}")
+    @ArgumentsSource(SpanArgumentsProvider.class)
+    @DisplayName("Given span is OrderedSpan -> should check invokedBy correctly")
+    void givenSpanIsOrderedSpan(List<SpanArg> args, SpanArg expected) {
+      // Given
+      OrderedSpan span = null;
+      DefaultTracer tracer = new DefaultTracer();
+      for (SpanArg arg : args) {
+        span = new OrderedSpan(tracer, span, arg.key, arg.sync);
       }
 
-      static class SpanArgumentsProvider implements ArgumentsProvider {
-
-        @Override
-        public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
-          return Stream.of(
-              Arguments.of(Lists.list(SpanArg.sync("foo")), SpanArg.sync("foo")),
-              Arguments.of(Lists.list(SpanArg.async("foo")), SpanArg.sync("foo")),
-              Arguments.of(
-                  Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
-              Arguments.of(
-                  Lists.list(SpanArg.async("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
-              Arguments.of(
-                  Lists.list(SpanArg.sync("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
-              Arguments.of(
-                  Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
-              Arguments.of(
-                  Lists.list(SpanArg.async("foo"), SpanArg.sync("bar")), SpanArg.sync("foo")));
-        }
-      }
-
-      @ParameterizedTest(name = "{0} => {1}")
-      @ArgumentsSource(SpanArgumentsProvider.class)
-      void thenRun(List<SpanArg> args, SpanArg expected) {
-        OrderedSpan span = null;
-        DefaultTracer tracer = new DefaultTracer();
-        for (SpanArg arg : args) {
-          span = new OrderedSpan(tracer, span, arg.key, arg.sync);
-        }
-        assertThat(OrderedSpan.invokedBy(span, expected.key)).isEqualTo(expected.sync);
-      }
+      // When / Then
+      assertThat(OrderedSpan.invokedBy(span, expected.key)).isEqualTo(expected.sync);
     }
   }
 }

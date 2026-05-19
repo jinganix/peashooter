@@ -45,59 +45,66 @@ class DefaultExecutorSelectorTest {
   DefaultExecutorSelector provider = new DefaultExecutorSelector(traceExecutor);
 
   @Nested
-  @DisplayName("getExecutor")
-  class GetExecutor {
+  @DisplayName("getExecutor when is sync and span not null and queue is empty")
+  class GetExecutorWhenIsSyncAndSpanNotNullAndQueueIsEmpty {
 
-    @Nested
-    @DisplayName("when is sync and span not null and queue is empty")
-    class WhenIsSyncAndSpanNotNullAndQueueIsEmpty {
+    @Test
+    @DisplayName("Given is sync and span not null and queue empty -> should return DirectExecutor")
+    void givenIsSyncAndSpanNotNullAndQueueEmpty() {
+      // Given
+      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
+      when(queue.isEmpty()).thenReturn(true);
 
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-        when(queue.isEmpty()).thenReturn(true);
-        assertThat(provider.getExecutor(queue, task, true)).isEqualTo(DirectExecutor.INSTANCE);
-      }
+      // When / Then
+      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(DirectExecutor.INSTANCE);
     }
+  }
 
-    @Nested
-    @DisplayName("when sync is false")
-    class WhenSyncIsFalse {
+  @Nested
+  @DisplayName("getExecutor when sync is false")
+  class GetExecutorWhenSyncIsFalse {
 
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-        when(queue.isEmpty()).thenReturn(true);
-        assertThat(provider.getExecutor(queue, task, false)).isEqualTo(traceExecutor);
-      }
+    @Test
+    @DisplayName("Given sync is false -> should return traceExecutor")
+    void givenSyncIsFalse() {
+      // Given
+      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
+      when(queue.isEmpty()).thenReturn(true);
+
+      // When / Then
+      assertThat(provider.getExecutor(queue, task, false)).isEqualTo(traceExecutor);
     }
+  }
 
-    @Nested
-    @DisplayName("when span is null")
-    class WhenSpanIsNull {
+  @Nested
+  @DisplayName("getExecutor when span is null")
+  class GetExecutorWhenSpanIsNull {
 
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        when(traceExecutor.getSpan()).thenReturn(null);
-        when(queue.isEmpty()).thenReturn(true);
-        assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
-      }
+    @Test
+    @DisplayName("Given span is null -> should return traceExecutor")
+    void givenSpanIsNull() {
+      // Given
+      when(traceExecutor.getSpan()).thenReturn(null);
+      when(queue.isEmpty()).thenReturn(true);
+
+      // When / Then
+      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
     }
+  }
 
-    @Nested
-    @DisplayName("when queue is not empty")
-    class WhenQueueIsNotEmpty {
+  @Nested
+  @DisplayName("getExecutor when queue is not empty")
+  class GetExecutorWhenQueueIsNotEmpty {
 
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
-        when(queue.isEmpty()).thenReturn(false);
-        assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
-      }
+    @Test
+    @DisplayName("Given queue is not empty -> should return traceExecutor")
+    void givenQueueIsNotEmpty() {
+      // Given
+      when(traceExecutor.getSpan()).thenReturn(mock(Span.class));
+      when(queue.isEmpty()).thenReturn(false);
+
+      // When / Then
+      assertThat(provider.getExecutor(queue, task, true)).isEqualTo(traceExecutor);
     }
   }
 }

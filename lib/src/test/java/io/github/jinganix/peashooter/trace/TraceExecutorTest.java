@@ -41,65 +41,62 @@ class TraceExecutorTest {
   TraceExecutor traceExecutor = new TraceExecutor(delegate, tracer);
 
   @Nested
-  @DisplayName("getTracer")
-  class GetTracer {
+  @DisplayName("getTracer when called")
+  class GetTracerWhenCalled {
 
-    @Nested
-    @DisplayName("when called")
-    class WhenCalled {
-
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        assertThat(traceExecutor.getTracer()).isEqualTo(tracer);
-      }
+    @Test
+    @DisplayName("Given called -> should return tracer")
+    void givenCalled() {
+      // When / Then
+      assertThat(traceExecutor.getTracer()).isEqualTo(tracer);
     }
   }
 
   @Nested
-  @DisplayName("getSpan")
-  class GetSpan {
+  @DisplayName("getSpan when called")
+  class GetSpanWhenCalled {
 
-    @Nested
-    @DisplayName("when called")
-    class WhenCalled {
-
-      @Test
-      @DisplayName("then return")
-      void thenReturn() {
-        assertThat(traceExecutor.getSpan()).isEqualTo(tracer.getSpan());
-      }
+    @Test
+    @DisplayName("Given called -> should return span")
+    void givenCalled() {
+      // When / Then
+      assertThat(traceExecutor.getSpan()).isEqualTo(tracer.getSpan());
     }
   }
 
   @Nested
-  @DisplayName("execute")
-  class Execute {
+  @DisplayName("execute when called by Runnable")
+  class ExecuteWhenCalledByRunnable {
 
-    @Nested
-    @DisplayName("when called by Runnable")
-    class WhenCalledByRunnable {
+    @Test
+    @DisplayName("Given called by Runnable -> should call delegate")
+    void givenCalledByRunnable() {
+      // Given
+      Runnable runnable = () -> {};
 
-      @Test
-      @DisplayName("then delegate is called")
-      void thenDelegateIsCalled() {
-        Runnable runnable = () -> {};
-        traceExecutor.execute(runnable);
-        verify(delegate, times(1)).execute(isA(TraceRunnable.class));
-      }
+      // When
+      traceExecutor.execute(runnable);
+
+      // Then
+      verify(delegate, times(1)).execute(isA(TraceRunnable.class));
     }
+  }
 
-    @Nested
-    @DisplayName("when called by TraceRunnable")
-    class WhenCalledByTraceRunnable {
+  @Nested
+  @DisplayName("execute when called by TraceRunnable")
+  class ExecuteWhenCalledByTraceRunnable {
 
-      @Test
-      @DisplayName("then delegate is called")
-      void thenDelegateIsCalled() {
-        Runnable runnable = new TraceRunnable(tracer, () -> {});
-        traceExecutor.execute(runnable);
-        verify(delegate, times(1)).execute(runnable);
-      }
+    @Test
+    @DisplayName("Given called by TraceRunnable -> should call delegate")
+    void givenCalledByTraceRunnable() {
+      // Given
+      Runnable runnable = new TraceRunnable(tracer, () -> {});
+
+      // When
+      traceExecutor.execute(runnable);
+
+      // Then
+      verify(delegate, times(1)).execute(runnable);
     }
   }
 }

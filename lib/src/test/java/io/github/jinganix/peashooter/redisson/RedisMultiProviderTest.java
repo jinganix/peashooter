@@ -75,8 +75,8 @@ public class RedisMultiProviderTest {
   }
 
   @Nested
-  @DisplayName("when execute 10 task")
-  class WhenExecute10Task {
+  @DisplayName("when execute 10 tasks")
+  class WhenExecute10Tasks {
 
     private List<Runnable> getTasks(
         int taskId, CountDownLatch latch, AtomicBoolean lock, RedissonClient client) {
@@ -100,16 +100,22 @@ public class RedisMultiProviderTest {
     }
 
     @Test
-    @DisplayName("then tasks are executed")
-    void thenTasksAreExecuted() throws InterruptedException {
+    @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
+    void givenExecute10Tasks() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(20);
       AtomicBoolean lock = new AtomicBoolean(false);
+
+      // When
       CompletableFuture.runAsync(() -> getTasks(0, latch, lock, client).forEach(Runnable::run));
       TestUtils.sleep(5);
       CompletableFuture.runAsync(() -> getTasks(1, latch, lock, client2).forEach(Runnable::run));
       latch.await();
+
       RList<TestItem> list = client.getList("list");
       List<TestItem> items = list.readAll();
+
+      // Then
       for (int i = 0; i < items.size() - 1; i++) {
         if ((i + 1) % 5 == 0) {
           assertThat(items.get(i).getTask()).isNotEqualTo(items.get(i + 1).getTask());

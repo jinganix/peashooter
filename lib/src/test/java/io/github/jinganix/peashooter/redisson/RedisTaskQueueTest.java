@@ -66,9 +66,12 @@ public class RedisTaskQueueTest {
   class WhenExecute1Task {
 
     @Test
-    @DisplayName("then task is executed")
-    void thenTaskIsExecuted() {
+    @DisplayName("Given execute 1 task -> should execute task correctly")
+    void givenExecute1Task() {
+      // Given
       RList<TestItem> list = client.getList("list");
+
+      // When
       TestItem value =
           traceExecutor.supply(
               "a",
@@ -77,20 +80,25 @@ public class RedisTaskQueueTest {
                 list.add(item);
                 return item;
               });
+
+      // Then
       assertThat(list.get(0)).usingRecursiveComparison().isEqualTo(value);
     }
   }
 
   @Nested
-  @DisplayName("when execute 10 task")
-  class WhenExecute10Task {
+  @DisplayName("when execute 10 tasks")
+  class WhenExecute10Tasks {
 
     @Test
-    @DisplayName("then tasks are executed")
-    void thenTasksAreExecuted() throws InterruptedException {
+    @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
+    void givenExecute10Tasks() throws InterruptedException {
+      // Given
       RList<TestItem> list = client.getList("list");
       List<TestItem> items = new ArrayList<>();
       CountDownLatch latch = new CountDownLatch(10);
+
+      // When
       for (int i = 0; i < 10; i++) {
         TestItem item = new TestItem(0, i);
         items.add(item);
@@ -103,6 +111,8 @@ public class RedisTaskQueueTest {
             });
       }
       latch.await();
+
+      // Then
       assertThat(list.readAll()).usingRecursiveComparison().isEqualTo(items);
     }
   }
