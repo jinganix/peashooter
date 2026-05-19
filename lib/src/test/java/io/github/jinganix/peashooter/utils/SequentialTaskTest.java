@@ -25,34 +25,28 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("SequentialTask")
 public class SequentialTaskTest {
 
-  @Nested
-  @DisplayName("when run concurrently")
-  class WhenRunConcurrently {
+  @Test
+  @DisplayName("Given run concurrently -> should throw exception")
+  void givenRunConcurrently() {
+    // Given
+    AtomicBoolean lock = new AtomicBoolean(false);
 
-    @Test
-    @DisplayName("Given run concurrently -> should throw exception")
-    void givenRunConcurrently() {
-      // Given
-      AtomicBoolean lock = new AtomicBoolean(false);
+    // When
+    CompletableFuture<?> future =
+        CompletableFuture.allOf(
+            runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))),
+            runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))));
 
-      // When
-      CompletableFuture<?> future =
-          CompletableFuture.allOf(
-              runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))),
-              runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))));
-
-      // Then
-      assertThatThrownBy(future::join)
-          .isInstanceOf(CompletionException.class)
-          .rootCause()
-          .isInstanceOf(RuntimeException.class)
-          .hasMessage("Task is running concurrently");
-    }
+    // Then
+    assertThatThrownBy(future::join)
+        .isInstanceOf(CompletionException.class)
+        .rootCause()
+        .isInstanceOf(RuntimeException.class)
+        .hasMessage("Task is running concurrently");
   }
 }

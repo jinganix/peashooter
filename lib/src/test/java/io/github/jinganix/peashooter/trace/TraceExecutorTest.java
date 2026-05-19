@@ -40,33 +40,23 @@ class TraceExecutorTest {
 
   TraceExecutor traceExecutor = new TraceExecutor(delegate, tracer);
 
-  @Nested
-  @DisplayName("getTracer when called")
-  class GetTracerWhenCalled {
+  @Test
+  @DisplayName("Given getTracer called -> should return tracer")
+  void givenGetTracerCalled() {
+    // When / Then
+    assertThat(traceExecutor.getTracer()).isEqualTo(tracer);
+  }
 
-    @Test
-    @DisplayName("Given called -> should return tracer")
-    void givenCalled() {
-      // When / Then
-      assertThat(traceExecutor.getTracer()).isEqualTo(tracer);
-    }
+  @Test
+  @DisplayName("Given getSpan called -> should return span")
+  void givenGetSpanCalled() {
+    // When / Then
+    assertThat(traceExecutor.getSpan()).isEqualTo(tracer.getSpan());
   }
 
   @Nested
-  @DisplayName("getSpan when called")
-  class GetSpanWhenCalled {
-
-    @Test
-    @DisplayName("Given called -> should return span")
-    void givenCalled() {
-      // When / Then
-      assertThat(traceExecutor.getSpan()).isEqualTo(tracer.getSpan());
-    }
-  }
-
-  @Nested
-  @DisplayName("execute when called by Runnable")
-  class ExecuteWhenCalledByRunnable {
+  @DisplayName("execute")
+  class Execute {
 
     @Test
     @DisplayName("Given called by Runnable -> should call delegate")
@@ -80,11 +70,6 @@ class TraceExecutorTest {
       // Then
       verify(delegate, times(1)).execute(isA(TraceRunnable.class));
     }
-  }
-
-  @Nested
-  @DisplayName("execute when called by TraceRunnable")
-  class ExecuteWhenCalledByTraceRunnable {
 
     @Test
     @DisplayName("Given called by TraceRunnable -> should call delegate")

@@ -28,8 +28,8 @@ import org.junit.jupiter.api.Test;
 class OrderedTraceRunnableTest {
 
   @Nested
-  @DisplayName("constructor with concrete span")
-  class ConstructorWithConcreteSpan {
+  @DisplayName("constructor")
+  class Constructor {
 
     @Test
     @DisplayName("Given concrete with span -> should create span correctly")

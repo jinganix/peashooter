@@ -45,8 +45,8 @@ import org.junit.jupiter.api.Test;
 class LockableTaskQueueTest {
 
   @Nested
-  @DisplayName("run when not locked")
-  class RunWhenNotLocked {
+  @DisplayName("run")
+  class Run {
 
     @Test
     @DisplayName("Given not locked -> should not unlock")
@@ -61,11 +61,6 @@ class LockableTaskQueueTest {
       // Then
       verify(taskQueue, never()).unlock();
     }
-  }
-
-  @Nested
-  @DisplayName("run when locked with no tasks")
-  class RunWhenLockedWithNoTasks {
 
     @Test
     @DisplayName("Given locked and no tasks -> should not check yield")
@@ -81,15 +76,10 @@ class LockableTaskQueueTest {
       verify(taskQueue, never()).shouldYield(any());
       verify(taskQueue, times(1)).unlock();
     }
-  }
-
-  @Nested
-  @DisplayName("run when locked with single task")
-  class RunWhenLockedWithSingleTask {
 
     @Test
-    @DisplayName("Given should yield -> should lock twice")
-    void givenShouldYield() throws InterruptedException {
+    @DisplayName("Given should yield with single task -> should lock twice")
+    void givenShouldYieldWithSingleTask() throws InterruptedException {
       // Given
       LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
       when(taskQueue.tryLock(any())).thenReturn(true);
@@ -108,8 +98,8 @@ class LockableTaskQueueTest {
     }
 
     @Test
-    @DisplayName("Given should not yield -> should lock once")
-    void givenShouldNotYield() throws InterruptedException {
+    @DisplayName("Given should not yield with single task -> should lock once")
+    void givenShouldNotYieldWithSingleTask() throws InterruptedException {
       // Given
       LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
       when(taskQueue.tryLock(any())).thenReturn(true);
@@ -126,11 +116,6 @@ class LockableTaskQueueTest {
       verify(taskQueue, times(1)).tryLock(any());
       verify(taskQueue, times(1)).unlock();
     }
-  }
-
-  @Nested
-  @DisplayName("run when locked with two tasks")
-  class RunWhenLockedWithTwoTasks {
 
     void executeTwoTasks(TaskQueue taskQueue) throws InterruptedException {
       CountDownLatch latch1 = new CountDownLatch(1);
@@ -160,8 +145,8 @@ class LockableTaskQueueTest {
     }
 
     @Test
-    @DisplayName("Given should yield first -> should lock twice")
-    void givenShouldYieldFirst() throws InterruptedException {
+    @DisplayName("Given should yield first with two tasks -> should lock twice")
+    void givenShouldYieldFirstWithTwoTasks() throws InterruptedException {
       // Given
       LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
       when(taskQueue.tryLock(any())).thenReturn(true);
@@ -177,8 +162,8 @@ class LockableTaskQueueTest {
     }
 
     @Test
-    @DisplayName("Given should not yield -> should lock once")
-    void givenShouldNotYield() throws InterruptedException {
+    @DisplayName("Given should not yield with two tasks -> should lock once")
+    void givenShouldNotYieldWithTwoTasks() throws InterruptedException {
       // Given
       LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
       when(taskQueue.tryLock(any())).thenReturn(true);
@@ -192,11 +177,6 @@ class LockableTaskQueueTest {
       verify(taskQueue, times(1)).tryLock(any());
       verify(taskQueue, times(1)).unlock();
     }
-  }
-
-  @Nested
-  @DisplayName("run when first task throws errors")
-  class RunWhenFirstTaskThrowsErrors {
 
     @Test
     @DisplayName("Given first task throws error -> should run tasks sequentially")
@@ -229,11 +209,6 @@ class LockableTaskQueueTest {
       // Then
       assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
-  }
-
-  @Nested
-  @DisplayName("run when executor throws errors with empty tasks")
-  class RunWhenExecutorThrowsErrorsWithEmptyTasks {
 
     @Test
     @DisplayName("Given executor throws error and tasks empty -> should throw exception")
@@ -249,11 +224,6 @@ class LockableTaskQueueTest {
       // When / Then
       assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
     }
-  }
-
-  @Nested
-  @DisplayName("run when executor throws errors with non-empty tasks")
-  class RunWhenExecutorThrowsErrorsWithNonEmptyTasks {
 
     @Test
     @DisplayName("Given executor throws error and tasks not empty -> should not call task")

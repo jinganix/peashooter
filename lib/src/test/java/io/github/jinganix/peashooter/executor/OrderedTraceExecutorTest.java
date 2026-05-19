@@ -56,6 +56,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.junit.jupiter.params.support.ParameterDeclarations;
 import org.mockito.MockedConstruction;
 
 @DisplayName("OrderedTraceExecutor")
@@ -77,7 +78,8 @@ class OrderedTraceExecutorTest {
   static class ExecutorArgumentsProvider implements ArgumentsProvider {
 
     @Override
-    public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+    public Stream<? extends Arguments> provideArguments(
+        ParameterDeclarations parameters, ExtensionContext context) {
       return ExecutorForTests.executors().entrySet().stream()
           .map(
               x ->
@@ -121,7 +123,8 @@ class OrderedTraceExecutorTest {
     }
 
     @Override
-    public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
+    public Stream<? extends Arguments> provideArguments(
+        ParameterDeclarations parameters, ExtensionContext context) {
       return ExecutorForTests.executors().entrySet().stream()
           .map(
               x ->
@@ -147,8 +150,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("constructor when ExecutorService provided")
-  class ConstructorWhenExecutorServiceProvided {
+  @DisplayName("constructor")
+  class Constructor {
 
     @Test
     @DisplayName("Given ExecutorService provided -> should construct TraceExecutor")
@@ -160,11 +163,6 @@ class OrderedTraceExecutorTest {
         assertThat(provider.constructed().size()).isEqualTo(1);
       }
     }
-  }
-
-  @Nested
-  @DisplayName("constructor when TraceExecutor provided")
-  class ConstructorWhenTraceExecutorProvided {
 
     @Test
     @DisplayName("Given TraceExecutor provided -> should not construct new TraceExecutor")
@@ -179,8 +177,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("setTimeout when set to 1ms")
-  class SetTimeoutWhenSetTo1Ms {
+  @DisplayName("setTimeout")
+  class SetTimeout {
 
     @Test
     @DisplayName("Given timeout set to 1ms -> should throw TimeoutException")
@@ -198,8 +196,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("executeAsync when called")
-  class ExecuteAsyncWhenCalled {
+  @DisplayName("executeAsync")
+  class ExecuteAsync {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
@@ -216,11 +214,6 @@ class OrderedTraceExecutorTest {
         assertThat(System.currentTimeMillis() - start).isLessThan(100);
       }
     }
-  }
-
-  @Nested
-  @DisplayName("executeAsync when call sync nested")
-  class ExecuteAsyncWhenCallSyncNested {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
@@ -251,8 +244,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("runSynchronously when execute two same keys")
-  class RunSynchronouslyWhenExecuteTwoSameKeys {
+  @DisplayName("runSynchronously")
+  class RunSynchronously {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -286,11 +279,6 @@ class OrderedTraceExecutorTest {
       // Then
       assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execute two different keys")
-  class RunSynchronouslyWhenExecuteTwoDifferentKeys {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -328,11 +316,6 @@ class OrderedTraceExecutorTest {
         assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
       }
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execute nested same keys")
-  class RunSynchronouslyWhenExecuteNestedSameKeys {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -353,11 +336,6 @@ class OrderedTraceExecutorTest {
       // Then
       assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execute nested same keys in different threads")
-  class RunSynchronouslyWhenExecuteNestedSameKeysInDifferentThreads {
 
     void executeSync(Runnable runnable) {
       try {
@@ -401,11 +379,6 @@ class OrderedTraceExecutorTest {
       // Then
       assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(300);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execute nested different keys")
-  class RunSynchronouslyWhenExecuteNestedDifferentKeys {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -426,11 +399,6 @@ class OrderedTraceExecutorTest {
       // Then
       assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execute nested mixed keys")
-  class RunSynchronouslyWhenExecuteNestedMixedKeys {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -461,11 +429,6 @@ class OrderedTraceExecutorTest {
       // Then
       assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(400);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when task has runtime error")
-  class RunSynchronouslyWhenTaskHasRuntimeError {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -485,11 +448,6 @@ class OrderedTraceExecutorTest {
           .isInstanceOf(RuntimeException.class)
           .matches(t -> t == ex);
     }
-  }
-
-  @Nested
-  @DisplayName("runSynchronously when execution is interrupted")
-  class RunSynchronouslyWhenExecutionIsInterrupted {
 
     @ParameterizedTest(name = "{0}.{1}")
     @ArgumentsSource(CallableArgumentsProvider.class)
@@ -514,8 +472,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("executeSyncKeys when execute two same keys")
-  class ExecuteSyncKeysWhenExecuteTwoSameKeys {
+  @DisplayName("executeSync")
+  class ExecuteSync {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
@@ -530,11 +488,6 @@ class OrderedTraceExecutorTest {
       // Then
       verify(runnable, times(1)).run();
     }
-  }
-
-  @Nested
-  @DisplayName("executeSyncKeys when execute mixed keys")
-  class ExecuteSyncKeysWhenExecuteMixedKeys {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
@@ -552,8 +505,8 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("supplyKeys when supply two same keys")
-  class SupplyKeysWhenSupplyTwoSameKeys {
+  @DisplayName("supply")
+  class Supply {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
@@ -562,11 +515,6 @@ class OrderedTraceExecutorTest {
       // When / Then
       assertThat(executor.supply(Arrays.asList("a", "a"), () -> 1)).isEqualTo(1);
     }
-  }
-
-  @Nested
-  @DisplayName("supplyKeys when supply mixed keys")
-  class SupplyKeysWhenSupplyMixedKeys {
 
     @ParameterizedTest(name = "{0}")
     @ArgumentsSource(ExecutorArgumentsProvider.class)
