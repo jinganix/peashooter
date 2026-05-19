@@ -48,7 +48,7 @@ class TaskQueueBenchmarkTest {
 
   @Nested
   @DisplayName("when execute 5,000,000 tasks")
-  class WhenExecuteTasks {
+  class WhenExecute5MillionTasks {
 
     int taskCount = 5_000_000;
 
@@ -58,24 +58,31 @@ class TaskQueueBenchmarkTest {
     }
 
     private long taskQueueTest() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(taskCount);
-
       TaskQueue taskQueue = new TaskQueue();
       Counter counter = new Counter();
+
+      // When
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
         taskQueue.execute(executorService, () -> count(latch, counter));
       }
       latch.await();
+
+      // Then
       assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     private long synchronizedTest() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(taskCount);
-      long startAt = System.nanoTime();
       Counter counter = new Counter();
       String KEY = "lock_test";
+
+      // When
+      long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
             () -> {
@@ -85,15 +92,20 @@ class TaskQueueBenchmarkTest {
             });
       }
       latch.await();
+
+      // Then
       assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     private long reentrantLockTest() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(taskCount);
-      long startAt = System.nanoTime();
       Counter counter = new Counter();
       ReentrantLock lock = new ReentrantLock();
+
+      // When
+      long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
             () -> {
@@ -106,16 +118,22 @@ class TaskQueueBenchmarkTest {
             });
       }
       latch.await();
+
+      // Then
       assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     @Test
-    @DisplayName("then task is executed")
-    void thenTaskIsExecuted() throws InterruptedException {
+    @DisplayName(
+        "Given execute 5,000,000 tasks -> should execute faster than synchronized and ReentrantLock")
+    void givenExecute5MillionTasks() throws InterruptedException {
+      // When
       long time1 = taskQueueTest();
       long time2 = synchronizedTest();
       long time3 = reentrantLockTest();
+
+      // Then
       System.out.printf(
           "task count: %d, benchmark: peashooter(%dms), synchronized(%dms), reentrantLock(%dms)",
           taskCount,

@@ -32,43 +32,39 @@ class SpanTest {
   @DisplayName("constructor")
   class Constructor {
 
-    @Nested
-    @DisplayName("when concrete with trace id")
-    class WhenConcreteWithTraceId {
+    @Test
+    @DisplayName("Given concrete with trace id -> should get the trace id")
+    void givenConcreteWithTraceId() {
+      // When
+      Span span = new Span("trace", null);
 
-      @Test
-      @DisplayName("then get the trace id")
-      void thenGetTheTraceId() {
-        Span span = new Span("trace", null);
-        assertThat(span.getTraceId()).isEqualTo("trace");
-      }
+      // Then
+      assertThat(span.getTraceId()).isEqualTo("trace");
     }
 
-    @Nested
-    @DisplayName("when parent is null")
-    class WhenParentIsNull {
+    @Test
+    @DisplayName("Given parent is null -> should gen new trace id")
+    void givenParentIsNull() {
+      // When
+      Span span = new Span(new DefaultTracer(), null);
 
-      @Test
-      @DisplayName("then gen new trace id")
-      void thenGenNewTraceId() {
-        Span span = new Span(new DefaultTracer(), null);
-        assertThat(span.getParent()).isNull();
-        assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
-      }
+      // Then
+      assertThat(span.getParent()).isNull();
+      assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
     }
 
-    @Nested
-    @DisplayName("when parent is not null")
-    class WhenParentIsNotNull {
+    @Test
+    @DisplayName("Given parent is not null -> should inherit the trace id")
+    void givenParentIsNotNull() {
+      // Given
+      Span parent = new Span(new DefaultTracer(), null);
 
-      @Test
-      @DisplayName("then inherit the trace id")
-      void thenInheritTheTraceId() {
-        Span parent = new Span(new DefaultTracer(), null);
-        Span span = new Span(new DefaultTracer(), parent);
-        assertThat(span.getParent()).isEqualTo(parent);
-        assertThat(span.getTraceId()).isEqualTo(parent.getTraceId());
-      }
+      // When
+      Span span = new Span(new DefaultTracer(), parent);
+
+      // Then
+      assertThat(span.getParent()).isEqualTo(parent);
+      assertThat(span.getTraceId()).isEqualTo(parent.getTraceId());
     }
   }
 
@@ -76,29 +72,28 @@ class SpanTest {
   @DisplayName("isRoot")
   class IsRoot {
 
-    @Nested
-    @DisplayName("when parent is null")
-    class WhenParentIsNull {
+    @Test
+    @DisplayName("Given parent is null -> should return true")
+    void givenParentIsNull() {
+      // When
+      Span span = new Span(new DefaultTracer(), null);
 
-      @Test
-      @DisplayName("then return true")
-      void thenReturnTrue() {
-        Span span = new Span(new DefaultTracer(), null);
-        assertThat(span.isRoot()).isTrue();
-      }
+      // Then
+      assertThat(span.isRoot()).isTrue();
     }
 
-    @Nested
-    @DisplayName("when parent is not null")
-    class WhenParentIsNotNull {
+    @Test
+    @DisplayName("Given parent is not null -> should return false")
+    void givenParentIsNotNull() {
+      // Given
+      TraceIdGenerator traceIdGenerator = new DefaultTracer();
+      Span parent = new Span(traceIdGenerator, null);
 
-      @Test
-      @DisplayName("then return false")
-      void thenReturnFalse() {
-        TraceIdGenerator traceIdGenerator = new DefaultTracer();
-        Span span = new Span(traceIdGenerator, new Span(traceIdGenerator, null));
-        assertThat(span.isRoot()).isFalse();
-      }
+      // When
+      Span span = new Span(traceIdGenerator, parent);
+
+      // Then
+      assertThat(span.isRoot()).isFalse();
     }
   }
 }

@@ -28,21 +28,20 @@ import org.junit.jupiter.api.Test;
 class OrderedTraceRunnableTest {
 
   @Nested
-  @DisplayName("constructor")
-  class Constructor {
+  @DisplayName("constructor with concrete span")
+  class ConstructorWithConcreteSpan {
 
-    @Nested
-    @DisplayName("when concrete with span")
-    class WhenConcreteWithSpan {
+    @Test
+    @DisplayName("Given concrete with span -> should create span correctly")
+    void givenConcreteWithSpan() {
+      // Given
+      Span span = new Span("", null);
 
-      @Test
-      @DisplayName("then concrete")
-      void thenConcrete() {
-        Span span = new Span("", null);
-        OrderedTraceRunnable runnable =
-            new OrderedTraceRunnable(new DefaultTracer(), span, () -> {});
-        assertThat(runnable.createSpan()).isEqualTo(span);
-      }
+      // When
+      OrderedTraceRunnable runnable = new OrderedTraceRunnable(new DefaultTracer(), span, () -> {});
+
+      // Then
+      assertThat(runnable.createSpan()).isEqualTo(span);
     }
   }
 }

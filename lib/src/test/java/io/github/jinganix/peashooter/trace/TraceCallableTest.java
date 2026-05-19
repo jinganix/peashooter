@@ -32,34 +32,30 @@ class TraceCallableTest {
   @DisplayName("call")
   class Call {
 
-    @Nested
-    @DisplayName("when delegate has no error")
-    class WhenDelegateHasNoError {
+    @Test
+    @DisplayName("Given delegate has no error -> should not throw exception")
+    void givenDelegateHasNoError() {
+      // When
+      TraceCallable<Integer> traceCallable = new TraceCallable<>(new DefaultTracer(), () -> 0);
 
-      @Test
-      @DisplayName("then no exception")
-      void thenNoException() {
-        TraceCallable<Integer> traceCallable = new TraceCallable<>(new DefaultTracer(), () -> 0);
-        assertThatCode(traceCallable::call).doesNotThrowAnyException();
-      }
+      // Then
+      assertThatCode(traceCallable::call).doesNotThrowAnyException();
     }
 
-    @Nested
-    @DisplayName("when delegate has error")
-    class WhenDelegateHasError {
+    @Test
+    @DisplayName("Given delegate has error -> should throw exception")
+    void givenDelegateHasError() {
+      // Given
+      RuntimeException exception = new RuntimeException();
+      TraceCallable<Integer> traceCallable =
+          new TraceCallable<>(
+              new DefaultTracer(),
+              () -> {
+                throw exception;
+              });
 
-      @Test
-      @DisplayName("then throw exception")
-      void thenThrowException() {
-        RuntimeException exception = new RuntimeException();
-        TraceCallable<Integer> traceCallable =
-            new TraceCallable<>(
-                new DefaultTracer(),
-                () -> {
-                  throw exception;
-                });
-        assertThatThrownBy(traceCallable::call).isEqualTo(exception);
-      }
+      // When / Then
+      assertThatThrownBy(traceCallable::call).isEqualTo(exception);
     }
   }
 }

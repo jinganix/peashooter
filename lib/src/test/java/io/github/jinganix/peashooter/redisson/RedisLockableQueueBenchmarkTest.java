@@ -64,11 +64,12 @@ public class RedisLockableQueueBenchmarkTest {
 
   @Nested
   @DisplayName("when execute 500 tasks")
-  class WhenExecuteTasks {
+  class WhenExecute500Tasks {
 
     int taskCount = 500;
 
     private long redisTaskQueueTest() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(taskCount);
       RedisLockableTaskQueue taskQueue =
           new RedisLockableTaskQueue("lock_test") {
@@ -81,6 +82,8 @@ public class RedisLockableQueueBenchmarkTest {
             }
           };
       Counter counter = new Counter();
+
+      // When
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
         taskQueue.execute(
@@ -91,15 +94,20 @@ public class RedisLockableQueueBenchmarkTest {
             });
       }
       latch.await();
+
+      // Then
       assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     private long redisLockTest() throws InterruptedException {
+      // Given
       CountDownLatch latch = new CountDownLatch(taskCount);
-      long startAt = System.nanoTime();
       RLock lock = RedisClient.client.getFairLock("lock_test");
       Counter counter = new Counter();
+
+      // When
+      long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
         executorService.submit(
             () -> {
@@ -116,15 +124,20 @@ public class RedisLockableQueueBenchmarkTest {
             });
       }
       latch.await();
+
+      // Then
       assertThat(counter.count).isEqualTo(taskCount);
       return System.nanoTime() - startAt;
     }
 
     @Test
-    @DisplayName("then task is executed")
-    void thenTaskIsExecuted() throws InterruptedException {
+    @DisplayName("Given execute 500 tasks -> should execute faster than Redis lock")
+    void givenExecute500Tasks() throws InterruptedException {
+      // When
       long time1 = redisTaskQueueTest();
       long time2 = redisLockTest();
+
+      // Then
       System.out.printf(
           "task count: %d, benchmark: peashooter(%dms), lock(%dms)",
           taskCount, TimeUnit.NANOSECONDS.toMillis(time1), TimeUnit.NANOSECONDS.toMillis(time2));

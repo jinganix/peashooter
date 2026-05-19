@@ -147,400 +147,433 @@ class OrderedTraceExecutorTest {
   }
 
   @Nested
-  @DisplayName("constructor")
-  class Constructor {
+  @DisplayName("constructor when ExecutorService provided")
+  class ConstructorWhenExecutorServiceProvided {
 
-    @Nested
-    @DisplayName("when ExecutorService provided")
-    class WhenExecutorServiceProvided {
-
-      @Test
-      @DisplayName("then context provider concreted")
-      void thenContextProviderConcreted() {
-        try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
-          assertThatCode(() -> new OrderedTraceExecutor(mock(ExecutorService.class)))
-              .doesNotThrowAnyException();
-          assertThat(provider.constructed().size()).isEqualTo(1);
-        }
-      }
-    }
-
-    @Nested
-    @DisplayName("when TraceExecutor provided")
-    class WhenTraceExecutorProvided {
-
-      @Test
-      @DisplayName("then context provider concreted")
-      void thenContextProviderConcreted() {
-        try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
-          assertThatCode(() -> new OrderedTraceExecutor(mock(TraceExecutor.class)))
-              .doesNotThrowAnyException();
-          assertThat(provider.constructed().size()).isEqualTo(0);
-        }
+    @Test
+    @DisplayName("Given ExecutorService provided -> should construct TraceExecutor")
+    void givenExecutorServiceProvided() {
+      // When / Then
+      try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
+        assertThatCode(() -> new OrderedTraceExecutor(mock(ExecutorService.class)))
+            .doesNotThrowAnyException();
+        assertThat(provider.constructed().size()).isEqualTo(1);
       }
     }
   }
 
   @Nested
-  @DisplayName("setTimeout")
-  class SetTimeout {
+  @DisplayName("constructor when TraceExecutor provided")
+  class ConstructorWhenTraceExecutorProvided {
 
-    @Nested
-    @DisplayName("when set timeout to 1ms")
-    class WhenSetTimeoutTo1Ms {
-
-      @Test
-      @DisplayName("then sync execution throw exception")
-      void thenSyncExecutionThrowException() {
-        OrderedTraceExecutor executor =
-            createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
-        executor.setTimeout(1, TimeUnit.MILLISECONDS);
-        assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
-            .isInstanceOf(RuntimeException.class)
-            .matches(t -> t.getCause() instanceof TimeoutException);
+    @Test
+    @DisplayName("Given TraceExecutor provided -> should not construct new TraceExecutor")
+    void givenTraceExecutorProvided() {
+      // When / Then
+      try (MockedConstruction<TraceExecutor> provider = mockConstruction(TraceExecutor.class)) {
+        assertThatCode(() -> new OrderedTraceExecutor(mock(TraceExecutor.class)))
+            .doesNotThrowAnyException();
+        assertThat(provider.constructed().size()).isEqualTo(0);
       }
     }
   }
 
   @Nested
-  @DisplayName("executeAsync")
-  class ExecuteAsync {
+  @DisplayName("setTimeout when set to 1ms")
+  class SetTimeoutWhenSetTo1Ms {
 
-    @Nested
-    @DisplayName("when called")
-    class WhenCalled {
+    @Test
+    @DisplayName("Given timeout set to 1ms -> should throw TimeoutException")
+    void givenTimeoutSetTo1Ms() {
+      // Given
+      OrderedTraceExecutor executor =
+          createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+      executor.setTimeout(1, TimeUnit.MILLISECONDS);
 
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then call task async")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenCallDelegate(String name, OrderedTraceExecutor executor) {
-        long start = System.currentTimeMillis();
-        executor.executeAsync("a", () -> sleep(100));
-        if (DIRECT_EXECUTOR.equals(name)) {
-          assertThat(System.currentTimeMillis() - start).isGreaterThanOrEqualTo(100);
-        } else {
-          assertThat(System.currentTimeMillis() - start).isLessThan(100);
-        }
-      }
+      // When / Then
+      assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
+          .isInstanceOf(RuntimeException.class)
+          .matches(t -> t.getCause() instanceof TimeoutException);
     }
+  }
 
-    @Nested
-    @DisplayName("when call sync")
-    class WhenCallSync {
+  @Nested
+  @DisplayName("executeAsync when called")
+  class ExecuteAsyncWhenCalled {
 
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then should not timeout")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenShouldNotTimeout(String name, OrderedTraceExecutor executor)
-          throws InterruptedException {
-        long millis = System.currentTimeMillis();
-        AtomicReference<Long> ref = new AtomicReference<>();
-        CountDownLatch latch = new CountDownLatch(1);
-        executor.executeAsync(
-            "a",
-            () ->
-                executor.executeSync(
-                    "a",
-                    () -> {
-                      ref.set(System.currentTimeMillis() - millis);
-                      latch.countDown();
-                    }));
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given called -> should call task async")
+    void givenCalled(String name, OrderedTraceExecutor executor) {
+      // When
+      long start = System.currentTimeMillis();
+      executor.executeAsync("a", () -> sleep(100));
 
-        latch.await();
-        Assertions.assertThat(ref.get()).isLessThan(100);
+      // Then
+      if (DIRECT_EXECUTOR.equals(name)) {
+        assertThat(System.currentTimeMillis() - start).isGreaterThanOrEqualTo(100);
+      } else {
+        assertThat(System.currentTimeMillis() - start).isLessThan(100);
       }
     }
   }
 
   @Nested
-  @DisplayName("runSynchronously")
-  class RunSynchronously {
+  @DisplayName("executeAsync when call sync nested")
+  class ExecuteAsyncWhenCallSyncNested {
 
-    @Nested
-    @DisplayName("when execute two same keys")
-    class WhenExecuteTwoSameKeys {
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given call sync nested -> should not timeout")
+    void givenCallSyncNested(String name, OrderedTraceExecutor executor)
+        throws InterruptedException {
+      // Given
+      long millis = System.currentTimeMillis();
+      AtomicReference<Long> ref = new AtomicReference<>();
+      CountDownLatch latch = new CountDownLatch(1);
 
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call both sequentially")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallBothSequentially(String _name, String _key, SyncCallable callable)
-          throws ExecutionException, InterruptedException {
-        AtomicReference<Long> start1 = new AtomicReference<>();
-        AtomicReference<Long> start2 = new AtomicReference<>();
-        CompletableFuture.allOf(
-                runAsync(
-                    () ->
-                        callable.call(
-                            "a",
-                            () -> {
-                              start1.set(System.currentTimeMillis());
-                              return sleep(100);
-                            })),
-                runAsync(
-                    () ->
-                        callable.call(
-                            "a",
-                            () -> {
-                              start2.set(System.currentTimeMillis());
-                              return sleep(100);
-                            })))
-            .get();
+      // When
+      executor.executeAsync(
+          "a",
+          () ->
+              executor.executeSync(
+                  "a",
+                  () -> {
+                    ref.set(System.currentTimeMillis() - millis);
+                    latch.countDown();
+                  }));
+
+      latch.await();
+
+      // Then
+      Assertions.assertThat(ref.get()).isLessThan(100);
+    }
+  }
+
+  @Nested
+  @DisplayName("runSynchronously when execute two same keys")
+  class RunSynchronouslyWhenExecuteTwoSameKeys {
+
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execute two same keys -> should call both sequentially")
+    void givenExecuteTwoSameKeys(String _name, String _key, SyncCallable callable)
+        throws ExecutionException, InterruptedException {
+      // Given
+      AtomicReference<Long> start1 = new AtomicReference<>();
+      AtomicReference<Long> start2 = new AtomicReference<>();
+
+      // When
+      CompletableFuture.allOf(
+              runAsync(
+                  () ->
+                      callable.call(
+                          "a",
+                          () -> {
+                            start1.set(System.currentTimeMillis());
+                            return sleep(100);
+                          })),
+              runAsync(
+                  () ->
+                      callable.call(
+                          "a",
+                          () -> {
+                            start2.set(System.currentTimeMillis());
+                            return sleep(100);
+                          })))
+          .get();
+
+      // Then
+      assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
+    }
+  }
+
+  @Nested
+  @DisplayName("runSynchronously when execute two different keys")
+  class RunSynchronouslyWhenExecuteTwoDifferentKeys {
+
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execute two different keys -> should call both concurrently")
+    void givenExecuteTwoDifferentKeys(String name, String _key, SyncCallable callable)
+        throws ExecutionException, InterruptedException {
+      // Given
+      AtomicReference<Long> start1 = new AtomicReference<>();
+      AtomicReference<Long> start2 = new AtomicReference<>();
+
+      // When
+      CompletableFuture.allOf(
+              runAsync(
+                  () ->
+                      callable.call(
+                          "a",
+                          () -> {
+                            start1.set(System.currentTimeMillis());
+                            return sleep(100);
+                          })),
+              runAsync(
+                  () ->
+                      callable.call(
+                          "b",
+                          () -> {
+                            start2.set(System.currentTimeMillis());
+                            return sleep(100);
+                          })))
+          .get();
+
+      // Then
+      if (SINGLE_THREAD_EXECUTOR.equals(name)) {
         assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
+      } else {
+        assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
+      }
+    }
+  }
+
+  @Nested
+  @DisplayName("runSynchronously when execute nested same keys")
+  class RunSynchronouslyWhenExecuteNestedSameKeys {
+
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execute nested same keys -> should call tasks sequentially")
+    void givenExecuteNestedSameKeys(String _name, String _key, SyncCallable callable) {
+      // Given
+      AtomicReference<Long> start = new AtomicReference<>();
+
+      // When
+      callable.call(
+          "a",
+          () -> {
+            start.set(System.currentTimeMillis());
+            sleep(100);
+            return callable.call("a", () -> sleep(100));
+          });
+
+      // Then
+      assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
+    }
+  }
+
+  @Nested
+  @DisplayName("runSynchronously when execute nested same keys in different threads")
+  class RunSynchronouslyWhenExecuteNestedSameKeysInDifferentThreads {
+
+    void executeSync(Runnable runnable) {
+      try {
+        runAsync(runnable, newSingleThreadExecutor()).get();
+      } catch (InterruptedException | ExecutionException e) {
+        throw new RuntimeException(e);
       }
     }
 
-    @Nested
-    @DisplayName("when execute two different keys")
-    class WhenExecuteTwoDifferentKeys {
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName(
+        "Given execute nested same keys in different threads -> should call tasks sequentially")
+    void givenExecuteNestedSameKeysInDifferentThreads(
+        String _name, String _key, SyncCallable callable) {
+      // Given
+      AtomicReference<Long> start = new AtomicReference<>();
 
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call both concurrently")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallBothConcurrently(String name, String _key, SyncCallable callable)
-          throws ExecutionException, InterruptedException {
-        AtomicReference<Long> start1 = new AtomicReference<>();
-        AtomicReference<Long> start2 = new AtomicReference<>();
-        CompletableFuture.allOf(
-                runAsync(
-                    () ->
-                        callable.call(
-                            "a",
-                            () -> {
-                              start1.set(System.currentTimeMillis());
-                              return sleep(100);
-                            })),
-                runAsync(
+      // When
+      callable.call(
+          "a",
+          () -> {
+            start.set(System.currentTimeMillis());
+            sleep(100);
+            executeSync(
+                new TraceRunnable(
+                    TRACER,
                     () ->
                         callable.call(
                             "b",
                             () -> {
-                              start2.set(System.currentTimeMillis());
-                              return sleep(100);
-                            })))
-            .get();
-        if (SINGLE_THREAD_EXECUTOR.equals(name)) {
-          assertThat(Math.abs(start2.get() - start1.get())).isGreaterThanOrEqualTo(100);
-        } else {
-          assertThat(Math.abs(start2.get() - start1.get())).isLessThanOrEqualTo(100);
-        }
-      }
-    }
+                              sleep(100);
+                              executeSync(
+                                  new TraceRunnable(
+                                      TRACER, () -> callable.call("a", () -> sleep(100))));
+                              return 0L;
+                            })));
+            return 0L;
+          });
 
-    @Nested
-    @DisplayName("when execute nested same keys")
-    class WhenExecuteNestedSameKeys {
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call tasks sequentially")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallTasksSequentially(String _name, String _key, SyncCallable callable) {
-        AtomicReference<Long> start = new AtomicReference<>();
-        callable.call(
-            "a",
-            () -> {
-              start.set(System.currentTimeMillis());
-              sleep(100);
-              return callable.call("a", () -> sleep(100));
-            });
-        assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
-      }
-    }
-
-    @Nested
-    @DisplayName("when execute nested same keys in different threads")
-    class WhenExecuteNestedSameKeysInDifferentThreads {
-
-      void executeSync(Runnable runnable) {
-        try {
-          runAsync(runnable, newSingleThreadExecutor()).get();
-        } catch (InterruptedException | ExecutionException e) {
-          throw new RuntimeException(e);
-        }
-      }
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call tasks sequentially")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallTasksSequentially(String _name, String _key, SyncCallable callable) {
-        AtomicReference<Long> start = new AtomicReference<>();
-        callable.call(
-            "a",
-            () -> {
-              start.set(System.currentTimeMillis());
-              sleep(100);
-              executeSync(
-                  new TraceRunnable(
-                      TRACER,
-                      () ->
-                          callable.call(
-                              "b",
-                              () -> {
-                                sleep(100);
-                                executeSync(
-                                    new TraceRunnable(
-                                        TRACER, () -> callable.call("a", () -> sleep(100))));
-                                return 0L;
-                              })));
-              return 0L;
-            });
-        assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(300);
-      }
-    }
-
-    @Nested
-    @DisplayName("when execute nested different keys")
-    class WhenExecuteNestedDifferentKeys {
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call tasks sequentially")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallTasksSequentially(String _name, String _key, SyncCallable callable) {
-        AtomicReference<Long> start = new AtomicReference<>();
-        callable.call(
-            "a",
-            () -> {
-              start.set(System.currentTimeMillis());
-              sleep(100);
-              return callable.call("b", () -> sleep(100));
-            });
-        assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
-      }
-    }
-
-    @Nested
-    @DisplayName("when execute nested mixed keys")
-    class WhenExecuteNestedMixedKeys {
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then call tasks sequentially")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenCallTasksSequentially(String _name, String _key, SyncCallable callable) {
-        AtomicReference<Long> start = new AtomicReference<>();
-        callable.call(
-            "a",
-            () -> {
-              start.set(System.currentTimeMillis());
-              sleep(100);
-              return callable.call(
-                  "b",
-                  () -> {
-                    sleep(100);
-                    return callable.call(
-                        "a",
-                        () -> {
-                          sleep(100);
-                          return callable.call("b", () -> sleep(100));
-                        });
-                  });
-            });
-        assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(400);
-      }
-    }
-
-    @Nested
-    @DisplayName("when task has runtime error")
-    class WhenSupplierHasHasRuntimeError {
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then throw exception")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenThrowException(String _name, String _key, SyncCallable callable) {
-        RuntimeException ex = new RuntimeException("error");
-        assertThatThrownBy(
-                () ->
-                    callable.call(
-                        "a",
-                        () -> {
-                          throw ex;
-                        }))
-            .isInstanceOf(RuntimeException.class)
-            .matches(t -> t == ex);
-      }
-    }
-
-    @Nested
-    @DisplayName("when execution is interrupted")
-    class WhenExecutionIsInterrupted {
-
-      @ParameterizedTest(name = "{0}.{1}")
-      @DisplayName("then throw exception")
-      @ArgumentsSource(CallableArgumentsProvider.class)
-      void thenThrowException(String _name, String _key, SyncCallable callable) {
-        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider())
-            .executeAsync("a", () -> sleep(200));
-        Thread.currentThread().interrupt();
-        assertThatThrownBy(
-                () ->
-                    callable.call(
-                        "a",
-                        () -> {
-                          sleep(100);
-                          return 0L;
-                        }))
-            .isInstanceOf(RuntimeException.class);
-      }
+      // Then
+      assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(300);
     }
   }
 
   @Nested
-  @DisplayName("executeSyncKeys")
-  class ExecuteSyncKeys {
+  @DisplayName("runSynchronously when execute nested different keys")
+  class RunSynchronouslyWhenExecuteNestedDifferentKeys {
 
-    @Nested
-    @DisplayName("when execute two same keys")
-    class WhenSupplyTwoSameKeys {
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execute nested different keys -> should call tasks sequentially")
+    void givenExecuteNestedDifferentKeys(String _name, String _key, SyncCallable callable) {
+      // Given
+      AtomicReference<Long> start = new AtomicReference<>();
 
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) {
-        Runnable runnable = mock(Runnable.class);
-        executor.executeSync(Arrays.asList("a", "a"), runnable);
-        verify(runnable, times(1)).run();
-      }
-    }
+      // When
+      callable.call(
+          "a",
+          () -> {
+            start.set(System.currentTimeMillis());
+            sleep(100);
+            return callable.call("b", () -> sleep(100));
+          });
 
-    @Nested
-    @DisplayName("when execute mixed keys")
-    class WhenSupplyMixedKeys {
-
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) {
-        Runnable runnable = mock(Runnable.class);
-        executor.executeSync(Arrays.asList("a", "b", "a", "b"), runnable);
-        verify(runnable, times(1)).run();
-      }
+      // Then
+      assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(200);
     }
   }
 
   @Nested
-  @DisplayName("supplyKeys")
-  class SupplyKeys {
+  @DisplayName("runSynchronously when execute nested mixed keys")
+  class RunSynchronouslyWhenExecuteNestedMixedKeys {
 
-    @Nested
-    @DisplayName("when supply two same keys")
-    class WhenSupplyTwoSameKeys {
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execute nested mixed keys -> should call tasks sequentially")
+    void givenExecuteNestedMixedKeys(String _name, String _key, SyncCallable callable) {
+      // Given
+      AtomicReference<Long> start = new AtomicReference<>();
 
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) {
-        assertThat(executor.supply(Arrays.asList("a", "a"), () -> 1)).isEqualTo(1);
-      }
+      // When
+      callable.call(
+          "a",
+          () -> {
+            start.set(System.currentTimeMillis());
+            sleep(100);
+            return callable.call(
+                "b",
+                () -> {
+                  sleep(100);
+                  return callable.call(
+                      "a",
+                      () -> {
+                        sleep(100);
+                        return callable.call("b", () -> sleep(100));
+                      });
+                });
+          });
+
+      // Then
+      assertThat(System.currentTimeMillis() - start.get()).isGreaterThanOrEqualTo(400);
     }
+  }
 
-    @Nested
-    @DisplayName("when supply mixed keys")
-    class WhenSupplyMixedKeys {
+  @Nested
+  @DisplayName("runSynchronously when task has runtime error")
+  class RunSynchronouslyWhenTaskHasRuntimeError {
 
-      @ParameterizedTest(name = "{0}")
-      @DisplayName("then run")
-      @ArgumentsSource(ExecutorArgumentsProvider.class)
-      void thenRun(String _name, OrderedTraceExecutor executor) {
-        assertThat(executor.supply(Arrays.asList("a", "b", "a", "b"), () -> 1)).isEqualTo(1);
-      }
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given task has runtime error -> should throw exception")
+    void givenTaskHasRuntimeError(String _name, String _key, SyncCallable callable) {
+      // Given
+      RuntimeException ex = new RuntimeException("error");
+
+      // When / Then
+      assertThatThrownBy(
+              () ->
+                  callable.call(
+                      "a",
+                      () -> {
+                        throw ex;
+                      }))
+          .isInstanceOf(RuntimeException.class)
+          .matches(t -> t == ex);
+    }
+  }
+
+  @Nested
+  @DisplayName("runSynchronously when execution is interrupted")
+  class RunSynchronouslyWhenExecutionIsInterrupted {
+
+    @ParameterizedTest(name = "{0}.{1}")
+    @ArgumentsSource(CallableArgumentsProvider.class)
+    @DisplayName("Given execution is interrupted -> should throw exception")
+    void givenExecutionIsInterrupted(String _name, String _key, SyncCallable callable) {
+      // Given
+      createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider())
+          .executeAsync("a", () -> sleep(200));
+      Thread.currentThread().interrupt();
+
+      // When / Then
+      assertThatThrownBy(
+              () ->
+                  callable.call(
+                      "a",
+                      () -> {
+                        sleep(100);
+                        return 0L;
+                      }))
+          .isInstanceOf(RuntimeException.class);
+    }
+  }
+
+  @Nested
+  @DisplayName("executeSyncKeys when execute two same keys")
+  class ExecuteSyncKeysWhenExecuteTwoSameKeys {
+
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given execute two same keys -> should run")
+    void givenExecuteTwoSameKeys(String _name, OrderedTraceExecutor executor) {
+      // Given
+      Runnable runnable = mock(Runnable.class);
+
+      // When
+      executor.executeSync(Arrays.asList("a", "a"), runnable);
+
+      // Then
+      verify(runnable, times(1)).run();
+    }
+  }
+
+  @Nested
+  @DisplayName("executeSyncKeys when execute mixed keys")
+  class ExecuteSyncKeysWhenExecuteMixedKeys {
+
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given execute mixed keys -> should run")
+    void givenExecuteMixedKeys(String _name, OrderedTraceExecutor executor) {
+      // Given
+      Runnable runnable = mock(Runnable.class);
+
+      // When
+      executor.executeSync(Arrays.asList("a", "b", "a", "b"), runnable);
+
+      // Then
+      verify(runnable, times(1)).run();
+    }
+  }
+
+  @Nested
+  @DisplayName("supplyKeys when supply two same keys")
+  class SupplyKeysWhenSupplyTwoSameKeys {
+
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given supply two same keys -> should run")
+    void givenSupplyTwoSameKeys(String _name, OrderedTraceExecutor executor) {
+      // When / Then
+      assertThat(executor.supply(Arrays.asList("a", "a"), () -> 1)).isEqualTo(1);
+    }
+  }
+
+  @Nested
+  @DisplayName("supplyKeys when supply mixed keys")
+  class SupplyKeysWhenSupplyMixedKeys {
+
+    @ParameterizedTest(name = "{0}")
+    @ArgumentsSource(ExecutorArgumentsProvider.class)
+    @DisplayName("Given supply mixed keys -> should run")
+    void givenSupplyMixedKeys(String _name, OrderedTraceExecutor executor) {
+      // When / Then
+      assertThat(executor.supply(Arrays.asList("a", "b", "a", "b"), () -> 1)).isEqualTo(1);
     }
   }
 }

@@ -36,13 +36,18 @@ public class SequentialTaskTest {
   class WhenRunConcurrently {
 
     @Test
-    @DisplayName("then throw exception")
-    void thenThrowException() {
+    @DisplayName("Given run concurrently -> should throw exception")
+    void givenRunConcurrently() {
+      // Given
       AtomicBoolean lock = new AtomicBoolean(false);
+
+      // When
       CompletableFuture<?> future =
           CompletableFuture.allOf(
               runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))),
               runAsync(new SequentialTask(lock, () -> TestUtils.sleep(1000))));
+
+      // Then
       assertThatThrownBy(future::join)
           .isInstanceOf(CompletionException.class)
           .rootCause()

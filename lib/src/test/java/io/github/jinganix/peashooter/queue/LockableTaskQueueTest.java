@@ -45,250 +45,252 @@ import org.junit.jupiter.api.Test;
 class LockableTaskQueueTest {
 
   @Nested
-  @DisplayName("run")
-  class Run {
+  @DisplayName("run when not locked")
+  class RunWhenNotLocked {
 
-    @Nested
-    @DisplayName("when not locked")
-    class WhenNotLocked {
+    @Test
+    @DisplayName("Given not locked -> should not unlock")
+    void givenNotLocked() {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(false);
 
-      @Test
-      @DisplayName("then do not unlock")
-      void thenDoNotUnlock() {
-        LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-        when(taskQueue.tryLock(any())).thenReturn(false);
-        taskQueue.run();
-        verify(taskQueue, never()).unlock();
-      }
+      // When
+      taskQueue.run();
+
+      // Then
+      verify(taskQueue, never()).unlock();
+    }
+  }
+
+  @Nested
+  @DisplayName("run when locked with no tasks")
+  class RunWhenLockedWithNoTasks {
+
+    @Test
+    @DisplayName("Given locked and no tasks -> should not check yield")
+    void givenLockedAndNoTasks() {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+
+      // When
+      taskQueue.run();
+
+      // Then
+      verify(taskQueue, never()).shouldYield(any());
+      verify(taskQueue, times(1)).unlock();
+    }
+  }
+
+  @Nested
+  @DisplayName("run when locked with single task")
+  class RunWhenLockedWithSingleTask {
+
+    @Test
+    @DisplayName("Given should yield -> should lock twice")
+    void givenShouldYield() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+      when(taskQueue.shouldYield(any())).thenReturn(true);
+
+      CountDownLatch latch = new CountDownLatch(1);
+
+      // When
+      taskQueue.execute(DirectExecutor.INSTANCE, latch::countDown);
+      latch.await();
+
+      // Then
+      verify(taskQueue, times(1)).shouldYield(any());
+      verify(taskQueue, times(2)).tryLock(any());
+      verify(taskQueue, times(2)).unlock();
     }
 
-    @Nested
-    @DisplayName("when locked")
-    class WhenLocked {
+    @Test
+    @DisplayName("Given should not yield -> should lock once")
+    void givenShouldNotYield() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+      when(taskQueue.shouldYield(any())).thenReturn(false);
 
-      @Nested
-      @DisplayName("when no tasks")
-      class WhenNoTasks {
+      CountDownLatch latch = new CountDownLatch(1);
 
-        @Test
-        @DisplayName("then not check yield")
-        void thenNotCheckYield() {
-          LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-          when(taskQueue.tryLock(any())).thenReturn(true);
-          taskQueue.run();
-          verify(taskQueue, never()).shouldYield(any());
-          verify(taskQueue, times(1)).unlock();
-        }
-      }
+      // When
+      taskQueue.execute(DirectExecutor.INSTANCE, latch::countDown);
+      latch.await();
 
-      @Nested
-      @DisplayName("when task executed")
-      class WhenTaskExecuted {
+      // Then
+      verify(taskQueue, times(1)).shouldYield(any());
+      verify(taskQueue, times(1)).tryLock(any());
+      verify(taskQueue, times(1)).unlock();
+    }
+  }
 
-        @Nested
-        @DisplayName("when should yield")
-        class WhenShouldYield {
+  @Nested
+  @DisplayName("run when locked with two tasks")
+  class RunWhenLockedWithTwoTasks {
 
-          @Test
-          @DisplayName("then lock twice")
-          void thenLockTwice() throws InterruptedException {
-            LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-            when(taskQueue.tryLock(any())).thenReturn(true);
-            when(taskQueue.shouldYield(any())).thenReturn(true);
+    void executeTwoTasks(TaskQueue taskQueue) throws InterruptedException {
+      CountDownLatch latch1 = new CountDownLatch(1);
+      CountDownLatch latch2 = new CountDownLatch(1);
+      CountDownLatch latch3 = new CountDownLatch(1);
 
-            CountDownLatch latch = new CountDownLatch(1);
-            taskQueue.execute(DirectExecutor.INSTANCE, latch::countDown);
+      new Thread(
+              () ->
+                  taskQueue.execute(
+                      command -> {
+                        latch1.countDown();
+                        uncheckedRun(latch2::await);
+                        command.run();
+                      },
+                      () -> {}))
+          .start();
+      latch1.await();
 
-            latch.await();
-            verify(taskQueue, times(1)).shouldYield(any());
-            verify(taskQueue, times(2)).tryLock(any());
-            verify(taskQueue, times(2)).unlock();
-          }
-
-          @Nested
-          @DisplayName("when should not yield")
-          class WhenShouldNotYield {
-
-            @Test
-            @DisplayName("then lock once")
-            void thenLockOnce() throws InterruptedException {
-              LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-              when(taskQueue.tryLock(any())).thenReturn(true);
-              when(taskQueue.shouldYield(any())).thenReturn(false);
-
-              CountDownLatch latch = new CountDownLatch(1);
-              taskQueue.execute(DirectExecutor.INSTANCE, latch::countDown);
-
-              latch.await();
-              verify(taskQueue, times(1)).shouldYield(any());
-              verify(taskQueue, times(1)).tryLock(any());
-              verify(taskQueue, times(1)).unlock();
-            }
-          }
-        }
-      }
-
-      @Nested
-      @DisplayName("when 2 tasks executed")
-      class When2TasksExecuted {
-
-        void executeTwoTasks(TaskQueue taskQueue) throws InterruptedException {
-          CountDownLatch latch1 = new CountDownLatch(1);
-          CountDownLatch latch2 = new CountDownLatch(1);
-          CountDownLatch latch3 = new CountDownLatch(1);
-
-          new Thread(
-                  () ->
-                      taskQueue.execute(
-                          command -> {
-                            latch1.countDown();
-                            uncheckedRun(latch2::await);
-                            command.run();
-                          },
-                          () -> {}))
-              .start();
-          latch1.await();
-
-          taskQueue.execute(
-              command -> {
-                command.run();
-                latch3.countDown();
-              },
-              () -> {});
-          latch2.countDown();
-          latch3.await();
-        }
-
-        @Nested
-        @DisplayName("when should yield first")
-        class WhenShouldYieldFirst {
-
-          @Test
-          @DisplayName("then lock twice")
-          void thenLockTwice() throws InterruptedException {
-            LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-            when(taskQueue.tryLock(any())).thenReturn(true);
-            when(taskQueue.shouldYield(any())).thenReturn(true, false);
-
-            executeTwoTasks(taskQueue);
-
-            verify(taskQueue, times(2)).shouldYield(any());
-            verify(taskQueue, times(2)).tryLock(any());
-            verify(taskQueue, times(2)).unlock();
-          }
-        }
-
-        @Nested
-        @DisplayName("when should not yield")
-        class WhenShouldNotYield {
-
-          @Test
-          @DisplayName("then lock once")
-          void thenLockOnce() throws InterruptedException {
-            LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-            when(taskQueue.tryLock(any())).thenReturn(true);
-            when(taskQueue.shouldYield(any())).thenReturn(false);
-
-            executeTwoTasks(taskQueue);
-
-            verify(taskQueue, times(2)).shouldYield(any());
-            verify(taskQueue, times(1)).tryLock(any());
-            verify(taskQueue, times(1)).unlock();
-          }
-        }
-      }
+      taskQueue.execute(
+          command -> {
+            command.run();
+            latch3.countDown();
+          },
+          () -> {});
+      latch2.countDown();
+      latch3.await();
     }
 
-    @Nested
-    @DisplayName("when first task throw errors")
-    class WhenFirstTaskThrowErrors {
+    @Test
+    @DisplayName("Given should yield first -> should lock twice")
+    void givenShouldYieldFirst() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+      when(taskQueue.shouldYield(any())).thenReturn(true, false);
 
-      @Test
-      @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() throws InterruptedException {
-        LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-        when(taskQueue.tryLock(any())).thenReturn(true);
+      // When
+      executeTwoTasks(taskQueue);
 
-        CountDownLatch latch = new CountDownLatch(1);
-        taskQueue.execute(
-            newSingleThreadExecutor(),
-            () -> {
-              sleep(100);
-              throw new RuntimeException("error");
-            });
-
-        AtomicReference<Long> ref = new AtomicReference<>();
-        long millis = System.currentTimeMillis();
-        taskQueue.execute(
-            newSingleThreadExecutor(),
-            () -> {
-              ref.set(System.currentTimeMillis() - millis);
-              latch.countDown();
-            });
-
-        latch.await();
-        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
-      }
+      // Then
+      verify(taskQueue, times(2)).shouldYield(any());
+      verify(taskQueue, times(2)).tryLock(any());
+      verify(taskQueue, times(2)).unlock();
     }
 
-    @Nested
-    @DisplayName("when executor throw errors")
-    class WhenExecutorThrowErrors {
+    @Test
+    @DisplayName("Given should not yield -> should lock once")
+    void givenShouldNotYield() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+      when(taskQueue.shouldYield(any())).thenReturn(false);
 
-      @Nested
-      @DisplayName("when tasks is empty")
-      class WhenTasksIsEmpty {
+      // When
+      executeTwoTasks(taskQueue);
 
-        @Test
-        @DisplayName("then throw exception")
-        void thenThenThrowException() {
-          LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-          when(taskQueue.tryLock(any())).thenReturn(true);
+      // Then
+      verify(taskQueue, times(2)).shouldYield(any());
+      verify(taskQueue, times(1)).tryLock(any());
+      verify(taskQueue, times(1)).unlock();
+    }
+  }
 
-          Executor executor = mock(Executor.class);
-          RejectedExecutionException exception = new RejectedExecutionException();
-          doThrow(exception).when(executor).execute(any());
+  @Nested
+  @DisplayName("run when first task throws errors")
+  class RunWhenFirstTaskThrowsErrors {
 
-          assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
-        }
-      }
+    @Test
+    @DisplayName("Given first task throws error -> should run tasks sequentially")
+    void givenFirstTaskThrowsError() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
 
-      @Nested
-      @DisplayName("when tasks is not empty")
-      class WhenTasksIsNotEmpty {
+      CountDownLatch latch = new CountDownLatch(1);
 
-        @Test
-        @DisplayName("then task not called")
-        void thenTaskNotCalled() throws InterruptedException {
-          LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
-          when(taskQueue.tryLock(any())).thenReturn(true);
-          Executor executor = mock(Executor.class);
-          doThrow(new RejectedExecutionException()).when(executor).execute(any());
-          Runnable task = mock(Runnable.class);
+      // When
+      taskQueue.execute(
+          newSingleThreadExecutor(),
+          () -> {
+            sleep(100);
+            throw new RuntimeException("error");
+          });
 
-          CountDownLatch latch1 = new CountDownLatch(1);
-          CountDownLatch latch2 = new CountDownLatch(1);
-          CountDownLatch latch3 = new CountDownLatch(1);
-          new Thread(
-                  () ->
-                      taskQueue.execute(
-                          command -> {
-                            latch1.countDown();
-                            uncheckedRun(latch2::await);
-                            command.run();
-                            latch3.countDown();
-                          },
-                          () -> {}))
-              .start();
-          latch1.await();
-          taskQueue.execute(executor, task);
-          latch2.countDown();
-          latch3.await();
+      AtomicReference<Long> ref = new AtomicReference<>();
+      long millis = System.currentTimeMillis();
+      taskQueue.execute(
+          newSingleThreadExecutor(),
+          () -> {
+            ref.set(System.currentTimeMillis() - millis);
+            latch.countDown();
+          });
 
-          verify(executor, times(1)).execute(any());
-          verify(task, never()).run();
-        }
-      }
+      latch.await();
+
+      // Then
+      assertThat(ref.get()).isGreaterThanOrEqualTo(100);
+    }
+  }
+
+  @Nested
+  @DisplayName("run when executor throws errors with empty tasks")
+  class RunWhenExecutorThrowsErrorsWithEmptyTasks {
+
+    @Test
+    @DisplayName("Given executor throws error and tasks empty -> should throw exception")
+    void givenExecutorThrowsErrorAndTasksEmpty() {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+
+      Executor executor = mock(Executor.class);
+      RejectedExecutionException exception = new RejectedExecutionException();
+      doThrow(exception).when(executor).execute(any());
+
+      // When / Then
+      assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
+    }
+  }
+
+  @Nested
+  @DisplayName("run when executor throws errors with non-empty tasks")
+  class RunWhenExecutorThrowsErrorsWithNonEmptyTasks {
+
+    @Test
+    @DisplayName("Given executor throws error and tasks not empty -> should not call task")
+    void givenExecutorThrowsErrorAndTasksNotEmpty() throws InterruptedException {
+      // Given
+      LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+      when(taskQueue.tryLock(any())).thenReturn(true);
+
+      Executor executor = mock(Executor.class);
+      doThrow(new RejectedExecutionException()).when(executor).execute(any());
+      Runnable task = mock(Runnable.class);
+
+      CountDownLatch latch1 = new CountDownLatch(1);
+      CountDownLatch latch2 = new CountDownLatch(1);
+      CountDownLatch latch3 = new CountDownLatch(1);
+
+      new Thread(
+              () ->
+                  taskQueue.execute(
+                      command -> {
+                        latch1.countDown();
+                        uncheckedRun(latch2::await);
+                        command.run();
+                        latch3.countDown();
+                      },
+                      () -> {}))
+          .start();
+      latch1.await();
+
+      // When
+      taskQueue.execute(executor, task);
+      latch2.countDown();
+      latch3.await();
+
+      // Then
+      verify(executor, times(1)).execute(any());
+      verify(task, never()).run();
     }
   }
 }

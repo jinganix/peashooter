@@ -46,190 +46,205 @@ class TaskQueueTest {
   }
 
   @Nested
-  @DisplayName("execute")
-  class Execute {
+  @DisplayName("execute when run two tasks")
+  class ExecuteWhenRunTwoTasks {
 
-    @Nested
-    @DisplayName("when run two tasks")
-    class WhenRunTwoTasks {
+    @Test
+    @DisplayName("Given run two tasks -> should run tasks sequentially")
+    void givenRunTwoTasks() throws InterruptedException {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
+      Executor executor = createExecutor();
 
-      @Test
-      @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() throws InterruptedException {
-        TaskQueue taskQueue = new TaskQueue();
-        Executor executor = createExecutor();
-        taskQueue.execute(executor, () -> sleep(100));
-        AtomicReference<Long> ref = new AtomicReference<>();
-        long millis = System.currentTimeMillis();
+      // When
+      taskQueue.execute(executor, () -> sleep(100));
+      AtomicReference<Long> ref = new AtomicReference<>();
+      long millis = System.currentTimeMillis();
 
-        CountDownLatch latch = new CountDownLatch(1);
-        taskQueue.execute(
-            createExecutor(),
-            () -> {
-              ref.set(System.currentTimeMillis() - millis);
-              latch.countDown();
-            });
-        latch.await();
+      CountDownLatch latch = new CountDownLatch(1);
+      taskQueue.execute(
+          createExecutor(),
+          () -> {
+            ref.set(System.currentTimeMillis() - millis);
+            latch.countDown();
+          });
+      latch.await();
 
-        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
-      }
+      // Then
+      assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
+  }
 
-    @Nested
-    @DisplayName("when run two executors")
-    class WhenRunTwoExecutors {
+  @Nested
+  @DisplayName("execute when run two executors")
+  class ExecuteWhenRunTwoExecutors {
 
-      @Test
-      @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() throws InterruptedException {
-        TaskQueue taskQueue = new TaskQueue();
-        taskQueue.execute(createExecutor(), () -> sleep(100));
-        AtomicReference<Long> ref = new AtomicReference<>();
-        long millis = System.currentTimeMillis();
+    @Test
+    @DisplayName("Given run two executors -> should run tasks sequentially")
+    void givenRunTwoExecutors() throws InterruptedException {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
 
-        CountDownLatch latch = new CountDownLatch(1);
-        taskQueue.execute(
-            createExecutor(),
-            () -> {
-              ref.set(System.currentTimeMillis() - millis);
-              latch.countDown();
-            });
-        latch.await();
+      // When
+      taskQueue.execute(createExecutor(), () -> sleep(100));
+      AtomicReference<Long> ref = new AtomicReference<>();
+      long millis = System.currentTimeMillis();
 
-        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
-      }
+      CountDownLatch latch = new CountDownLatch(1);
+      taskQueue.execute(
+          createExecutor(),
+          () -> {
+            ref.set(System.currentTimeMillis() - millis);
+            latch.countDown();
+          });
+      latch.await();
+
+      // Then
+      assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
+  }
 
-    @Nested
-    @DisplayName("when first task throw errors")
-    class WhenFirstTaskThrowErrors {
+  @Nested
+  @DisplayName("execute when first task throws errors")
+  class ExecuteWhenFirstTaskThrowsErrors {
 
-      @Test
-      @DisplayName("then run tasks sequentially")
-      void thenRunTasksSequentially() throws InterruptedException {
-        TaskQueue taskQueue = new TaskQueue();
-        taskQueue.execute(
-            createExecutor(),
-            () -> {
-              sleep(100);
-              throw new RuntimeException("error");
-            });
+    @Test
+    @DisplayName("Given first task throws error -> should run tasks sequentially")
+    void givenFirstTaskThrowsError() throws InterruptedException {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
 
-        AtomicReference<Long> ref = new AtomicReference<>();
-        long millis = System.currentTimeMillis();
+      // When
+      taskQueue.execute(
+          createExecutor(),
+          () -> {
+            sleep(100);
+            throw new RuntimeException("error");
+          });
 
-        CountDownLatch latch = new CountDownLatch(1);
-        taskQueue.execute(
-            createExecutor(),
-            () -> {
-              ref.set(System.currentTimeMillis() - millis);
-              latch.countDown();
-            });
-        latch.await();
+      AtomicReference<Long> ref = new AtomicReference<>();
+      long millis = System.currentTimeMillis();
 
-        assertThat(ref.get()).isGreaterThanOrEqualTo(100);
-      }
+      CountDownLatch latch = new CountDownLatch(1);
+      taskQueue.execute(
+          createExecutor(),
+          () -> {
+            ref.set(System.currentTimeMillis() - millis);
+            latch.countDown();
+          });
+      latch.await();
+
+      // Then
+      assertThat(ref.get()).isGreaterThanOrEqualTo(100);
     }
+  }
 
-    @Nested
-    @DisplayName("when executor throw errors")
-    class WhenExecutorThrowErrors {
+  @Nested
+  @DisplayName("execute when executor throws errors with empty tasks")
+  class ExecuteWhenExecutorThrowsErrorsWithEmptyTasks {
 
-      @Nested
-      @DisplayName("when tasks is empty")
-      class WhenTasksIsEmpty {
+    @Test
+    @DisplayName("Given executor throws error and tasks empty -> should throw exception")
+    void givenExecutorThrowsErrorAndTasksEmpty() {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
+      Executor executor = mock(Executor.class);
+      RejectedExecutionException exception = new RejectedExecutionException();
+      doThrow(exception).when(executor).execute(any());
 
-        @Test
-        @DisplayName("then throw exception")
-        void thenThenThrowException() {
-          TaskQueue taskQueue = new TaskQueue();
-          Executor executor = mock(Executor.class);
-          RejectedExecutionException exception = new RejectedExecutionException();
-          doThrow(exception).when(executor).execute(any());
-
-          assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
-        }
-      }
-
-      @Nested
-      @DisplayName("when tasks is not empty")
-      class WhenTasksIsNotEmpty {
-
-        @Test
-        @DisplayName("then task not called")
-        void thenTaskNotCalled() throws InterruptedException {
-          TaskQueue taskQueue = new TaskQueue();
-          Executor executor = mock(Executor.class);
-          doThrow(new RejectedExecutionException()).when(executor).execute(any());
-          Runnable task = mock(Runnable.class);
-
-          CountDownLatch latch1 = new CountDownLatch(1);
-          CountDownLatch latch2 = new CountDownLatch(1);
-          CountDownLatch latch3 = new CountDownLatch(1);
-          new Thread(
-                  () ->
-                      taskQueue.execute(
-                          command -> {
-                            latch1.countDown();
-                            uncheckedRun(latch2::await);
-                            command.run();
-                            latch3.countDown();
-                          },
-                          () -> {}))
-              .start();
-          latch1.await();
-          taskQueue.execute(executor, task);
-          latch2.countDown();
-          latch3.await();
-
-          verify(executor, times(1)).execute(any());
-          verify(task, never()).run();
-        }
-      }
+      // When / Then
+      assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
     }
+  }
 
-    @Nested
-    @DisplayName("isEmpty")
-    class IsEmpty {
+  @Nested
+  @DisplayName("execute when executor throws errors with non-empty tasks")
+  class ExecuteWhenExecutorThrowsErrorsWithNonEmptyTasks {
 
-      @Nested
-      @DisplayName("when no tasks and current is null")
-      class WhenNoTasksAndCurrentIsNull {
+    @Test
+    @DisplayName("Given executor throws error and tasks not empty -> should not call task")
+    void givenExecutorThrowsErrorAndTasksNotEmpty() throws InterruptedException {
+      // Given
+      TaskQueue taskQueue = new TaskQueue();
+      Executor executor = mock(Executor.class);
+      doThrow(new RejectedExecutionException()).when(executor).execute(any());
+      Runnable task = mock(Runnable.class);
 
-        @Test
-        @DisplayName("then return true")
-        void thenReturnTrue() {
-          assertThat(new TaskQueue().isEmpty()).isTrue();
-        }
-      }
+      CountDownLatch latch1 = new CountDownLatch(1);
+      CountDownLatch latch2 = new CountDownLatch(1);
+      CountDownLatch latch3 = new CountDownLatch(1);
 
-      @Nested
-      @DisplayName("when has tasks and current is not null")
-      class WhenHasTasksAndCurrentIsNotNull {
+      new Thread(
+              () ->
+                  taskQueue.execute(
+                      command -> {
+                        latch1.countDown();
+                        uncheckedRun(latch2::await);
+                        command.run();
+                        latch3.countDown();
+                      },
+                      () -> {}))
+          .start();
+      latch1.await();
 
-        @Test
-        @DisplayName("then return false")
-        void thenReturnFalse() {
-          TaskQueue queue = new TaskQueue();
-          queue.execute(x -> {}, () -> {});
-          assertThat(queue.isEmpty()).isFalse();
-        }
-      }
+      // When
+      taskQueue.execute(executor, task);
+      latch2.countDown();
+      latch3.await();
 
-      @Nested
-      @DisplayName("when no tasks and current is not null")
-      class WhenNoTasksAndCurrentIsNotNull {
+      // Then
+      verify(executor, times(1)).execute(any());
+      verify(task, never()).run();
+    }
+  }
 
-        @Test
-        @DisplayName("then return false")
-        void thenReturnFalse() {
-          TaskQueue queue = new TaskQueue();
-          CountDownLatch latch = new CountDownLatch(1);
-          queue.execute(x -> {}, () -> uncheckedRun(latch::await));
-          assertThat(queue.isEmpty()).isFalse();
-          latch.countDown();
-        }
-      }
+  @Nested
+  @DisplayName("isEmpty when no tasks and current is null")
+  class IsEmptyWhenNoTasksAndCurrentIsNull {
+
+    @Test
+    @DisplayName("Given no tasks and current is null -> should return true")
+    void givenNoTasksAndCurrentIsNull() {
+      // When / Then
+      assertThat(new TaskQueue().isEmpty()).isTrue();
+    }
+  }
+
+  @Nested
+  @DisplayName("isEmpty when has tasks and current is not null")
+  class IsEmptyWhenHasTasksAndCurrentIsNotNull {
+
+    @Test
+    @DisplayName("Given has tasks and current is not null -> should return false")
+    void givenHasTasksAndCurrentIsNotNull() {
+      // Given
+      TaskQueue queue = new TaskQueue();
+
+      // When
+      queue.execute(x -> {}, () -> {});
+
+      // Then
+      assertThat(queue.isEmpty()).isFalse();
+    }
+  }
+
+  @Nested
+  @DisplayName("isEmpty when no tasks and current is not null")
+  class IsEmptyWhenNoTasksAndCurrentIsNotNull {
+
+    @Test
+    @DisplayName("Given no tasks and current is not null -> should return false")
+    void givenNoTasksAndCurrentIsNotNull() {
+      // Given
+      TaskQueue queue = new TaskQueue();
+      CountDownLatch latch = new CountDownLatch(1);
+
+      // When
+      queue.execute(x -> {}, () -> uncheckedRun(latch::await));
+
+      // Then
+      assertThat(queue.isEmpty()).isFalse();
+      latch.countDown();
     }
   }
 }
