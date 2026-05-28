@@ -2,7 +2,9 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:base",
-    ":semanticCommits"
+    ":semanticCommits",
+    "schedule:weekly",
+    "group:allNonMajor"
   ],
   "packageRules": [
     {
