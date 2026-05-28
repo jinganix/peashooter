@@ -126,8 +126,9 @@ class TaskQueueBenchmarkTest {
 
     @Test
     @DisplayName(
-        "Given execute 5,000,000 tasks -> should execute faster than synchronized and ReentrantLock")
-    void givenExecute5MillionTasks() throws InterruptedException {
+        "should execute faster than synchronized and reentrant lock when running 5,000,000 tasks")
+    void shouldExecuteFasterThanSynchronizedAndReentrantLockWhenRunningFiveMillionTasks()
+        throws InterruptedException {
       // When
       long time1 = taskQueueTest();
       long time2 = synchronizedTest();

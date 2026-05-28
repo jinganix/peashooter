@@ -28,7 +28,6 @@ import io.github.jinganix.peashooter.Tracer;
 import io.github.jinganix.peashooter.executor.TraceExecutor;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("TraceExecutor")
@@ -41,47 +40,42 @@ class TraceExecutorTest {
   TraceExecutor traceExecutor = new TraceExecutor(delegate, tracer);
 
   @Test
-  @DisplayName("Given getTracer called -> should return tracer")
-  void givenGetTracerCalled() {
+  @DisplayName("should expose the configured tracer")
+  void shouldExposeTheConfiguredTracer() {
     // When / Then
     assertThat(traceExecutor.getTracer()).isEqualTo(tracer);
   }
 
   @Test
-  @DisplayName("Given getSpan called -> should return span")
-  void givenGetSpanCalled() {
+  @DisplayName("should expose the current span from the tracer")
+  void shouldExposeTheCurrentSpanFromTheTracer() {
     // When / Then
     assertThat(traceExecutor.getSpan()).isEqualTo(tracer.getSpan());
   }
 
-  @Nested
-  @DisplayName("execute")
-  class Execute {
+  @Test
+  @DisplayName("should wrap a plain runnable before delegating")
+  void shouldWrapAPlainRunnableBeforeDelegating() {
+    // Given
+    Runnable runnable = () -> {};
 
-    @Test
-    @DisplayName("Given called by Runnable -> should call delegate")
-    void givenCalledByRunnable() {
-      // Given
-      Runnable runnable = () -> {};
+    // When
+    traceExecutor.execute(runnable);
 
-      // When
-      traceExecutor.execute(runnable);
+    // Then
+    verify(delegate, times(1)).execute(isA(TraceRunnable.class));
+  }
 
-      // Then
-      verify(delegate, times(1)).execute(isA(TraceRunnable.class));
-    }
+  @Test
+  @DisplayName("should delegate trace runnables without re-wrapping")
+  void shouldDelegateTraceRunnablesWithoutReWrapping() {
+    // Given
+    Runnable runnable = new TraceRunnable(tracer, () -> {});
 
-    @Test
-    @DisplayName("Given called by TraceRunnable -> should call delegate")
-    void givenCalledByTraceRunnable() {
-      // Given
-      Runnable runnable = new TraceRunnable(tracer, () -> {});
+    // When
+    traceExecutor.execute(runnable);
 
-      // When
-      traceExecutor.execute(runnable);
-
-      // Then
-      verify(delegate, times(1)).execute(runnable);
-    }
+    // Then
+    verify(delegate, times(1)).execute(runnable);
   }
 }

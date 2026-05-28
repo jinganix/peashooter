@@ -24,101 +24,94 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.assertj.core.util.Lists;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.ArgumentsProvider;
-import org.junit.jupiter.params.provider.ArgumentsSource;
-import org.junit.jupiter.params.support.ParameterDeclarations;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @DisplayName("OrderedSpan")
 class OrderedSpanTest {
 
-  @Nested
-  @DisplayName("constructor with concrete trace id")
-  class ConstructorWithConcreteTraceId {
+  @Test
+  @DisplayName("should keep an explicit trace id when provided")
+  void shouldKeepAnExplicitTraceIdWhenProvided() {
+    // When
+    OrderedSpan span = new OrderedSpan("trace", null, "key", true);
 
-    @Test
-    @DisplayName("Given concrete with trace id -> should get the trace id")
-    void givenConcreteWithTraceId() {
-      // When
-      OrderedSpan span = new OrderedSpan("trace", null, "key", true);
-
-      // Then
-      assertThat(span.getTraceId()).isEqualTo("trace");
-    }
+    // Then
+    assertThat(span.getTraceId()).isEqualTo("trace");
   }
 
   @Test
-  @DisplayName("Given span is null -> should return false")
-  void givenSpanIsNull() {
+  @DisplayName("should return false when span is null")
+  void shouldReturnFalseWhenSpanIsNull() {
     // When / Then
     assertThat(OrderedSpan.invokedBy(null, "")).isFalse();
   }
 
-  @Nested
-  @DisplayName("invokedBy")
-  class InvokedBy {
+  static Stream<Arguments> invokedByScenarios() {
+    return Stream.of(
+        Arguments.of(
+            "should treat as sync when only sync span matches key",
+            Lists.list(SpanArg.sync("foo")),
+            SpanArg.sync("foo")),
+        Arguments.of(
+            "should treat as sync when async parent has sync child for key",
+            Lists.list(SpanArg.async("foo")),
+            SpanArg.sync("foo")),
+        Arguments.of(
+            "should treat as sync when async then sync chain ends on key",
+            Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")),
+            SpanArg.sync("foo")),
+        Arguments.of(
+            "should treat as async when async spans do not end on key",
+            Lists.list(SpanArg.async("foo"), SpanArg.async("bar")),
+            SpanArg.async("foo")),
+        Arguments.of(
+            "should treat as async when sync parent has async child for key",
+            Lists.list(SpanArg.sync("foo"), SpanArg.async("bar")),
+            SpanArg.async("foo")),
+        Arguments.of(
+            "should treat as sync when async then sync on same key",
+            Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")),
+            SpanArg.sync("foo")),
+        Arguments.of(
+            "should treat as sync when async then sync on different keys",
+            Lists.list(SpanArg.async("foo"), SpanArg.sync("bar")),
+            SpanArg.sync("foo")));
+  }
 
-    static class SpanArg {
-      String key;
-      boolean sync;
-
-      SpanArg(String key, boolean sync) {
-        this.key = key;
-        this.sync = sync;
-      }
-
-      static SpanArg sync(String key) {
-        return new SpanArg(key, true);
-      }
-
-      static SpanArg async(String key) {
-        return new SpanArg(key, false);
-      }
-
-      @Override
-      public String toString() {
-        return "SpanKeyArg(" + key + ", " + sync + ")";
-      }
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invokedByScenarios")
+  @DisplayName("should classify invocation as sync or async from span chain")
+  void shouldClassifyInvocationAsSyncOrAsyncFromSpanChain(
+      String scenario, List<SpanArg> args, SpanArg expected) {
+    // Given
+    OrderedSpan span = null;
+    DefaultTracer tracer = new DefaultTracer();
+    for (SpanArg arg : args) {
+      span = new OrderedSpan(tracer, span, arg.key, arg.sync);
     }
 
-    static class SpanArgumentsProvider implements ArgumentsProvider {
+    // When / Then
+    assertThat(OrderedSpan.invokedBy(span, expected.key)).isEqualTo(expected.sync);
+  }
 
-      @Override
-      public Stream<? extends Arguments> provideArguments(
-          ParameterDeclarations parameters, ExtensionContext context) {
-        return Stream.of(
-            Arguments.of(Lists.list(SpanArg.sync("foo")), SpanArg.sync("foo")),
-            Arguments.of(Lists.list(SpanArg.async("foo")), SpanArg.sync("foo")),
-            Arguments.of(
-                Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
-            Arguments.of(
-                Lists.list(SpanArg.async("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
-            Arguments.of(
-                Lists.list(SpanArg.sync("foo"), SpanArg.async("bar")), SpanArg.async("foo")),
-            Arguments.of(
-                Lists.list(SpanArg.async("foo"), SpanArg.sync("foo")), SpanArg.sync("foo")),
-            Arguments.of(
-                Lists.list(SpanArg.async("foo"), SpanArg.sync("bar")), SpanArg.sync("foo")));
-      }
+  static class SpanArg {
+    String key;
+    boolean sync;
+
+    SpanArg(String key, boolean sync) {
+      this.key = key;
+      this.sync = sync;
     }
 
-    @ParameterizedTest(name = "{0} => {1}")
-    @ArgumentsSource(SpanArgumentsProvider.class)
-    @DisplayName("Given span is OrderedSpan -> should check invokedBy correctly")
-    void givenSpanIsOrderedSpan(List<SpanArg> args, SpanArg expected) {
-      // Given
-      OrderedSpan span = null;
-      DefaultTracer tracer = new DefaultTracer();
-      for (SpanArg arg : args) {
-        span = new OrderedSpan(tracer, span, arg.key, arg.sync);
-      }
+    static SpanArg sync(String key) {
+      return new SpanArg(key, true);
+    }
 
-      // When / Then
-      assertThat(OrderedSpan.invokedBy(span, expected.key)).isEqualTo(expected.sync);
+    static SpanArg async(String key) {
+      return new SpanArg(key, false);
     }
   }
 }

@@ -21,27 +21,21 @@ package io.github.jinganix.peashooter.trace;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("OrderedTraceExecutor")
+@DisplayName("OrderedTraceRunnable")
 class OrderedTraceRunnableTest {
 
-  @Nested
-  @DisplayName("constructor")
-  class Constructor {
+  @Test
+  @DisplayName("should reuse the provided span when constructed with a span")
+  void shouldReuseTheProvidedSpanWhenConstructedWithASpan() {
+    // Given
+    Span span = new Span("", null);
 
-    @Test
-    @DisplayName("Given concrete with span -> should create span correctly")
-    void givenConcreteWithSpan() {
-      // Given
-      Span span = new Span("", null);
+    // When
+    OrderedTraceRunnable runnable = new OrderedTraceRunnable(new DefaultTracer(), span, () -> {});
 
-      // When
-      OrderedTraceRunnable runnable = new OrderedTraceRunnable(new DefaultTracer(), span, () -> {});
-
-      // Then
-      assertThat(runnable.createSpan()).isEqualTo(span);
-    }
+    // Then
+    assertThat(runnable.createSpan()).isEqualTo(span);
   }
 }

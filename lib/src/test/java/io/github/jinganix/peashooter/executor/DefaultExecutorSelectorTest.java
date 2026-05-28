@@ -29,12 +29,11 @@ import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-@DisplayName("DefaultTraceExecutorProvider")
+@DisplayName("DefaultExecutorSelector")
 class DefaultExecutorSelectorTest {
 
   TaskQueue queue = mock(TaskQueue.class);
@@ -47,48 +46,38 @@ class DefaultExecutorSelectorTest {
 
   DefaultExecutorSelector provider = new DefaultExecutorSelector(traceExecutor);
 
-  @Nested
-  @DisplayName("getExecutor")
-  class GetExecutor {
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("executorSelectionScenarios")
+  @DisplayName("should select executor based on span, queue, and sync flag")
+  void shouldSelectExecutorBasedOnSpanQueueAndSyncFlag(
+      String scenario, Span span, boolean queueEmpty, boolean sync, Executor expectedExecutor) {
+    // Given
+    when(traceExecutor.getSpan()).thenReturn(span);
+    when(queue.isEmpty()).thenReturn(queueEmpty);
 
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("provideGetExecutorScenarios")
-    @DisplayName("should return correct executor based on conditions")
-    void testGetExecutor(
-        String scenario, Span span, boolean queueEmpty, boolean sync, Executor expectedExecutor) {
-      // Given
-      when(traceExecutor.getSpan()).thenReturn(span);
-      when(queue.isEmpty()).thenReturn(queueEmpty);
+    // When
+    Executor result = provider.getExecutor(queue, task, sync);
 
-      // When
-      Executor result = provider.getExecutor(queue, task, sync);
-
-      // Then
-      if (expectedExecutor == null) {
-        assertThat(result).isEqualTo(traceExecutor);
-      } else {
-        assertThat(result).isEqualTo(expectedExecutor);
-      }
+    // Then
+    if (expectedExecutor == null) {
+      assertThat(result).isEqualTo(traceExecutor);
+    } else {
+      assertThat(result).isEqualTo(expectedExecutor);
     }
+  }
 
-    private static Stream<Arguments> provideGetExecutorScenarios() {
-      Span mockSpan = mock(Span.class);
-      return Stream.of(
-          Arguments.of(
-              "Given is sync and span not null and queue empty -> should return DirectExecutor",
-              mockSpan,
-              true,
-              true,
-              DirectExecutor.INSTANCE),
-          Arguments.of(
-              "Given sync is false -> should return traceExecutor", mockSpan, true, false, null),
-          Arguments.of("Given span is null -> should return traceExecutor", null, true, true, null),
-          Arguments.of(
-              "Given queue is not empty -> should return traceExecutor",
-              mockSpan,
-              false,
-              true,
-              null));
-    }
+  private static Stream<Arguments> executorSelectionScenarios() {
+    Span mockSpan = mock(Span.class);
+    return Stream.of(
+        Arguments.of(
+            "should return direct executor when sync, span present, and queue empty",
+            mockSpan,
+            true,
+            true,
+            DirectExecutor.INSTANCE),
+        Arguments.of("should return trace executor when not sync", mockSpan, true, false, null),
+        Arguments.of("should return trace executor when span is null", null, true, true, null),
+        Arguments.of(
+            "should return trace executor when queue is not empty", mockSpan, false, true, null));
   }
 }

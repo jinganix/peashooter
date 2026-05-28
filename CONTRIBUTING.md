@@ -1,5 +1,22 @@
 # Contributing
 
+## Development docs
+
+- Java code: [ai-kit/CODE_CONVENTIONS.md](ai-kit/CODE_CONVENTIONS.md)
+- Tests: [ai-kit/TEST_CONVENTIONS.md](ai-kit/TEST_CONVENTIONS.md)
+
+Run the full check from the repository root:
+
+```bash
+./gradlew build
+```
+
+Run library tests only:
+
+```bash
+./gradlew :lib:test
+```
+
 ## Conventional Commits
 
 Check if your commit messages meet the [conventional commit format](https://conventionalcommits.org).

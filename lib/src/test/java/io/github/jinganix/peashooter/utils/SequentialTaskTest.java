@@ -28,11 +28,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("SequentialTask")
-public class SequentialTaskTest {
+class SequentialTaskTest {
 
   @Test
-  @DisplayName("Given run concurrently -> should throw exception")
-  void givenRunConcurrently() {
+  @DisplayName("should fail when two tasks run concurrently")
+  void shouldFailWhenTwoTasksRunConcurrently() {
     // Given
     AtomicBoolean lock = new AtomicBoolean(false);
 

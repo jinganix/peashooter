@@ -131,8 +131,8 @@ public class RedisLockableQueueBenchmarkTest {
     }
 
     @Test
-    @DisplayName("Given execute 500 tasks -> should execute faster than Redis lock")
-    void givenExecute500Tasks() throws InterruptedException {
+    @DisplayName("should execute faster than redis lock when running 500 tasks")
+    void shouldExecuteFasterThanRedisLockWhenRunning500Tasks() throws InterruptedException {
       // When
       long time1 = redisTaskQueueTest();
       long time2 = redisLockTest();
