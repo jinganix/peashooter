@@ -22,40 +22,34 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("TraceCallable")
 class TraceCallableTest {
 
-  @Nested
-  @DisplayName("call")
-  class Call {
+  @Test
+  @DisplayName("should complete without error when delegate succeeds")
+  void shouldCompleteWithoutErrorWhenDelegateSucceeds() {
+    // When
+    TraceCallable<Integer> traceCallable = new TraceCallable<>(new DefaultTracer(), () -> 0);
 
-    @Test
-    @DisplayName("Given delegate has no error -> should not throw exception")
-    void givenDelegateHasNoError() {
-      // When
-      TraceCallable<Integer> traceCallable = new TraceCallable<>(new DefaultTracer(), () -> 0);
+    // Then
+    assertThatCode(traceCallable::call).doesNotThrowAnyException();
+  }
 
-      // Then
-      assertThatCode(traceCallable::call).doesNotThrowAnyException();
-    }
+  @Test
+  @DisplayName("should propagate delegate error when delegate fails")
+  void shouldPropagateDelegateErrorWhenDelegateFails() {
+    // Given
+    RuntimeException exception = new RuntimeException();
+    TraceCallable<Integer> traceCallable =
+        new TraceCallable<>(
+            new DefaultTracer(),
+            () -> {
+              throw exception;
+            });
 
-    @Test
-    @DisplayName("Given delegate has error -> should throw exception")
-    void givenDelegateHasError() {
-      // Given
-      RuntimeException exception = new RuntimeException();
-      TraceCallable<Integer> traceCallable =
-          new TraceCallable<>(
-              new DefaultTracer(),
-              () -> {
-                throw exception;
-              });
-
-      // When / Then
-      assertThatThrownBy(traceCallable::call).isEqualTo(exception);
-    }
+    // When / Then
+    assertThatThrownBy(traceCallable::call).isEqualTo(exception);
   }
 }

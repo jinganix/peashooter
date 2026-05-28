@@ -18,10 +18,20 @@
 
 package io.github.jinganix.peashooter.utils;
 
+import static org.awaitility.Awaitility.await;
+
 import io.github.jinganix.peashooter.ThrowingRunnable;
+import java.time.Duration;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 
 public class TestUtils {
+
+  private static final Duration DEFAULT_AWAIT = Duration.ofSeconds(10);
+
+  public static void awaitCountDown(CountDownLatch latch) {
+    await().atMost(DEFAULT_AWAIT).until(() -> latch.getCount() == 0);
+  }
 
   public static long sleep(long millis) {
     try {

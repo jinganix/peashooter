@@ -22,78 +22,67 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.jinganix.peashooter.TraceIdGenerator;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("Span")
 class SpanTest {
 
-  @Nested
-  @DisplayName("constructor")
-  class Constructor {
+  @Test
+  @DisplayName("should keep an explicit trace id when provided")
+  void shouldKeepAnExplicitTraceIdWhenProvided() {
+    // When
+    Span span = new Span("trace", null);
 
-    @Test
-    @DisplayName("Given concrete with trace id -> should get the trace id")
-    void givenConcreteWithTraceId() {
-      // When
-      Span span = new Span("trace", null);
-
-      // Then
-      assertThat(span.getTraceId()).isEqualTo("trace");
-    }
-
-    @Test
-    @DisplayName("Given parent is null -> should gen new trace id")
-    void givenParentIsNull() {
-      // When
-      Span span = new Span(new DefaultTracer(), null);
-
-      // Then
-      assertThat(span.getParent()).isNull();
-      assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
-    }
-
-    @Test
-    @DisplayName("Given parent is not null -> should inherit the trace id")
-    void givenParentIsNotNull() {
-      // Given
-      Span parent = new Span(new DefaultTracer(), null);
-
-      // When
-      Span span = new Span(new DefaultTracer(), parent);
-
-      // Then
-      assertThat(span.getParent()).isEqualTo(parent);
-      assertThat(span.getTraceId()).isEqualTo(parent.getTraceId());
-    }
+    // Then
+    assertThat(span.getTraceId()).isEqualTo("trace");
   }
 
-  @Nested
-  @DisplayName("isRoot")
-  class IsRoot {
+  @Test
+  @DisplayName("should generate a trace id when parent is null")
+  void shouldGenerateATraceIdWhenParentIsNull() {
+    // When
+    Span span = new Span(new DefaultTracer(), null);
 
-    @Test
-    @DisplayName("Given parent is null -> should return true")
-    void givenParentIsNull() {
-      // When
-      Span span = new Span(new DefaultTracer(), null);
+    // Then
+    assertThat(span.getParent()).isNull();
+    assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
+  }
 
-      // Then
-      assertThat(span.isRoot()).isTrue();
-    }
+  @Test
+  @DisplayName("should inherit trace id from parent when parent is set")
+  void shouldInheritTraceIdFromParentWhenParentIsSet() {
+    // Given
+    Span parent = new Span(new DefaultTracer(), null);
 
-    @Test
-    @DisplayName("Given parent is not null -> should return false")
-    void givenParentIsNotNull() {
-      // Given
-      TraceIdGenerator traceIdGenerator = new DefaultTracer();
-      Span parent = new Span(traceIdGenerator, null);
+    // When
+    Span span = new Span(new DefaultTracer(), parent);
 
-      // When
-      Span span = new Span(traceIdGenerator, parent);
+    // Then
+    assertThat(span.getParent()).isEqualTo(parent);
+    assertThat(span.getTraceId()).isEqualTo(parent.getTraceId());
+  }
 
-      // Then
-      assertThat(span.isRoot()).isFalse();
-    }
+  @Test
+  @DisplayName("should be root when parent is null")
+  void shouldBeRootWhenParentIsNull() {
+    // When
+    Span span = new Span(new DefaultTracer(), null);
+
+    // Then
+    assertThat(span.isRoot()).isTrue();
+  }
+
+  @Test
+  @DisplayName("should not be root when parent is set")
+  void shouldNotBeRootWhenParentIsSet() {
+    // Given
+    TraceIdGenerator traceIdGenerator = new DefaultTracer();
+    Span parent = new Span(traceIdGenerator, null);
+
+    // When
+    Span span = new Span(traceIdGenerator, parent);
+
+    // Then
+    assertThat(span.isRoot()).isFalse();
   }
 }

@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.redisson;
 
+import static io.github.jinganix.peashooter.utils.TestUtils.awaitCountDown;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import io.github.jinganix.peashooter.Tracer;
@@ -42,7 +43,7 @@ import org.redisson.api.RedissonClient;
 
 @DisplayName("RedisTaskQueue")
 @ExtendWith(RedisExtension.class)
-public class RedisTaskQueueTest {
+class RedisTaskQueueTest {
 
   private final OrderedTraceExecutor traceExecutor = createExecutor();
 
@@ -61,8 +62,8 @@ public class RedisTaskQueueTest {
   }
 
   @Test
-  @DisplayName("Given execute 1 task -> should execute task correctly")
-  void givenExecute1Task() {
+  @DisplayName("should persist task result when one task is executed")
+  void shouldPersistTaskResultWhenOneTaskIsExecuted() {
     // Given
     RList<TestItem> list = client.getList("list");
 
@@ -81,8 +82,8 @@ public class RedisTaskQueueTest {
   }
 
   @Test
-  @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
-  void givenExecute10Tasks() throws InterruptedException {
+  @DisplayName("should persist all items when ten async tasks share one key")
+  void shouldPersistAllItemsWhenTenAsyncTasksShareOneKey() {
     // Given
     RList<TestItem> list = client.getList("list");
     List<TestItem> items = new ArrayList<>();
@@ -100,7 +101,7 @@ public class RedisTaskQueueTest {
             latch.countDown();
           });
     }
-    latch.await();
+    awaitCountDown(latch);
 
     // Then
     assertThat(list.readAll()).usingRecursiveComparison().isEqualTo(items);

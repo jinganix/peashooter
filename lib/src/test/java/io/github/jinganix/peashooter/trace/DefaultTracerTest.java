@@ -38,8 +38,8 @@ import org.junit.jupiter.api.Test;
 class DefaultTracerTest {
 
   @Test
-  @DisplayName("Given span is not set -> should return null")
-  void givenSpanIsNotSet() {
+  @DisplayName("should return null span when span was cleared")
+  void shouldReturnNullSpanWhenSpanWasCleared() {
     // Given
     Tracer tracer = new DefaultTracer();
     tracer.clearSpan();
@@ -49,8 +49,8 @@ class DefaultTracerTest {
   }
 
   @Test
-  @DisplayName("Given span is set -> should return the span")
-  void givenSpanIsSet() {
+  @DisplayName("should return the span that was set")
+  void shouldReturnTheSpanThatWasSet() {
     // Given
     Tracer tracer = new DefaultTracer();
     tracer.clearSpan();
@@ -64,8 +64,9 @@ class DefaultTracerTest {
   }
 
   @Test
-  @DisplayName("Given called in multi threads -> should have no duplicated")
-  void givenCalledInMultiThreads() throws InterruptedException, ExecutionException {
+  @DisplayName("should generate unique ids when called from multiple threads")
+  void shouldGenerateUniqueIdsWhenCalledFromMultipleThreads()
+      throws InterruptedException, ExecutionException {
     // Given
     Tracer tracer = new DefaultTracer();
     List<Callable<List<String>>> callables =

@@ -11,6 +11,10 @@ plugins {
   id("java.library")
 }
 
+tasks.test {
+  maxHeapSize = "2g"
+}
+
 dependencies {
   implementation("com.github.ben-manes.caffeine:caffeine:$versionCaffeine")
   implementation("io.netty:netty-resolver-dns-native-macos:${versionNetty}:osx-aarch_64")

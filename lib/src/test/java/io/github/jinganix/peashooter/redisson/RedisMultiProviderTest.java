@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.redisson;
 
+import static io.github.jinganix.peashooter.utils.TestUtils.awaitCountDown;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import io.github.jinganix.peashooter.Tracer;
@@ -48,7 +49,7 @@ import org.redisson.api.RedissonClient;
 
 @DisplayName("RedisMultiProvider")
 @ExtendWith(RedisExtension.class)
-public class RedisMultiProviderTest {
+class RedisMultiProviderTest {
 
   private static final ExecutorService executorService = Executors.newCachedThreadPool();
 
@@ -74,7 +75,11 @@ public class RedisMultiProviderTest {
   }
 
   private List<Runnable> getTasks(
-      int taskId, CountDownLatch latch, AtomicBoolean lock, RedissonClient client) {
+      int taskId,
+      CountDownLatch latch,
+      AtomicBoolean lock,
+      RedissonClient client,
+      CountDownLatch onFirstRun) {
     RList<TestItem> list = client.getList("list");
     OrderedTraceExecutor traceExecutor = createExecutor();
     List<Runnable> tasks = new ArrayList<>();
@@ -84,6 +89,9 @@ public class RedisMultiProviderTest {
           new SequentialTask(
               lock,
               () -> {
+                if (onFirstRun != null) {
+                  onFirstRun.countDown();
+                }
                 TestUtils.sleep(10);
                 item.setMillis(System.currentTimeMillis());
                 list.add(item);
@@ -95,22 +103,26 @@ public class RedisMultiProviderTest {
   }
 
   @Test
-  @DisplayName("Given execute 10 tasks -> should execute tasks correctly")
-  void givenExecute10Tasks() throws InterruptedException {
+  @DisplayName("should interleave task groups when two redis clients run concurrently")
+  void shouldInterleaveTaskGroupsWhenTwoRedisClientsRunConcurrently() {
     // Given
     CountDownLatch latch = new CountDownLatch(20);
     AtomicBoolean lock = new AtomicBoolean(false);
 
     // When
-    CompletableFuture.runAsync(() -> getTasks(0, latch, lock, client).forEach(Runnable::run));
-    TestUtils.sleep(5);
-    CompletableFuture.runAsync(() -> getTasks(1, latch, lock, client2).forEach(Runnable::run));
-    latch.await();
+    CountDownLatch batch0Running = new CountDownLatch(1);
+    CompletableFuture.runAsync(
+        () -> getTasks(0, latch, lock, client, batch0Running).forEach(Runnable::run));
+    awaitCountDown(batch0Running);
+    CompletableFuture.runAsync(
+        () -> getTasks(1, latch, lock, client2, null).forEach(Runnable::run));
+    awaitCountDown(latch);
 
     RList<TestItem> list = client.getList("list");
     List<TestItem> items = list.readAll();
 
     // Then
+    assertThat(items.size()).isEqualTo(20);
     for (int i = 0; i < items.size() - 1; i++) {
       if ((i + 1) % 5 == 0) {
         assertThat(items.get(i).getTask()).isNotEqualTo(items.get(i + 1).getTask());
