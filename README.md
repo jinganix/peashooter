@@ -1,5 +1,5 @@
 [![CI](https://github.com/jinganix/peashooter/actions/workflows/ci.yml/badge.svg)](https://github.com/jinganix/peashooter/actions/workflows/ci.yml)
-[![Coverage Status](https://coveralls.io/repos/github/jinganix/peashooter/badge.svg?branch=master)](https://coveralls.io/github/jinganix/peashooter?branch=master)
+[![Coverage](https://codecov.io/gh/jinganix/peashooter/graph/badge.svg?branch=master)](https://codecov.io/gh/jinganix/peashooter)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # peashooter

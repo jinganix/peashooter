@@ -82,8 +82,8 @@ jobs:
           skip_benchmark: true
         run: ./gradlew clean build --info
 
-  coveralls:
-    name: Update Coveralls
+  codecov:
+    name: Upload coverage to Codecov
     needs: [build]
     runs-on: ubuntu-latest
     steps:
@@ -98,12 +98,13 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew clean coverage
 
-      - name: Upload coverage to Coveralls
-        uses: coverallsapp/github-action@v2
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          format: jacoco
-          file: aggregation/build/reports/jacoco/coverage/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: aggregation/build/reports/jacoco/coverage/coverage.xml
+          disable_search: true
+          fail_ci_if_error: false
 
   publish:
     name: Publish
