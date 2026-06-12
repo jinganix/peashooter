@@ -1,4 +1,5 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import utils.Props
 import utils.Vers
 import utils.Vers.versionAssertj
@@ -45,13 +46,20 @@ tasks.test {
   useJUnitPlatform()
 }
 
+tasks.withType<Javadoc>().configureEach {
+  (options as StandardJavadocDocletOptions).apply {
+    addBooleanOption("Xdoclint:all", true)
+    addBooleanOption("Werror", true)
+  }
+}
+
 extensions.findByType<SpotlessExtension>()?.java {
   targetExclude("build/**/*")
   googleJavaFormat(versionGoogleJavaFormat)
 }
 
 tasks.named<Task>("check") {
-  dependsOn(tasks.named("spotlessCheck"))
+  dependsOn(tasks.named("spotlessCheck"), tasks.named("javadoc"))
 }
 
 jacoco {

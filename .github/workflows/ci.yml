@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        jdk: [21, 25]
+        jdk: [25]
       fail-fast: false
     steps:
       - uses: actions/checkout@v6
@@ -93,7 +93,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
-          java-version: 21
+          java-version: 25
 
       - name: Build with Gradle
         run: ./gradlew clean coverage

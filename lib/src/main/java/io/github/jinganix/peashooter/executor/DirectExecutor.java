@@ -18,9 +18,15 @@ package io.github.jinganix.peashooter.executor;
 
 import java.util.concurrent.Executor;
 
-/** Execute {@link Runnable} in current thread. */
+/**
+ * {@link Executor} that runs each command synchronously on the calling thread.
+ *
+ * <p>Used by {@link DefaultExecutorSelector} and {@link
+ * io.github.jinganix.peashooter.queue.LockableTaskQueue} to avoid extra thread hops; nested {@code
+ * execute} calls increase runner depth rather than scheduling new threads.
+ */
 public enum DirectExecutor implements Executor {
-  /** singleton instance */
+  /** Shared instance. */
   INSTANCE;
 
   @Override

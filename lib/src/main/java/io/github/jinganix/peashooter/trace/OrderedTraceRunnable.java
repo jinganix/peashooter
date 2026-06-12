@@ -19,30 +19,26 @@
 package io.github.jinganix.peashooter.trace;
 
 import io.github.jinganix.peashooter.Tracer;
+import io.github.jinganix.peashooter.executor.RejectionAware;
 
-/** Task with ordered key and sync flag. */
-public class OrderedTraceRunnable extends TraceRunnable {
+/**
+ * {@link TraceRunnable} that installs an {@link OrderedSpan} for per-key ordering and tracing.
+ *
+ * <p>The {@code sync} flag is stored on the span and drives {@link OrderedSpan#invokedBy(Span,
+ * String)} for reentrant sync detection.
+ */
+public class OrderedTraceRunnable extends TraceRunnable implements RejectionAware {
 
   private final Span span;
 
   /**
-   * Constructor.
+   * Constructor that builds an {@link OrderedSpan} from the ordering key and sync flag.
    *
    * @param tracer {@link Tracer}
-   * @param span {@link Span}
-   * @param delegate {@link Runnable}
-   */
-  public OrderedTraceRunnable(Tracer tracer, Span span, Runnable delegate) {
-    super(tracer, delegate);
-    this.span = span;
-  }
-
-  /**
-   * Constructor.
-   *
-   * @param tracer {@link Tracer}
-   * @param key trace key
-   * @param sync true if a sync call
+   * @param key per-key ordering identifier
+   * @param sync {@code true} for {@link
+   *     io.github.jinganix.peashooter.executor.OrderedTraceExecutor} sync paths; {@code false} for
+   *     async
    * @param delegate {@link Runnable}
    */
   public OrderedTraceRunnable(Tracer tracer, String key, boolean sync, Runnable delegate) {
@@ -53,5 +49,12 @@ public class OrderedTraceRunnable extends TraceRunnable {
   @Override
   public Span createSpan() {
     return this.span;
+  }
+
+  @Override
+  public void rejected(RuntimeException cause) {
+    if (delegate instanceof RejectionAware aware) {
+      aware.rejected(cause);
+    }
   }
 }

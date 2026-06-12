@@ -23,7 +23,7 @@ import static io.github.jinganix.peashooter.utils.TestUtils.sleep;
 import static io.github.jinganix.peashooter.utils.TestUtils.uncheckedRun;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -121,16 +121,63 @@ class TaskQueueTest {
   }
 
   @Test
-  @DisplayName("should propagate rejection when executor rejects on an idle queue")
-  void shouldPropagateRejectionWhenExecutorRejectsOnAnIdleQueue() {
+  @DisplayName("should discard all queued tasks when concurrent submit is rejected")
+  void shouldDiscardAllQueuedTasksWhenConcurrentSubmitIsRejected() throws InterruptedException {
+    // Given
+    TaskQueue taskQueue = new TaskQueue();
+    CountDownLatch rejectorEntered = new CountDownLatch(1);
+    CountDownLatch releaseRejector = new CountDownLatch(1);
+    Executor rejecting =
+        command -> {
+          rejectorEntered.countDown();
+          uncheckedRun(releaseRejector::await);
+          throw new RejectedExecutionException();
+        };
+    Executor worker = createExecutor();
+    Runnable secondTask = mock(Runnable.class);
+
+    // When
+    new Thread(() -> taskQueue.execute(rejecting, () -> {})).start();
+    rejectorEntered.await();
+    taskQueue.execute(worker, secondTask);
+    releaseRejector.countDown();
+    sleep(200);
+
+    // Then
+    verify(secondTask, never()).run();
+    assertThat(taskQueue.isEmpty()).isTrue();
+  }
+
+  @Test
+  @DisplayName("should process later task when executor throws non-rejection on idle queue")
+  void shouldProcessLaterTaskWhenExecutorThrowsNonRejectionOnIdleQueue() {
+    // Given
+    TaskQueue taskQueue = new TaskQueue();
+    Executor bad = mock(Executor.class);
+    doThrow(new IllegalStateException("executor failed")).when(bad).execute(any());
+    taskQueue.execute(bad, () -> {});
+
+    // When
+    CountDownLatch latch = new CountDownLatch(1);
+    taskQueue.execute(createExecutor(), latch::countDown);
+
+    // Then
+    awaitCountDown(latch);
+    assertThat(taskQueue.isEmpty()).isTrue();
+  }
+
+  @Test
+  @DisplayName("should discard task when executor rejects on an idle queue")
+  void shouldDiscardTaskWhenExecutorRejectsOnAnIdleQueue() {
     // Given
     TaskQueue taskQueue = new TaskQueue();
     Executor executor = mock(Executor.class);
-    RejectedExecutionException exception = new RejectedExecutionException();
-    doThrow(exception).when(executor).execute(any());
+    doThrow(new RejectedExecutionException()).when(executor).execute(any());
+    Runnable task = mock(Runnable.class);
 
     // When / Then
-    assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
+    assertThatCode(() -> taskQueue.execute(executor, task)).doesNotThrowAnyException();
+    verify(task, never()).run();
   }
 
   @Test
@@ -217,14 +264,14 @@ class TaskQueueTest {
   }
 
   @Test
-  @DisplayName("should reject only the failing submit when queue is idle after prior work")
-  void shouldRejectOnlyTheFailingSubmitWhenQueueIsIdleAfterPriorWork() throws InterruptedException {
+  @DisplayName("should discard only the failing submit when queue is idle after prior work")
+  void shouldDiscardOnlyTheFailingSubmitWhenQueueIsIdleAfterPriorWork()
+      throws InterruptedException {
     // Given
     TaskQueue taskQueue = new TaskQueue();
     AtomicInteger completed = new AtomicInteger(0);
     Executor rejecting = mock(Executor.class);
-    RejectedExecutionException exception = new RejectedExecutionException();
-    doThrow(exception).when(rejecting).execute(any());
+    doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
 
     CountDownLatch runnerStarted = new CountDownLatch(1);
     CountDownLatch releaseRunner = new CountDownLatch(1);
@@ -258,9 +305,75 @@ class TaskQueueTest {
     Runnable rejected = mock(Runnable.class);
 
     // When / Then
-    assertThatThrownBy(() -> taskQueue.execute(rejecting, rejected)).isEqualTo(exception);
+    assertThatCode(() -> taskQueue.execute(rejecting, rejected)).doesNotThrowAnyException();
     verify(rejected, never()).run();
     assertThat(completed.get()).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("should discard task when executor rejects during handoff in run")
+  void shouldDiscardTaskWhenExecutorRejectsDuringHandoffInRun() throws InterruptedException {
+    // Given
+    TaskQueue taskQueue = new TaskQueue();
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
+    Executor worker = createExecutor();
+    CountDownLatch firstTaskStarted = new CountDownLatch(1);
+    CountDownLatch releaseFirstTask = new CountDownLatch(1);
+    Runnable discarded = mock(Runnable.class);
+
+    new Thread(
+            () ->
+                taskQueue.execute(
+                    worker,
+                    () -> {
+                      firstTaskStarted.countDown();
+                      uncheckedRun(releaseFirstTask::await);
+                    }))
+        .start();
+    firstTaskStarted.await();
+
+    // When
+    taskQueue.execute(rejecting, discarded);
+    releaseFirstTask.countDown();
+    sleep(200);
+
+    // Then
+    verify(discarded, never()).run();
+  }
+
+  @Test
+  @DisplayName("should report empty when rejection in run discards task")
+  void shouldReportEmptyWhenRejectionInRunDiscardsTask() throws InterruptedException {
+    // Given
+    TaskQueue taskQueue = new TaskQueue();
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
+
+    CountDownLatch runnerStarted = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    CountDownLatch runnerFinished = new CountDownLatch(1);
+
+    new Thread(
+            () ->
+                taskQueue.execute(
+                    command -> {
+                      runnerStarted.countDown();
+                      uncheckedRun(releaseRunner::await);
+                      command.run();
+                      runnerFinished.countDown();
+                    },
+                    () -> {}))
+        .start();
+    runnerStarted.await();
+
+    // When
+    taskQueue.execute(rejecting, () -> {});
+    releaseRunner.countDown();
+    awaitCountDown(runnerFinished);
+
+    // Then
+    assertThat(taskQueue.isEmpty()).isTrue();
   }
 
   @Test

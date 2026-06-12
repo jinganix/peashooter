@@ -16,26 +16,16 @@
  * https://github.com/jinganix/peashooter
  */
 
-package io.github.jinganix.peashooter.trace;
+package io.github.jinganix.peashooter.executor;
 
-import static org.assertj.core.api.Assertions.assertThat;
+/** Runnable notified when its queue discards pending work after executor submission failure. */
+public interface RejectionAware {
 
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
-@DisplayName("OrderedTraceRunnable")
-class OrderedTraceRunnableTest {
-
-  @Test
-  @DisplayName("should reuse the provided span when constructed with a span")
-  void shouldReuseTheProvidedSpanWhenConstructedWithASpan() {
-    // Given
-    Span span = new Span("", null);
-
-    // When
-    OrderedTraceRunnable runnable = new OrderedTraceRunnable(new DefaultTracer(), span, () -> {});
-
-    // Then
-    assertThat(runnable.createSpan()).isEqualTo(span);
-  }
+  /**
+   * Called when the enclosing {@link io.github.jinganix.peashooter.queue.TaskQueue} discards this
+   * task without running it.
+   *
+   * @param cause rejection reported by {@link java.util.concurrent.Executor#execute(Runnable)}
+   */
+  void rejected(RuntimeException cause);
 }

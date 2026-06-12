@@ -22,16 +22,16 @@ import io.github.jinganix.peashooter.queue.TaskQueue;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
 
-/** Select a {@link Executor} for next execution. */
+/** Chooses which {@link Executor} schedules the next queue runner for an ordered submission. */
 public interface ExecutorSelector {
 
   /**
-   * Get executor.
+   * Selects the executor that will run the next queue runner for an ordered submission.
    *
-   * @param queue {@link TaskQueue}
-   * @param task {@link TraceRunnable}
-   * @param sync true if a sync call
-   * @return {@link Executor}
+   * @param queue per-key queue for the submission
+   * @param task traced runnable being enqueued
+   * @param sync {@code true} when the submission originated from a sync API
+   * @return executor that will call the queue runner
    */
   Executor getExecutor(TaskQueue queue, TraceRunnable task, boolean sync);
 }
