@@ -27,9 +27,6 @@ import java.util.Objects;
  */
 public final class W3CTraceContext {
 
-  /** HTTP / messaging header name for trace propagation. */
-  public static final String TRACEPARENT = "traceparent";
-
   private static final String VERSION = "00";
 
   private W3CTraceContext() {}

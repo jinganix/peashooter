@@ -104,7 +104,6 @@ public abstract class LockableTaskQueue extends TaskQueue {
   }
 
   private void runOuter() {
-    outer:
     for (; ; ) {
       boolean keepLock = false;
       try {

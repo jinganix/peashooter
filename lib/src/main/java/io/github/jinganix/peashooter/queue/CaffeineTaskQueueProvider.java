@@ -38,8 +38,6 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
 
   private static final long PINNED_NANOS = Long.MAX_VALUE;
 
-  private final Duration expireAfterAccess;
-
   private final LoadingCache<String, TaskQueue> queues;
 
   /** Constructor. */
@@ -57,7 +55,6 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
    * @param expireAfterAccess idle period after which an unused queue entry is evicted
    */
   public CaffeineTaskQueueProvider(Duration expireAfterAccess) {
-    this.expireAfterAccess = expireAfterAccess;
     this.queues =
         Caffeine.newBuilder()
             .expireAfter(new QueueExpiry(expireAfterAccess))

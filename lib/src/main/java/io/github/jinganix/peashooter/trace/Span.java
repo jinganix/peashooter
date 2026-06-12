@@ -30,16 +30,6 @@ public class Span {
   private final String spanId;
 
   /**
-   * Constructor.
-   *
-   * @param traceId trace id
-   * @param parent {@link Span}
-   */
-  public Span(String traceId, Span parent) {
-    this(traceId, TraceIds.nextSpanId(), parent);
-  }
-
-  /**
    * Constructor with explicit trace and span ids (e.g. from W3C {@code traceparent}).
    *
    * @param traceId trace id

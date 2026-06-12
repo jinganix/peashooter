@@ -31,7 +31,7 @@ class SpanTest {
   @DisplayName("should keep an explicit trace id when provided")
   void shouldKeepAnExplicitTraceIdWhenProvided() {
     // When
-    Span span = new Span("trace", null);
+    Span span = new Span("trace", TraceIds.nextSpanId(), null);
 
     // Then
     assertThat(span.getTraceId()).isEqualTo("trace");

@@ -20,6 +20,7 @@ package io.github.jinganix.peashooter.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.jinganix.peashooter.TraceIdGenerator;
 import java.util.List;
 import java.util.stream.Stream;
 import org.assertj.core.util.Lists;
@@ -36,7 +37,7 @@ class OrderedSpanTest {
   @DisplayName("should keep an explicit trace id when provided")
   void shouldKeepAnExplicitTraceIdWhenProvided() {
     // When
-    OrderedSpan span = new OrderedSpan("trace", null, "key", true);
+    OrderedSpan span = new OrderedSpan((TraceIdGenerator) () -> "trace", null, "key", true);
 
     // Then
     assertThat(span.getTraceId()).isEqualTo("trace");

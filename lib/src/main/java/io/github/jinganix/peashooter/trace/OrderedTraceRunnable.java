@@ -32,18 +32,6 @@ public class OrderedTraceRunnable extends TraceRunnable implements RejectionAwar
   private final Span span;
 
   /**
-   * Constructor.
-   *
-   * @param tracer {@link Tracer}
-   * @param span {@link Span}
-   * @param delegate {@link Runnable}
-   */
-  public OrderedTraceRunnable(Tracer tracer, Span span, Runnable delegate) {
-    super(tracer, delegate);
-    this.span = span;
-  }
-
-  /**
    * Constructor that builds an {@link OrderedSpan} from the ordering key and sync flag.
    *
    * @param tracer {@link Tracer}
