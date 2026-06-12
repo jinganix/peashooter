@@ -45,7 +45,8 @@ class SpanTest {
 
     // Then
     assertThat(span.getParent()).isNull();
-    assertThat(span.getTraceId()).matches("\\w+-\\w+-\\w+-\\w+-\\w+");
+    assertThat(span.getTraceId()).matches("[0-9a-f]{32}");
+    assertThat(span.getSpanId()).matches("[0-9a-f]{16}");
   }
 
   @Test
@@ -60,6 +61,7 @@ class SpanTest {
     // Then
     assertThat(span.getParent()).isEqualTo(parent);
     assertThat(span.getTraceId()).isEqualTo(parent.getTraceId());
+    assertThat(span.getSpanId()).isNotEqualTo(parent.getSpanId());
   }
 
   @Test

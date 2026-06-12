@@ -18,13 +18,24 @@
 
 package io.github.jinganix.peashooter;
 
-/** Generator for trace id. */
+import io.github.jinganix.peashooter.trace.TraceIds;
+
+/** Generator for W3C-compatible trace and span ids. */
 public interface TraceIdGenerator {
 
   /**
-   * Generate a trace id.
+   * Generate a 128-bit trace id (32 lowercase hex characters).
    *
    * @return trace id
    */
   String nextId();
+
+  /**
+   * Generate a 64-bit span id (16 lowercase hex characters).
+   *
+   * @return span id
+   */
+  default String nextSpanId() {
+    return TraceIds.nextSpanId();
+  }
 }

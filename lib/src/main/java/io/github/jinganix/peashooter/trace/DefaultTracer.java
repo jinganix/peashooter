@@ -19,7 +19,6 @@
 package io.github.jinganix.peashooter.trace;
 
 import io.github.jinganix.peashooter.Tracer;
-import java.util.UUID;
 
 /** Default implementation for {@link Tracer}. */
 public class DefaultTracer implements Tracer {
@@ -46,7 +45,7 @@ public class DefaultTracer implements Tracer {
 
   @Override
   public String nextId() {
-    return UUID.randomUUID().toString();
+    return TraceIds.nextTraceId();
   }
 
   @Override

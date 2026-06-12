@@ -156,6 +156,9 @@ public class TaskQueue {
   /**
    * Notifies a discarded task runnable; overridden by integrations that complete sync waiters on
    * rejection.
+   *
+   * @param runnable task body that was discarded
+   * @param e rejection cause passed to rejection-aware runnables
    */
   protected void notifyDiscarded(Runnable runnable, RuntimeException e) {
     if (runnable instanceof RejectionAware aware) {
