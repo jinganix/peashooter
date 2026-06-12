@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.trace;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -28,6 +29,22 @@ import org.junit.jupiter.api.Test;
 class TraceRunnableTest {
 
   @Test
+  @DisplayName("should restore parent span after child task completes")
+  void shouldRestoreParentSpanAfterChildTaskCompletes() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+    Span parent = new Span(tracer, null);
+    tracer.setSpan(parent);
+    TraceRunnable traceRunnable = new TraceRunnable(tracer, () -> {});
+
+    // When
+    traceRunnable.run();
+
+    // Then
+    assertThat(tracer.getSpan()).isEqualTo(parent);
+  }
+
+  @Test
   @DisplayName("should complete without error when delegate succeeds")
   void shouldCompleteWithoutErrorWhenDelegateSucceeds() {
     // When
@@ -35,6 +52,21 @@ class TraceRunnableTest {
 
     // Then
     assertThatCode(traceRunnable::run).doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("should restore parent span when delegate throws error")
+  void shouldRestoreParentSpanWhenDelegateThrowsError() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+    Span parent = new Span(tracer, null);
+    tracer.setSpan(parent);
+    TraceRunnable traceRunnable =
+        new TraceRunnable(tracer, () -> { throw new OutOfMemoryError(); });
+
+    // When / Then
+    assertThatThrownBy(traceRunnable::run).isInstanceOf(OutOfMemoryError.class);
+    assertThat(tracer.getSpan()).isEqualTo(parent);
   }
 
   @Test

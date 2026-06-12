@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.trace;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -35,6 +36,21 @@ class TraceCallableTest {
 
     // Then
     assertThatCode(traceCallable::call).doesNotThrowAnyException();
+  }
+
+  @Test
+  @DisplayName("should restore parent span when delegate throws error")
+  void shouldRestoreParentSpanWhenDelegateThrowsError() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+    Span parent = new Span(tracer, null);
+    tracer.setSpan(parent);
+    TraceCallable<Integer> traceCallable =
+        new TraceCallable<>(tracer, () -> { throw new OutOfMemoryError(); });
+
+    // When / Then
+    assertThatThrownBy(traceCallable::call).isInstanceOf(OutOfMemoryError.class);
+    assertThat(tracer.getSpan()).isEqualTo(parent);
   }
 
   @Test

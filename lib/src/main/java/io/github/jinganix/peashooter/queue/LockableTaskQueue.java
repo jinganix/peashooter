@@ -84,6 +84,20 @@ public abstract class LockableTaskQueue extends TaskQueue {
           }
         }
         if (!this.locked) {
+          synchronized (tasks) {
+            if (tasks.isEmpty()) {
+              current = null;
+              return;
+            }
+            current = null;
+            Task pending = tasks.peek();
+            current = pending.exec;
+            try {
+              pending.exec.execute(runner);
+            } catch (RejectedExecutionException e) {
+              current = null;
+            }
+          }
           return;
         }
       } finally {

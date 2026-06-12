@@ -2,6 +2,8 @@
 [![Coverage](https://codecov.io/gh/jinganix/peashooter/graph/badge.svg?branch=master)](https://codecov.io/gh/jinganix/peashooter)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
+[中文版本](README.zh.md)
+
 # peashooter
 
 Per-key ordered task execution for Java thread pools — sequential guarantees without global locking, plus safe nested synchronous calls that avoid deadlocks.

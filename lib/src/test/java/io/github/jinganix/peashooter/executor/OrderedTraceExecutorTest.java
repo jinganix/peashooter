@@ -36,6 +36,7 @@ import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.queue.LockableTaskQueueProvider;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -50,6 +51,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -108,6 +110,85 @@ class OrderedTraceExecutorTest {
     assertThatThrownBy(() -> executor.executeSync("a", () -> sleep(100)))
         .isInstanceOf(RuntimeException.class)
         .matches(t -> t.getCause() instanceof TimeoutException);
+  }
+
+  @Test
+  @DisplayName("should propagate error throwables from supply without timing out")
+  void shouldPropagateErrorThrowablesFromSupplyWithoutTimingOut() {
+    // Given
+    OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+    executor.setTimeout(10, TimeUnit.SECONDS);
+    Error error = new AssertionError("fail");
+
+    // When / Then
+    org.junit.jupiter.api.Assertions.assertTimeout(
+        Duration.ofMillis(500),
+        (ThrowingSupplier<Void>)
+            () -> {
+              assertThatThrownBy(() -> executor.supply("a", () -> { throw error; }))
+                  .isEqualTo(error);
+              return null;
+            });
+  }
+
+  @Test
+  @DisplayName("should restore interrupt flag when sync call is interrupted")
+  void shouldRestoreInterruptFlagWhenSyncCallIsInterrupted() {
+    // Given
+    OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+    executor.executeAsync("a", () -> sleep(200));
+    Thread.currentThread().interrupt();
+
+    // When
+    assertThatThrownBy(() -> executor.supply("a", () -> { sleep(100); return 0L; }))
+        .isInstanceOf(RuntimeException.class);
+
+    // Then
+    assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    Thread.interrupted();
+  }
+
+  @Test
+  @DisplayName("should wrap non-runtime throwables from supply in runtime exception")
+  void shouldWrapNonRuntimeThrowablesFromSupplyInRuntimeException() {
+    // Given
+    OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+    Throwable throwable = new Throwable("checked");
+
+    // When / Then
+    assertThatThrownBy(
+            () ->
+                executor.supply(
+                    "a",
+                    () -> {
+                      sneakyThrow(throwable);
+                      return null;
+                    }))
+        .isInstanceOf(RuntimeException.class)
+        .hasCause(throwable);
+  }
+
+  @Test
+  @DisplayName("should propagate error throwables from executeSync without timing out")
+  void shouldPropagateErrorThrowablesFromExecuteSyncWithoutTimingOut() {
+    // Given
+    OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+    executor.setTimeout(10, TimeUnit.SECONDS);
+    Error error = new AssertionError("fail");
+
+    // When / Then
+    org.junit.jupiter.api.Assertions.assertTimeout(
+        Duration.ofMillis(500),
+        (ThrowingSupplier<Void>)
+            () -> {
+              assertThatThrownBy(() -> executor.executeSync("a", () -> { throw error; }))
+                  .isEqualTo(error);
+              return null;
+            });
   }
 
   @Nested
@@ -525,5 +606,10 @@ class OrderedTraceExecutorTest {
       // When / Then
       assertThat(executor.supply(Arrays.asList("a", "b", "a", "b"), () -> 1)).isEqualTo(1);
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <E extends Throwable> void sneakyThrow(Throwable throwable) throws E {
+    throw (E) throwable;
   }
 }

@@ -264,6 +264,40 @@ class TaskQueueTest {
   }
 
   @Test
+  @DisplayName("should report not empty when rejection in run leaves tasks queued")
+  void shouldReportNotEmptyWhenRejectionInRunLeavesTasksQueued() throws InterruptedException {
+    // Given
+    TaskQueue taskQueue = new TaskQueue();
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
+
+    CountDownLatch runnerStarted = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    CountDownLatch runnerFinished = new CountDownLatch(1);
+
+    new Thread(
+            () ->
+                taskQueue.execute(
+                    command -> {
+                      runnerStarted.countDown();
+                      uncheckedRun(releaseRunner::await);
+                      command.run();
+                      runnerFinished.countDown();
+                    },
+                    () -> {}))
+        .start();
+    runnerStarted.await();
+
+    // When
+    taskQueue.execute(rejecting, () -> {});
+    releaseRunner.countDown();
+    awaitCountDown(runnerFinished);
+
+    // Then
+    assertThat(taskQueue.isEmpty()).isFalse();
+  }
+
+  @Test
   @DisplayName("should report empty when no tasks are queued or running")
   void shouldReportEmptyWhenNoTasksAreQueuedOrRunning() {
     // When / Then

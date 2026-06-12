@@ -138,7 +138,7 @@ public class OrderedTraceExecutor {
                 try {
                   task.run();
                   future.complete(null);
-                } catch (RuntimeException ex) {
+                } catch (Throwable ex) {
                   future.completeExceptionally(ex);
                 }
               });
@@ -146,10 +146,7 @@ public class OrderedTraceExecutor {
       queue.execute(selector.getExecutor(queue, runnable, true), runnable);
       future.get(timeout, timeUnit);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
-      if (e instanceof ExecutionException) {
-        throw (RuntimeException) e.getCause();
-      }
-      throw new RuntimeException(e);
+      throw syncException(e);
     }
   }
 
@@ -189,7 +186,7 @@ public class OrderedTraceExecutor {
               () -> {
                 try {
                   future.complete(supplier.get());
-                } catch (RuntimeException ex) {
+                } catch (Throwable ex) {
                   future.completeExceptionally(ex);
                 }
               });
@@ -197,10 +194,7 @@ public class OrderedTraceExecutor {
       queue.execute(selector.getExecutor(queue, runnable, true), runnable);
       return future.get(timeout, timeUnit);
     } catch (InterruptedException | ExecutionException | TimeoutException e) {
-      if (e instanceof ExecutionException) {
-        throw (RuntimeException) e.getCause();
-      }
-      throw new RuntimeException(e);
+      throw syncException(e);
     }
   }
 
@@ -218,5 +212,23 @@ public class OrderedTraceExecutor {
       supplier = () -> supply(key, finalSupplier);
     }
     return supplier.get();
+  }
+
+  private static RuntimeException syncException(Exception e) {
+    if (e instanceof InterruptedException) {
+      Thread.currentThread().interrupt();
+      return new RuntimeException(e);
+    }
+    if (e instanceof ExecutionException) {
+      Throwable cause = e.getCause();
+      if (cause instanceof RuntimeException) {
+        return (RuntimeException) cause;
+      }
+      if (cause instanceof Error) {
+        throw (Error) cause;
+      }
+      return new RuntimeException(cause);
+    }
+    return new RuntimeException(e);
   }
 }

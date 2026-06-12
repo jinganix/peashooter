@@ -56,6 +56,8 @@ public class DefaultTracer implements Tracer {
   public void afterCall(Span span, Exception e) {
     if (span.isRoot()) {
       clearSpan();
+    } else {
+      setSpan(span.getParent());
     }
   }
 }

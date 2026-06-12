@@ -37,12 +37,29 @@ import io.github.jinganix.peashooter.executor.DirectExecutor;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("LockableTaskQueue")
 class LockableTaskQueueTest {
+
+  @Test
+  @DisplayName("should run enqueued task after tryLock fails then succeeds")
+  void shouldRunEnqueuedTaskAfterTryLockFailsThenSucceeds() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    AtomicInteger tryLockCalls = new AtomicInteger();
+    when(taskQueue.tryLock(any())).thenAnswer(inv -> tryLockCalls.getAndIncrement() > 0);
+    CountDownLatch executed = new CountDownLatch(1);
+
+    // When
+    taskQueue.execute(DirectExecutor.INSTANCE, executed::countDown);
+
+    // Then
+    awaitCountDown(executed);
+  }
 
   @Test
   @DisplayName("should not unlock when lock cannot be acquired")
