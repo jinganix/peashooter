@@ -28,20 +28,20 @@ Per-key ordered task execution for Java thread pools — sequential guarantees w
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.8</version>
+  <version>0.0.9</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.8'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.9'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.8")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.9")
 ```
 
 ## Quick start
