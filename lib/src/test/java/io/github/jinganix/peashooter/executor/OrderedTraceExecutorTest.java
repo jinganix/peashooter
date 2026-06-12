@@ -25,6 +25,8 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.times;
@@ -38,11 +40,15 @@ import io.github.jinganix.peashooter.trace.DefaultTracer;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -76,6 +82,62 @@ class OrderedTraceExecutorTest {
     return new OrderedTraceExecutor(taskQueueProvider, selector, TRACER);
   }
 
+  @Nested
+  @DisplayName("when validating arguments")
+  class WhenValidatingArguments {
+
+    private final OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+
+    @Test
+    @DisplayName("should reject null key on executeAsync")
+    void shouldRejectNullKeyOnExecuteAsync() {
+      assertThatThrownBy(() -> executor.executeAsync(null, () -> {}))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("key");
+    }
+
+    @Test
+    @DisplayName("should reject null key on executeSync")
+    void shouldRejectNullKeyOnExecuteSync() {
+      assertThatThrownBy(() -> executor.executeSync((String) null, () -> {}))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("key");
+    }
+
+    @Test
+    @DisplayName("should reject null element in multi-key executeSync")
+    void shouldRejectNullElementInMultiKeyExecuteSync() {
+      assertThatThrownBy(() -> executor.executeSync(Arrays.asList("a", null), () -> {}))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("key");
+    }
+
+    @Test
+    @DisplayName("should reject empty key collection on executeSync")
+    void shouldRejectEmptyKeyCollectionOnExecuteSync() {
+      assertThatThrownBy(() -> executor.executeSync(Collections.emptyList(), () -> {}))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("keys");
+    }
+
+    @Test
+    @DisplayName("should reject empty key collection on supply")
+    void shouldRejectEmptyKeyCollectionOnSupply() {
+      assertThatThrownBy(() -> executor.supply(Collections.emptyList(), () -> 1))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("keys");
+    }
+
+    @Test
+    @DisplayName("should reject null key on supply")
+    void shouldRejectNullKeyOnSupply() {
+      assertThatThrownBy(() -> executor.supply((String) null, () -> 1))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("key");
+    }
+  }
+
   @Test
   @DisplayName("should construct trace executor when built from executor service")
   void shouldConstructTraceExecutorWhenBuiltFromExecutorService() {
@@ -96,6 +158,65 @@ class OrderedTraceExecutorTest {
           .doesNotThrowAnyException();
       assertThat(provider.constructed()).isEmpty();
     }
+  }
+
+  @Test
+  @DisplayName("should still run queued task after sync caller times out")
+  void shouldStillRunQueuedTaskAfterSyncCallerTimesOut() {
+    // Given
+    OrderedTraceExecutor executor =
+        createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
+    executor.setTimeout(50, TimeUnit.MILLISECONDS);
+    java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+
+    // When
+    assertThatThrownBy(
+            () ->
+                executor.executeSync(
+                    "a",
+                    () -> {
+                      sleep(200);
+                      finished.set(true);
+                    }))
+        .isInstanceOf(RuntimeException.class)
+        .matches(t -> t.getCause() instanceof TimeoutException);
+
+    // Then
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(5))
+        .until(finished::get);
+  }
+
+  @Test
+  @DisplayName("should surface executor rejection on executeSync instead of timing out")
+  void shouldSurfaceExecutorRejectionOnExecuteSyncInsteadOfTimingOut() {
+    // Given
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException("rejected")).when(rejecting).execute(any());
+    OrderedTraceExecutor executor =
+        createExecutor(rejecting, new CaffeineTaskQueueProvider());
+    executor.setTimeout(10, TimeUnit.SECONDS);
+
+    // When / Then
+    assertThatThrownBy(() -> executor.executeSync("a", () -> {}))
+        .isInstanceOf(RejectedExecutionException.class)
+        .hasMessageContaining("rejected");
+  }
+
+  @Test
+  @DisplayName("should surface executor rejection on supply instead of timing out")
+  void shouldSurfaceExecutorRejectionOnSupplyInsteadOfTimingOut() {
+    // Given
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException("rejected")).when(rejecting).execute(any());
+    OrderedTraceExecutor executor =
+        createExecutor(rejecting, new CaffeineTaskQueueProvider());
+    executor.setTimeout(10, TimeUnit.SECONDS);
+
+    // When / Then
+    assertThatThrownBy(() -> executor.supply("a", () -> "value"))
+        .isInstanceOf(RejectedExecutionException.class)
+        .hasMessageContaining("rejected");
   }
 
   @Test
@@ -223,6 +344,36 @@ class OrderedTraceExecutorTest {
       } else {
         assertThat(System.currentTimeMillis() - start).isLessThan(100);
       }
+    }
+
+    @Test
+    @DisplayName("should create child span on reentrant same-key sync")
+    void shouldCreateChildSpanOnReentrantSameKeySync() {
+      // Given
+      Tracer tracer = new DefaultTracer();
+      Executor executor = ExecutorForTests.executors().get(SINGLE_THREAD_EXECUTOR);
+      TraceExecutor traceExecutor = new TraceExecutor(executor, tracer);
+      OrderedTraceExecutor orderedExecutor =
+          new OrderedTraceExecutor(
+              new CaffeineTaskQueueProvider(),
+              new DefaultExecutorSelector(traceExecutor),
+              tracer);
+      AtomicReference<io.github.jinganix.peashooter.trace.Span> outerSpan =
+          new AtomicReference<>();
+      AtomicReference<io.github.jinganix.peashooter.trace.Span> innerSpan =
+          new AtomicReference<>();
+
+      // When: nested executeSync on the same key runs inline via invokedBy
+      orderedExecutor.executeSync(
+          "a",
+          () -> {
+            outerSpan.set(tracer.getSpan());
+            orderedExecutor.executeSync("a", () -> innerSpan.set(tracer.getSpan()));
+          });
+
+      // Then
+      assertThat(outerSpan.get()).isNotNull();
+      assertThat(innerSpan.get()).isNotNull().isNotSameAs(outerSpan.get());
     }
 
     @ParameterizedTest(name = "{0}")
@@ -539,6 +690,42 @@ class OrderedTraceExecutorTest {
       } catch (InterruptedException | ExecutionException e) {
         throw new RuntimeException(e);
       }
+    }
+  }
+
+  @Nested
+  @DisplayName("when locking multiple keys")
+  class WhenLockingMultipleKeys {
+
+    @Test
+    @DisplayName("should not deadlock when two threads use opposite key orders")
+    void shouldNotDeadlockWhenTwoThreadsUseOppositeKeyOrders() throws InterruptedException {
+      // Given
+      OrderedTraceExecutor executor =
+          createExecutor(Executors.newFixedThreadPool(4), new CaffeineTaskQueueProvider());
+      CountDownLatch done = new CountDownLatch(2);
+      AtomicInteger completed = new AtomicInteger();
+      Runnable work =
+          () -> {
+            completed.incrementAndGet();
+            done.countDown();
+          };
+
+      // When
+      org.junit.jupiter.api.Assertions.assertTimeout(
+          Duration.ofSeconds(5),
+          () -> {
+            Thread thread1 = new Thread(() -> executor.executeSync(Arrays.asList("a", "b"), work));
+            Thread thread2 = new Thread(() -> executor.executeSync(Arrays.asList("b", "a"), work));
+            thread1.start();
+            thread2.start();
+            thread1.join();
+            thread2.join();
+          });
+
+      // Then
+      assertThat(completed.get()).isEqualTo(2);
+      awaitCountDown(done);
     }
   }
 

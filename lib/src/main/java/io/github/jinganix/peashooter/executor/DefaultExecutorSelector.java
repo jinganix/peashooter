@@ -23,7 +23,10 @@ import io.github.jinganix.peashooter.queue.TaskQueue;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
 
-/** Default implementation for {@link ExecutorSelector}. */
+/**
+ * Default {@link ExecutorSelector}: uses {@link DirectExecutor} for sync submissions when a span is
+ * already active and the target queue is idle, otherwise the configured {@link TraceExecutor}.
+ */
 public class DefaultExecutorSelector implements ExecutorSelector {
 
   private final TraceExecutor traceExecutor;
@@ -37,6 +40,11 @@ public class DefaultExecutorSelector implements ExecutorSelector {
     this.traceExecutor = traceExecutor;
   }
 
+  /**
+   * Returns {@link DirectExecutor} when {@code sync}, a span is present, and {@code queue} is
+   * {@link TaskQueue#isEmpty() empty}; otherwise {@link TraceExecutor}. The direct path avoids a
+   * thread hop for eligible nested sync work.
+   */
   @Override
   public Executor getExecutor(TaskQueue queue, TraceRunnable task, boolean sync) {
     if (sync && traceExecutor.getTracer().getSpan() != null && queue.isEmpty()) {

@@ -12,25 +12,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * https://github.com/jinganix/peashooter
  */
 
 package io.github.jinganix.peashooter.executor;
 
-import java.util.concurrent.Executor;
+/** Runnable notified when its queue discards pending work after executor submission failure. */
+public interface RejectionAware {
 
-/**
- * {@link Executor} that runs each command synchronously on the calling thread.
- *
- * <p>Used by {@link DefaultExecutorSelector} and {@link
- * io.github.jinganix.peashooter.queue.LockableTaskQueue} to avoid extra thread hops; nested
- * {@code execute} calls increase runner depth rather than scheduling new threads.
- */
-public enum DirectExecutor implements Executor {
-  /** Shared instance. */
-  INSTANCE;
-
-  @Override
-  public void execute(Runnable runnable) {
-    runnable.run();
-  }
+  /**
+   * Called when the enclosing {@link io.github.jinganix.peashooter.queue.TaskQueue} discards this
+   * task without running it.
+   *
+   * @param cause rejection reported by {@link java.util.concurrent.Executor#execute(Runnable)}
+   */
+  void rejected(RuntimeException cause);
 }

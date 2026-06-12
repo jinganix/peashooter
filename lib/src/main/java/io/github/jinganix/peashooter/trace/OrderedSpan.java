@@ -21,7 +21,13 @@ package io.github.jinganix.peashooter.trace;
 import io.github.jinganix.peashooter.TraceIdGenerator;
 import java.util.Objects;
 
-/** Span with ordered key and sync flag. */
+/**
+ * {@link Span} tagged with the per-key ordering key and whether the call was synchronous.
+ *
+ * <p>Created by {@link OrderedTraceRunnable} for each ordered submission. The {@code sync} flag
+ * participates in {@link #invokedBy(Span, String)}: only sync spans on the active chain can
+ * trigger reentrant inline execution in {@link io.github.jinganix.peashooter.executor.OrderedTraceExecutor}.
+ */
 public class OrderedSpan extends Span {
 
   private final String key;
@@ -57,11 +63,26 @@ public class OrderedSpan extends Span {
   }
 
   /**
-   * Check if the key is in the task call chain.
+   * Whether a nested {@code executeSync}/{@code supply} for {@code key} may bypass the per-key
+   * queue and run inline on the current thread.
    *
-   * @param span {@link Span} to check
-   * @param key trace key
-   * @return true if the {@link Span} is called by key.
+   * <p>Walks the active span chain from {@code span} toward the root:
+   *
+   * <ul>
+   *   <li>Matching {@code OrderedSpan} key → {@code true} (reentrant sync; queue bypass).
+   *   <li>Async {@code OrderedSpan} with a different key → {@code false} (stop).
+   *   <li>Sync {@code OrderedSpan} with a different key → continue to parent (multi-key nesting).
+   * </ul>
+   *
+   * <p><b>Ordering implication:</b> when this returns {@code true}, work runs immediately on the
+   * caller thread even if other threads are blocked in the queue for the same key. Cross-thread
+   * FIFO is not preserved for that nested call. This is intentional — it prevents a thread from
+   * deadlocking on its own nested sync — but callers requiring strict global ordering per key must
+   * structure code to avoid nested same-key sync while peers are waiting.
+   *
+   * @param span current {@link Span}, or {@code null}
+   * @param key ordered trace key
+   * @return {@code true} if the sync call may run inline without enqueueing
    */
   public static boolean invokedBy(Span span, String key) {
     if (span == null) {

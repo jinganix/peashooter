@@ -23,6 +23,7 @@ import static io.github.jinganix.peashooter.utils.TestUtils.sleep;
 import static io.github.jinganix.peashooter.utils.TestUtils.uncheckedRun;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -41,9 +42,114 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 @DisplayName("LockableTaskQueue")
 class LockableTaskQueueTest {
+
+  @Test
+  @DisplayName("should discard all pending tasks when lock failure reschedule is rejected")
+  void shouldDiscardAllPendingTasksWhenLockFailureRescheduleIsRejected() throws InterruptedException {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(false);
+    CountDownLatch runnerEntered = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    AtomicInteger executeCalls = new AtomicInteger();
+    Executor flaky =
+        command -> {
+          int call = executeCalls.getAndIncrement();
+          if (call == 0) {
+            runnerEntered.countDown();
+            uncheckedRun(releaseRunner::await);
+            DirectExecutor.INSTANCE.execute(command);
+          } else {
+            throw new RejectedExecutionException();
+          }
+        };
+    Runnable first = mock(Runnable.class);
+    Runnable second = mock(Runnable.class);
+
+    // When
+    new Thread(() -> taskQueue.execute(flaky, first)).start();
+    runnerEntered.await();
+    taskQueue.execute(DirectExecutor.INSTANCE, second);
+    releaseRunner.countDown();
+    sleep(200);
+
+    // Then
+    verify(first, never()).run();
+    verify(second, never()).run();
+    assertThat(taskQueue.isEmpty()).isTrue();
+  }
+
+  @Test
+  @DisplayName("should unlock once when handoff uses async executor while lock is held")
+  void shouldUnlockOnceWhenHandoffUsesAsyncExecutorWhileLockIsHeld() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(true);
+    when(taskQueue.shouldYield(any())).thenReturn(false);
+    CountDownLatch done = new CountDownLatch(1);
+
+    // When
+    taskQueue.execute(newSingleThreadExecutor(), () -> sleep(50));
+    taskQueue.execute(newSingleThreadExecutor(), done::countDown);
+    awaitCountDown(done);
+
+    // Then
+    verify(taskQueue, times(1)).unlock();
+  }
+
+  @Test
+  @DisplayName("should unlock once when handoff uses DirectExecutor while lock is held")
+  void shouldUnlockOnceWhenHandoffUsesDirectExecutorWhileLockIsHeld() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(true);
+    when(taskQueue.shouldYield(any())).thenReturn(false);
+    CountDownLatch done = new CountDownLatch(1);
+
+    // When
+    taskQueue.execute(newSingleThreadExecutor(), () -> sleep(50));
+    taskQueue.execute(DirectExecutor.INSTANCE, done::countDown);
+    awaitCountDown(done);
+
+    // Then
+    verify(taskQueue, times(1)).unlock();
+  }
+
+  @Test
+  @DisplayName("should reuse a single reschedule thread when tryLock persistently fails")
+  void shouldReuseSingleRescheduleThreadWhenTryLockPersistentlyFails() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(false);
+    int threadsBefore = LockableTaskQueue.rescheduleThreadsCreated();
+
+    // When
+    for (int i = 0; i < 10; i++) {
+      taskQueue.execute(DirectExecutor.INSTANCE, () -> {});
+    }
+    sleep(500);
+
+    // Then
+    assertThat(LockableTaskQueue.rescheduleThreadsCreated() - threadsBefore).isLessThanOrEqualTo(1);
+  }
+
+  @Test
+  @Timeout(2)
+  @DisplayName("should not stack overflow when tryLock always fails with DirectExecutor")
+  void shouldNotStackOverflowWhenTryLockAlwaysFailsWithDirectExecutor() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(false);
+
+    // When / Then: must not recurse on the current thread
+    assertThatCode(() -> taskQueue.execute(DirectExecutor.INSTANCE, () -> {}))
+        .doesNotThrowAnyException();
+    sleep(100);
+  }
 
   @Test
   @DisplayName("should run enqueued task after tryLock fails then succeeds")
@@ -192,17 +298,66 @@ class LockableTaskQueueTest {
   }
 
   @Test
-  @DisplayName("should propagate rejection when executor rejects on an idle queue")
-  void shouldPropagateRejectionWhenExecutorRejectsOnAnIdleQueue() {
+  @DisplayName("should finish prior queued tasks when a later submit is rejected")
+  void shouldFinishPriorQueuedTasksWhenALaterSubmitIsRejected() throws InterruptedException {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    when(taskQueue.tryLock(any())).thenReturn(true);
+    when(taskQueue.shouldYield(any())).thenReturn(false);
+    AtomicInteger completed = new AtomicInteger(0);
+    Executor rejecting = mock(Executor.class);
+    doThrow(new RejectedExecutionException()).when(rejecting).execute(any());
+    Runnable rejected = mock(Runnable.class);
+
+    CountDownLatch runnerStarted = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    CountDownLatch priorTasksDone = new CountDownLatch(3);
+
+    new Thread(
+            () ->
+                taskQueue.execute(
+                    command -> {
+                      runnerStarted.countDown();
+                      uncheckedRun(releaseRunner::await);
+                      command.run();
+                    },
+                    () -> {}))
+        .start();
+    runnerStarted.await();
+
+    Executor worker = newSingleThreadExecutor();
+    Runnable countAndSignal =
+        () -> {
+          completed.incrementAndGet();
+          priorTasksDone.countDown();
+        };
+    taskQueue.execute(worker, countAndSignal);
+    taskQueue.execute(worker, countAndSignal);
+    taskQueue.execute(worker, countAndSignal);
+
+    // When
+    taskQueue.execute(rejecting, rejected);
+    releaseRunner.countDown();
+    awaitCountDown(priorTasksDone);
+
+    // Then
+    assertThat(completed.get()).isEqualTo(3);
+    verify(rejected, never()).run();
+  }
+
+  @Test
+  @DisplayName("should discard task when executor rejects on an idle queue")
+  void shouldDiscardTaskWhenExecutorRejectsOnAnIdleQueue() {
     // Given
     LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
     when(taskQueue.tryLock(any())).thenReturn(true);
     Executor executor = mock(Executor.class);
-    RejectedExecutionException exception = new RejectedExecutionException();
-    doThrow(exception).when(executor).execute(any());
+    doThrow(new RejectedExecutionException()).when(executor).execute(any());
+    Runnable task = mock(Runnable.class);
 
     // When / Then
-    assertThatThrownBy(() -> taskQueue.execute(executor, () -> {})).isEqualTo(exception);
+    assertThatCode(() -> taskQueue.execute(executor, task)).doesNotThrowAnyException();
+    verify(task, never()).run();
   }
 
   @Test
