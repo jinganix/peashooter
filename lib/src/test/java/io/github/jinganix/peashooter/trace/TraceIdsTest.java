@@ -19,9 +19,14 @@
 package io.github.jinganix.peashooter.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
+import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 @DisplayName("TraceIds")
 class TraceIdsTest {
@@ -44,5 +49,26 @@ class TraceIdsTest {
     // Then
     assertThat(TraceIds.isValidTraceId("00000000000000000000000000000000")).isFalse();
     assertThat(TraceIds.isValidSpanId("0000000000000000")).isFalse();
+  }
+
+  @Test
+  @DisplayName("should reject invalid hex characters")
+  void shouldRejectInvalidHexCharacters() {
+    assertThat(TraceIds.isValidTraceId("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz")).isFalse();
+    assertThat(TraceIds.isValidSpanId("zzzzzzzzzzzzzzzz")).isFalse();
+    assertThat(TraceIds.isValidTraceId("4BF92F3577B34DA6A3CE929D0E0E4736")).isFalse();
+  }
+
+  @Test
+  @DisplayName("should skip all-zero random values")
+  void shouldSkipAllZeroRandomValues() {
+    ThreadLocalRandom random = mock(ThreadLocalRandom.class);
+    try (MockedStatic<ThreadLocalRandom> mocked = mockStatic(ThreadLocalRandom.class)) {
+      mocked.when(ThreadLocalRandom::current).thenReturn(random);
+      when(random.nextLong()).thenReturn(0L, 0L, 0L, 1L, 0L, 1L);
+
+      assertThat(TraceIds.nextTraceId()).isEqualTo("00000000000000000000000000000001");
+      assertThat(TraceIds.nextSpanId()).isEqualTo("0000000000000001");
+    }
   }
 }

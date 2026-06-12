@@ -25,8 +25,9 @@ import java.util.Objects;
  * {@link Span} tagged with the per-key ordering key and whether the call was synchronous.
  *
  * <p>Created by {@link OrderedTraceRunnable} for each ordered submission. The {@code sync} flag
- * participates in {@link #invokedBy(Span, String)}: only sync spans on the active chain can
- * trigger reentrant inline execution in {@link io.github.jinganix.peashooter.executor.OrderedTraceExecutor}.
+ * participates in {@link #invokedBy(Span, String)}: only sync spans on the active chain can trigger
+ * reentrant inline execution in {@link
+ * io.github.jinganix.peashooter.executor.OrderedTraceExecutor}.
  */
 public class OrderedSpan extends Span {
 

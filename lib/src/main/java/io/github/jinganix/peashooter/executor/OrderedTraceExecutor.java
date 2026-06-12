@@ -30,13 +30,13 @@ import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -53,11 +53,11 @@ import java.util.function.Supplier;
  * sync deadlocks, but other threads blocked on the same key may be overtaken — cross-thread FIFO is
  * not guaranteed in this case. {@link #executeAsync} always enqueues and never uses this fast path.
  *
- * <p><b>Executor submission failures:</b> when the backing {@link Executor} throws while
- * scheduling the queue runner, all pending tasks for that key are discarded (error log only). Sync
- * callers block until {@link #setTimeout(long, TimeUnit) timeout}; the symptom matches a slow task,
- * not a rejection. Async callers get no error. Callers that need at-least-once semantics must
- * retry themselves.
+ * <p><b>Executor submission failures:</b> when the backing {@link Executor} throws while scheduling
+ * the queue runner, all pending tasks for that key are discarded (error log only). Sync callers
+ * block until {@link #setTimeout(long, TimeUnit) timeout}; the symptom matches a slow task, not a
+ * rejection. Async callers get no error. Callers that need at-least-once semantics must retry
+ * themselves.
  *
  * <p><b>Task failures:</b> sync paths propagate exceptions from the delegate via {@code
  * CompletableFuture}. Async paths rely on {@link TaskQueue}, which logs and continues.
@@ -163,10 +163,10 @@ public class OrderedTraceExecutor {
    * without enqueueing. Other threads waiting on the same key are not consulted — nested same-key
    * sync can overtake them. See class javadoc.
    *
-   * <p>Waits up to {@link #setTimeout(long, TimeUnit)}. A timeout only unblocks the caller; it
-   * does not cancel work already queued or running. Executor submission failure discards pending
-   * tasks and surfaces as timeout, not {@link java.util.concurrent.RejectedExecutionException}.
-   * Delegate failures propagate as {@link RuntimeException} (or the original unchecked type).
+   * <p>Waits up to {@link #setTimeout(long, TimeUnit)}. A timeout only unblocks the caller; it does
+   * not cancel work already queued or running. Executor submission failure discards pending tasks
+   * and surfaces as timeout, not {@link java.util.concurrent.RejectedExecutionException}. Delegate
+   * failures propagate as {@link RuntimeException} (or the original unchecked type).
    *
    * @param key ordering key; must not be {@code null}
    * @param task work to run; must not be {@code null}

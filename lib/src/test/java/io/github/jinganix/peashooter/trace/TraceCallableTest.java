@@ -46,7 +46,11 @@ class TraceCallableTest {
     Span parent = new Span(tracer, null);
     tracer.setSpan(parent);
     TraceCallable<Integer> traceCallable =
-        new TraceCallable<>(tracer, () -> { throw new OutOfMemoryError(); });
+        new TraceCallable<>(
+            tracer,
+            () -> {
+              throw new OutOfMemoryError();
+            });
 
     // When / Then
     assertThatThrownBy(traceCallable::call).isInstanceOf(OutOfMemoryError.class);

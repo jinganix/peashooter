@@ -43,8 +43,8 @@ import org.slf4j.LoggerFactory;
  * handoff (e.g. {@link DirectExecutor}) uses nested {@link #run()} depth to pair lock/unlock
  * correctly.
  *
- * <p><b>Subclass contract:</b> {@code tryLock} may be invoked multiple times per outer loop after
- * a yield. {@code unlock} is skipped while {@code runDepth > 1}. Pair every successful lock with
+ * <p><b>Subclass contract:</b> {@code tryLock} may be invoked multiple times per outer loop after a
+ * yield. {@code unlock} is skipped while {@code runDepth > 1}. Pair every successful lock with
  * exactly one {@code unlock} at the outermost runner depth. Blocking or spinning in {@code tryLock}
  * is implementation-defined.
  */
@@ -85,8 +85,8 @@ public abstract class LockableTaskQueue extends TaskQueue {
   /**
    * Creates a queue that uses the given stats for lock and yield decisions.
    *
-   * @param stats execution statistics passed to {@link #tryLock} and {@link #shouldYield}; reset
-   *     at the start of each outer loop
+   * @param stats execution statistics passed to {@link #tryLock} and {@link #shouldYield}; reset at
+   *     the start of each outer loop
    */
   public LockableTaskQueue(ExecutionStats stats) {
     super();

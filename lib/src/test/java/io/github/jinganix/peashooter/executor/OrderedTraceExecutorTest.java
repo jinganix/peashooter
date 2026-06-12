@@ -42,23 +42,23 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
@@ -167,7 +167,8 @@ class OrderedTraceExecutorTest {
     OrderedTraceExecutor executor =
         createExecutor(newSingleThreadExecutor(), new CaffeineTaskQueueProvider());
     executor.setTimeout(50, TimeUnit.MILLISECONDS);
-    java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
+    java.util.concurrent.atomic.AtomicBoolean finished =
+        new java.util.concurrent.atomic.AtomicBoolean();
 
     // When
     assertThatThrownBy(
@@ -182,9 +183,7 @@ class OrderedTraceExecutorTest {
         .matches(t -> t.getCause() instanceof TimeoutException);
 
     // Then
-    org.awaitility.Awaitility.await()
-        .atMost(Duration.ofSeconds(5))
-        .until(finished::get);
+    org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(5)).until(finished::get);
   }
 
   @Test
@@ -193,8 +192,7 @@ class OrderedTraceExecutorTest {
     // Given
     Executor rejecting = mock(Executor.class);
     doThrow(new RejectedExecutionException("rejected")).when(rejecting).execute(any());
-    OrderedTraceExecutor executor =
-        createExecutor(rejecting, new CaffeineTaskQueueProvider());
+    OrderedTraceExecutor executor = createExecutor(rejecting, new CaffeineTaskQueueProvider());
     executor.setTimeout(10, TimeUnit.SECONDS);
 
     // When / Then
@@ -209,8 +207,7 @@ class OrderedTraceExecutorTest {
     // Given
     Executor rejecting = mock(Executor.class);
     doThrow(new RejectedExecutionException("rejected")).when(rejecting).execute(any());
-    OrderedTraceExecutor executor =
-        createExecutor(rejecting, new CaffeineTaskQueueProvider());
+    OrderedTraceExecutor executor = createExecutor(rejecting, new CaffeineTaskQueueProvider());
     executor.setTimeout(10, TimeUnit.SECONDS);
 
     // When / Then
@@ -247,7 +244,13 @@ class OrderedTraceExecutorTest {
         Duration.ofMillis(500),
         (ThrowingSupplier<Void>)
             () -> {
-              assertThatThrownBy(() -> executor.supply("a", () -> { throw error; }))
+              assertThatThrownBy(
+                      () ->
+                          executor.supply(
+                              "a",
+                              () -> {
+                                throw error;
+                              }))
                   .isEqualTo(error);
               return null;
             });
@@ -263,7 +266,14 @@ class OrderedTraceExecutorTest {
     Thread.currentThread().interrupt();
 
     // When
-    assertThatThrownBy(() -> executor.supply("a", () -> { sleep(100); return 0L; }))
+    assertThatThrownBy(
+            () ->
+                executor.supply(
+                    "a",
+                    () -> {
+                      sleep(100);
+                      return 0L;
+                    }))
         .isInstanceOf(RuntimeException.class);
 
     // Then
@@ -306,7 +316,13 @@ class OrderedTraceExecutorTest {
         Duration.ofMillis(500),
         (ThrowingSupplier<Void>)
             () -> {
-              assertThatThrownBy(() -> executor.executeSync("a", () -> { throw error; }))
+              assertThatThrownBy(
+                      () ->
+                          executor.executeSync(
+                              "a",
+                              () -> {
+                                throw error;
+                              }))
                   .isEqualTo(error);
               return null;
             });
@@ -355,13 +371,9 @@ class OrderedTraceExecutorTest {
       TraceExecutor traceExecutor = new TraceExecutor(executor, tracer);
       OrderedTraceExecutor orderedExecutor =
           new OrderedTraceExecutor(
-              new CaffeineTaskQueueProvider(),
-              new DefaultExecutorSelector(traceExecutor),
-              tracer);
-      AtomicReference<io.github.jinganix.peashooter.trace.Span> outerSpan =
-          new AtomicReference<>();
-      AtomicReference<io.github.jinganix.peashooter.trace.Span> innerSpan =
-          new AtomicReference<>();
+              new CaffeineTaskQueueProvider(), new DefaultExecutorSelector(traceExecutor), tracer);
+      AtomicReference<io.github.jinganix.peashooter.trace.Span> outerSpan = new AtomicReference<>();
+      AtomicReference<io.github.jinganix.peashooter.trace.Span> innerSpan = new AtomicReference<>();
 
       // When: nested executeSync on the same key runs inline via invokedBy
       orderedExecutor.executeSync(

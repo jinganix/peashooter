@@ -22,8 +22,8 @@ import java.util.concurrent.Executor;
  * {@link Executor} that runs each command synchronously on the calling thread.
  *
  * <p>Used by {@link DefaultExecutorSelector} and {@link
- * io.github.jinganix.peashooter.queue.LockableTaskQueue} to avoid extra thread hops; nested
- * {@code execute} calls increase runner depth rather than scheduling new threads.
+ * io.github.jinganix.peashooter.queue.LockableTaskQueue} to avoid extra thread hops; nested {@code
+ * execute} calls increase runner depth rather than scheduling new threads.
  */
 public enum DirectExecutor implements Executor {
   /** Shared instance. */

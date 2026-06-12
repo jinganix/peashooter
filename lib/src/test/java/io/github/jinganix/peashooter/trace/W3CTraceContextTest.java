@@ -43,6 +43,15 @@ class W3CTraceContextTest {
   }
 
   @Test
+  @DisplayName("should parse lowercase hex letters in trace flags")
+  void shouldParseLowercaseHexLettersInTraceFlags() {
+    W3CTraceContext.Context context =
+        W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0a");
+
+    assertThat(context.sampled()).isFalse();
+  }
+
+  @Test
   @DisplayName("should round-trip inject and extract parent")
   void shouldRoundTripInjectAndExtractParent() {
     // Given
@@ -67,5 +76,110 @@ class W3CTraceContextTest {
     // Then
     assertThatThrownBy(() -> W3CTraceContext.parse("invalid"))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("should reject null traceparent")
+  void shouldRejectNullTraceparent() {
+    assertThatThrownBy(() -> W3CTraceContext.parse(null)).isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  @DisplayName("should reject traceparent with wrong field count")
+  void shouldRejectTraceparentWithWrongFieldCount() {
+    assertThatThrownBy(() -> W3CTraceContext.parse("00-abc"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("4");
+  }
+
+  @Test
+  @DisplayName("should reject unsupported traceparent version")
+  void shouldRejectUnsupportedTraceparentVersion() {
+    assertThatThrownBy(() -> W3CTraceContext.parse("01-" + TRACEPARENT.substring(3)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("version");
+  }
+
+  @Test
+  @DisplayName("should reject all-zero trace id in traceparent")
+  void shouldRejectAllZeroTraceIdInTraceparent() {
+    assertThatThrownBy(
+            () -> W3CTraceContext.parse("00-00000000000000000000000000000000-00f067aa0ba902b7-01"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("trace-id");
+  }
+
+  @Test
+  @DisplayName("should reject all-zero span id in traceparent")
+  void shouldRejectAllZeroSpanIdInTraceparent() {
+    assertThatThrownBy(
+            () -> W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("span id");
+  }
+
+  @Test
+  @DisplayName("should reject invalid trace flags in traceparent")
+  void shouldRejectInvalidTraceFlagsInTraceparent() {
+    assertThatThrownBy(
+            () -> W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("trace-flags");
+    assertThatThrownBy(
+            () -> W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-zz"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("trace-flags");
+    assertThatThrownBy(
+            () -> W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-g0"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("trace-flags");
+  }
+
+  @Test
+  @DisplayName("should parse unsampled traceparent")
+  void shouldParseUnsampledTraceparent() {
+    W3CTraceContext.Context context =
+        W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00");
+
+    assertThat(context.sampled()).isFalse();
+  }
+
+  @Test
+  @DisplayName("should normalize uppercase hex in traceparent")
+  void shouldNormalizeUppercaseHexInTraceparent() {
+    W3CTraceContext.Context context =
+        W3CTraceContext.parse("00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01");
+
+    assertThat(context.traceId()).isEqualTo("4bf92f3577b34da6a3ce929d0e0e4736");
+    assertThat(context.parentSpanId()).isEqualTo("00f067aa0ba902b7");
+  }
+
+  @Test
+  @DisplayName("should inject unsampled traceparent")
+  void shouldInjectUnsampledTraceparent() {
+    Span span = new Span(TraceIds.nextTraceId(), TraceIds.nextSpanId(), null);
+
+    assertThat(W3CTraceContext.inject(span, false)).endsWith("-00");
+  }
+
+  @Test
+  @DisplayName("should reject null span on inject")
+  void shouldRejectNullSpanOnInject() {
+    assertThatThrownBy(() -> W3CTraceContext.inject(null, true))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  @DisplayName("should reject invalid ids on inject")
+  void shouldRejectInvalidIdsOnInject() {
+    Span invalidTraceId = new Span("00000000000000000000000000000000", TraceIds.nextSpanId(), null);
+    Span invalidSpanId = new Span(TraceIds.nextTraceId(), "0000000000000000", null);
+
+    assertThatThrownBy(() -> W3CTraceContext.inject(invalidTraceId, true))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("trace id");
+    assertThatThrownBy(() -> W3CTraceContext.inject(invalidSpanId, true))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("span id");
   }
 }

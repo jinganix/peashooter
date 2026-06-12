@@ -62,7 +62,11 @@ class TraceRunnableTest {
     Span parent = new Span(tracer, null);
     tracer.setSpan(parent);
     TraceRunnable traceRunnable =
-        new TraceRunnable(tracer, () -> { throw new OutOfMemoryError(); });
+        new TraceRunnable(
+            tracer,
+            () -> {
+              throw new OutOfMemoryError();
+            });
 
     // When / Then
     assertThatThrownBy(traceRunnable::run).isInstanceOf(OutOfMemoryError.class);

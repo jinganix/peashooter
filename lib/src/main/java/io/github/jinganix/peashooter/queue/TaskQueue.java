@@ -22,7 +22,6 @@ import io.github.jinganix.peashooter.executor.RejectionAware;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.Executor;
-import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,8 +119,8 @@ public class TaskQueue {
   /**
    * Whether the queue has no pending tasks and no active runner.
    *
-   * <p>Returns {@code false} while a runner is scheduled ({@code current != null}) even if the deque
-   * is momentarily empty, e.g. during executor handoff between consecutive tasks.
+   * <p>Returns {@code false} while a runner is scheduled ({@code current != null}) even if the
+   * deque is momentarily empty, e.g. during executor handoff between consecutive tasks.
    *
    * @return {@code true} when no tasks are queued and no runner is in flight
    */

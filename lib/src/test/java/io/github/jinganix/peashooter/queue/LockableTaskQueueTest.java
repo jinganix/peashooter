@@ -24,7 +24,6 @@ import static io.github.jinganix.peashooter.utils.TestUtils.uncheckedRun;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -49,7 +48,8 @@ class LockableTaskQueueTest {
 
   @Test
   @DisplayName("should discard all pending tasks when lock failure reschedule is rejected")
-  void shouldDiscardAllPendingTasksWhenLockFailureRescheduleIsRejected() throws InterruptedException {
+  void shouldDiscardAllPendingTasksWhenLockFailureRescheduleIsRejected()
+      throws InterruptedException {
     // Given
     LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
     when(taskQueue.tryLock(any())).thenReturn(false);
@@ -162,6 +162,22 @@ class LockableTaskQueueTest {
 
     // When
     taskQueue.execute(DirectExecutor.INSTANCE, executed::countDown);
+
+    // Then
+    awaitCountDown(executed);
+  }
+
+  @Test
+  @DisplayName("should reschedule on async executor when tryLock fails then succeeds")
+  void shouldRescheduleOnAsyncExecutorWhenTryLockFailsThenSucceeds() {
+    // Given
+    LockableTaskQueue taskQueue = spy(LockableTaskQueue.class);
+    AtomicInteger tryLockCalls = new AtomicInteger();
+    when(taskQueue.tryLock(any())).thenAnswer(inv -> tryLockCalls.getAndIncrement() > 0);
+    CountDownLatch executed = new CountDownLatch(1);
+
+    // When
+    taskQueue.execute(newSingleThreadExecutor(), executed::countDown);
 
     // Then
     awaitCountDown(executed);

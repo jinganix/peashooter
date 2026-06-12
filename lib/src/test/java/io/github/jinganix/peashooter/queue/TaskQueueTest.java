@@ -24,7 +24,6 @@ import static io.github.jinganix.peashooter.utils.TestUtils.uncheckedRun;
 import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -266,7 +265,8 @@ class TaskQueueTest {
 
   @Test
   @DisplayName("should discard only the failing submit when queue is idle after prior work")
-  void shouldDiscardOnlyTheFailingSubmitWhenQueueIsIdleAfterPriorWork() throws InterruptedException {
+  void shouldDiscardOnlyTheFailingSubmitWhenQueueIsIdleAfterPriorWork()
+      throws InterruptedException {
     // Given
     TaskQueue taskQueue = new TaskQueue();
     AtomicInteger completed = new AtomicInteger(0);

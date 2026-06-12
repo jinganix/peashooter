@@ -78,7 +78,8 @@ public final class W3CTraceContext {
   /**
    * Builds a {@link Span} representing the remote parent described by {@code traceparent}.
    *
-   * <p>Use as the parent when creating a local child, e.g. {@code new Span(tracer, extractParent(h))}.
+   * <p>Use as the parent when creating a local child, e.g. {@code new Span(tracer,
+   * extractParent(h))}.
    *
    * @param traceparent header value
    * @return remote parent span (root of the local chain, carrying upstream ids)
