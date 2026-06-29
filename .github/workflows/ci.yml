@@ -15,7 +15,7 @@ jobs:
     outputs:
       skip: ${{ steps.check-skip.outputs.skip }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -50,7 +50,7 @@ jobs:
         jdk: [25]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup redis on Linux
         if: matrix.os == 'ubuntu-latest'
@@ -87,7 +87,7 @@ jobs:
     needs: [build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup JDK
         uses: actions/setup-java@v5
@@ -115,7 +115,7 @@ jobs:
       ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.NEXUS_REPO_USERNAME }}
       ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.NEXUS_REPO_PASSWORD }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Skip release version
         run: |

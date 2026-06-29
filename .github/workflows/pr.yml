@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: "${{ !startsWith(github.event.pull_request.title, 'chore: release') && !startsWith(github.event.pull_request.title, 'chore: bump version to') }}"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: wagoid/commitlint-github-action@v6
@@ -29,7 +29,7 @@ jobs:
         jdk: [25]
       fail-fast: false
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup redis on Linux
         if: matrix.os == 'ubuntu-latest'
