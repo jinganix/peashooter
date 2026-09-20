@@ -37,4 +37,18 @@ public interface TraceCallback {
    * @param e if any {@link Exception} is thrown by task
    */
   void afterCall(Span span, Exception e);
+
+  /**
+   * After task called, including {@link Error}s.
+   *
+   * <p>Default implementation forwards {@link Exception}s to {@link #afterCall(Span, Exception)}
+   * and reports {@code null} otherwise, so existing implementations keep working unchanged.
+   * Override to observe {@link Error}s thrown by tasks.
+   *
+   * @param span {@link Span}
+   * @param e if any {@link Throwable} is thrown by task
+   */
+  default void afterCall(Span span, Throwable e) {
+    afterCall(span, e instanceof Exception ex ? ex : null);
+  }
 }
