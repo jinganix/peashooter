@@ -1,0 +1,25 @@
+name: PUBLISH_DEPLOYMENT
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploymentId:
+        description: 'Central Portal deployment id to publish'
+        required: true
+
+jobs:
+  publish:
+    name: Publish deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish deployment to Maven Central
+        run: |
+          code=$(curl -s -o /tmp/publish_response.txt -w "%{http_code}" \
+            -u "${{ secrets.NEXUS_REPO_USERNAME }}:${{ secrets.NEXUS_REPO_PASSWORD }}" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/deployment/${{ github.event.inputs.deploymentId }}")
+          echo "HTTP status: ${code}"
+          cat /tmp/publish_response.txt
+          if [ "${code}" != "204" ]; then
+            echo "ERROR: expected HTTP 204"
+            exit 1
+          fi
