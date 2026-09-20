@@ -58,10 +58,13 @@ public class TraceRunnable implements Runnable {
     Span span = createSpan();
     tracer.setSpan(span);
     tracer.beforeCall(span);
-    Exception error = null;
+    Throwable error = null;
     try {
       this.delegate.run();
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
+      error = e;
+      throw e;
+    } catch (Error e) {
       error = e;
       throw e;
     } finally {
