@@ -54,10 +54,13 @@ public class TraceCallable<V> implements Callable<V> {
     Span span = new Span(tracer, this.parent);
     tracer.setSpan(span);
     tracer.beforeCall(span);
-    Exception error = null;
+    Throwable error = null;
     try {
       return this.delegate.call();
     } catch (Exception e) {
+      error = e;
+      throw e;
+    } catch (Error e) {
       error = e;
       throw e;
     } finally {

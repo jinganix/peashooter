@@ -44,6 +44,24 @@ class OrderedSpanTest {
   }
 
   @Test
+  @DisplayName("should force an explicit trace id even when parent is set")
+  void shouldForceAnExplicitTraceIdEvenWhenParentIsSet() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+    Span parent = new Span("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", null);
+
+    // When
+    OrderedSpan span =
+        new OrderedSpan("cccccccccccccccccccccccccccccccc", tracer, parent, "key", true);
+
+    // Then
+    assertThat(span.getTraceId()).isEqualTo("cccccccccccccccccccccccccccccccc");
+    assertThat(span.getParent()).isEqualTo(parent);
+    assertThat(span.getSpanId()).matches("[0-9a-f]{16}");
+    assertThat(OrderedSpan.invokedBy(span, "key")).isTrue();
+  }
+
+  @Test
   @DisplayName("should return false when span is null")
   void shouldReturnFalseWhenSpanIsNull() {
     // When / Then

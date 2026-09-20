@@ -65,6 +65,22 @@ class SpanTest {
   }
 
   @Test
+  @DisplayName("should force an explicit trace id even when parent is set")
+  void shouldForceAnExplicitTraceIdEvenWhenParentIsSet() {
+    // Given
+    Span parent = new Span("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", null);
+
+    // When
+    Span span = new Span("cccccccccccccccccccccccccccccccc", new DefaultTracer(), parent);
+
+    // Then
+    assertThat(span.getTraceId()).isEqualTo("cccccccccccccccccccccccccccccccc");
+    assertThat(span.getParent()).isEqualTo(parent);
+    assertThat(span.getSpanId()).matches("[0-9a-f]{16}");
+    assertThat(span.isRoot()).isFalse();
+  }
+
+  @Test
   @DisplayName("should be root when parent is null")
   void shouldBeRootWhenParentIsNull() {
     // When

@@ -46,6 +46,27 @@ public class OrderedTraceRunnable extends TraceRunnable implements RejectionAwar
     this.span = new OrderedSpan(this.tracer, this.parent, key, sync);
   }
 
+  /**
+   * Constructor that forces {@code traceId} on the installed {@link OrderedSpan}.
+   *
+   * <p>See {@link OrderedSpan#OrderedSpan(String, TraceIdGenerator, Span, String, boolean)}: the
+   * forced id wins over any id carried by the span active at construction time, while the parent
+   * link is preserved.
+   *
+   * @param tracer {@link Tracer}, also used for the new span id
+   * @param traceId forced trace id, kept as-is
+   * @param key per-key ordering identifier
+   * @param sync {@code true} for {@link
+   *     io.github.jinganix.peashooter.executor.OrderedTraceExecutor} sync paths; {@code false} for
+   *     async
+   * @param delegate {@link Runnable}
+   */
+  public OrderedTraceRunnable(
+      Tracer tracer, String traceId, String key, boolean sync, Runnable delegate) {
+    super(tracer, delegate);
+    this.span = new OrderedSpan(traceId, this.tracer, this.parent, key, sync);
+  }
+
   @Override
   public Span createSpan() {
     return this.span;

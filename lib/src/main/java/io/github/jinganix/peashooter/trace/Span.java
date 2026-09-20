@@ -55,6 +55,26 @@ public class Span {
   }
 
   /**
+   * Constructor with a forced trace id.
+   *
+   * <p>Unlike {@link #Span(TraceIdGenerator, Span)}, the given {@code traceId} always wins, even
+   * when {@code parent} is set. The parent link is kept (reentrant detection and chain walking
+   * still work); only {@code nextSpanId()} is taken from {@code generator}. Use this to continue an
+   * externally provided trace (e.g. an inbound {@code traceparent} header or a request id from
+   * another propagation mechanism) on a worker thread whose {@link
+   * io.github.jinganix.peashooter.Tracer} holds a different span.
+   *
+   * @param traceId forced trace id, kept as-is
+   * @param generator {@link TraceIdGenerator} used only for the new span id
+   * @param parent parent {@link Span}, kept for chain linkage
+   */
+  public Span(String traceId, TraceIdGenerator generator, Span parent) {
+    this.parent = parent;
+    this.traceId = traceId;
+    this.spanId = generator.nextSpanId();
+  }
+
+  /**
    * Get the trace id.
    *
    * @return trace id
