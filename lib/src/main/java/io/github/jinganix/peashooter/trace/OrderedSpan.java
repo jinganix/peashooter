@@ -50,6 +50,26 @@ public class OrderedSpan extends Span {
   }
 
   /**
+   * Constructor with a forced trace id.
+   *
+   * <p>See {@link Span#Span(String, TraceIdGenerator, Span)}: the given {@code traceId} always
+   * wins, even when {@code parent} carries a different one, while the parent link (and therefore
+   * {@link #invokedBy(Span, String)}) is preserved.
+   *
+   * @param traceId forced trace id, kept as-is
+   * @param generator {@link TraceIdGenerator} used only for the new span id
+   * @param parent parent {@link Span}, kept for chain linkage
+   * @param key trace key
+   * @param sync true if a sync call
+   */
+  public OrderedSpan(
+      String traceId, TraceIdGenerator generator, Span parent, String key, boolean sync) {
+    super(traceId, generator, parent);
+    this.key = key;
+    this.sync = sync;
+  }
+
+  /**
    * Whether a nested {@code executeSync}/{@code supply} for {@code key} may bypass the per-key
    * queue and run inline on the current thread.
    *
