@@ -17,17 +17,84 @@ Run library tests only:
 ./gradlew :lib:test
 ```
 
+Generate coverage reports for all subprojects with tests:
+
+```bash
+./gradlew coverageReport
+```
+
+JaCoCo XML reports are written under each Java module's `build/reports/jacoco/test/`.
+
 ## Conventional Commits
 
-Check if your commit messages meet the [conventional commit format](https://conventionalcommits.org).
+Commit messages must meet the [conventional commit format](https://conventionalcommits.org):
 
-The conventional config extends from [config-conventional](https://github.com/conventional-changelog/commitlint/tree/master/%40commitlint/config-conventional).
+```
+<type>[optional scope]: <subject>
+
+[optional body, explain why rather than what]
+```
+
+- **subject**: imperative, short; header total length ≤ 100 characters.
+- **scope**: optional; when present, use one of the table below.
+- PR titles must follow the same format (validated by workflow).
+
+### type
+
+| type | When to use |
+|------|-------------|
+| `feat` | New feature or module |
+| `fix` | Bug fix |
+| `docs` | Documentation only |
+| `style` | Formatting, no semantic change |
+| `refactor` | Restructuring, no semantic change |
+| `perf` | Performance related |
+| `test` | Tests only |
+| `build` | Build, Gradle, dependency versions |
+| `ci` | CI, git hooks |
+| `chore` | Miscellaneous maintenance |
+| `revert` | Revert a previous commit |
+
+### scope
+
+| scope | Area |
+|-------|------|
+| `deps` | Third-party dependency bumps |
+| `lib` | `lib/` ordered executor library |
+| `docs` | `README.md`, `README.zh.md`, `CONTRIBUTING.md` |
+| `ci` | `.githooks/`, `scripts/`, `.github/` |
+| `build` | `build.gradle.kts`, `settings.gradle.kts`, Gradle wrapper |
+
+### Examples
+
+```
+feat(lib): support multi-key ordered execution
+
+fix(deps): update all non-major dependencies
+
+chore: bump version to 0.0.11-SNAPSHOT
+```
 
 ## Create a commit
 
-Run `npm install` in root directory, then you will get [Commitizen](https://github.com/commitizen-tools/commitizen) installed.
+No npm install is needed at the repository root; git hooks and release scripts are plain shell + Gradle.
 
-Use `npm run cz` or `npx cz` to create a commit.
+## Local git hooks (shell, no npm)
+
+Clone or update, then enable once (by a human, not by Agent):
+
+```bash
+./scripts/setup-git-hooks.sh
+```
+
+Trial run:
+
+```bash
+echo "feat(lib): test message" | ./scripts/validate-commit-msg.sh /dev/stdin
+```
+
+- `commit-msg` validates the message via `scripts/validate-commit-msg.sh`.
+- `pre-commit` / `pre-push` refuse direct commits/pushes to `master`.
 
 ## Workflow validation
 

@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Enter release version, eg: 0.0.1'
+        description: 'Release version (x.y.z). Required when republishing only.'
         required: false
+      publish_only:
+        description: 'Republish only (tag must already exist)'
+        type: boolean
+        default: false
 
 jobs:
   prepare:
@@ -24,8 +28,15 @@ jobs:
         run: |
           current_version=$(grep -m1 'version =' gradle.properties | grep -oE '([0-9]+\.[0-9]+\.[0-9]+)')
           input_version=${{ github.event.inputs.version }}
-          echo "Current version: ${current_version}, Input version: ${input_version}"
-          if [[ -n "${input_version}" ]]; then
+          publish_only=${{ github.event.inputs.publish_only }}
+          echo "Current version: ${current_version}, Input version: ${input_version}, Publish only: ${publish_only}"
+          if [[ "${publish_only}" == "true" ]]; then
+            if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: publish_only requires a valid version number (x.y.z)"
+              exit 1
+            fi
+            release_version=${input_version}
+          elif [[ -n "${input_version}" ]]; then
             if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "ERROR: Invalid version number ${input_version}. Please use format x.y.z"
               exit 1
@@ -47,7 +58,12 @@ jobs:
 
       - name: Check tag existence
         run: |
-          if [ $(git tag -l v"${{ env.release_version }}") ]; then
+          if [[ "${{ github.event.inputs.publish_only }}" == "true" ]]; then
+            if ! [ $(git tag -l v"${{ env.release_version }}") ]; then
+              echo "ERROR: Tag v${{ env.release_version }} does not exist"
+              exit 1
+            fi
+          elif [ $(git tag -l v"${{ env.release_version }}") ]; then
             echo "ERROR: Tag v${{ env.release_version }} already exists"
             exit 1
           fi
@@ -66,6 +82,7 @@ jobs:
   update-release:
     name: Update release version
     needs: [prepare]
+    if: github.event.inputs.publish_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
@@ -87,6 +104,12 @@ jobs:
           fetch-depth: 0
           ref: master
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
       - name: Commit release version
         run: |
           release_version=${{ env.release_version }}
@@ -94,7 +117,8 @@ jobs:
           git config --global user.name "github-actions"
           if [[ $(grep -m1 'version =' gradle.properties) == *-SNAPSHOT ]]; then
             sed -i "s/version = .*/version = ${release_version}/" gradle.properties
-            git add gradle.properties
+            node scripts/sync-versions.mjs --all
+            git add gradle.properties README.md README.zh.md
             git commit -m "chore: release ${release_version}" --quiet
           fi
 
@@ -125,6 +149,7 @@ jobs:
   bump-snapshot:
     name: Bump snapshot version
     needs: [update-release]
+    if: github.event.inputs.publish_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
@@ -156,6 +181,12 @@ jobs:
           fi
           echo "release_commit=${release_commit}" >> "${GITHUB_ENV}"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
       - name: Bump snapshot version
         run: |
           release_version=${{ env.release_version }}
@@ -169,8 +200,8 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           sed -i "s/version = .*/version = ${snapshot_version}-SNAPSHOT/" gradle.properties
-          sed -i -E "s/\b([:>])[0-9]+\.[0-9]+\.[0-9]+\b/\1${release_version}/g" README.md
-          git add gradle.properties
+          node scripts/sync-versions.mjs --consumer-version "${release_version}"
+          git add gradle.properties README.md README.zh.md
           git commit -m "chore: bump version to ${snapshot_version}-SNAPSHOT"
 
       - name: Create pull request

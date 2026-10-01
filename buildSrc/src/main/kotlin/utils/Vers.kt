@@ -33,7 +33,7 @@ object Vers {
   lateinit var versionGoogleJavaFormat: String
   lateinit var versionGradleMavenPublishPlugin: String
   lateinit var versionGradleVersionsPlugin: String
-  lateinit var versionJacocoAgent: String
+  lateinit var versionJacoco: String
   lateinit var versionJupiter: String
   lateinit var versionMockitoCore: String
   lateinit var versionMockitoInline: String

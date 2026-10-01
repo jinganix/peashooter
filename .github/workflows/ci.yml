@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  commitlint:
+  commit-msg:
     name: Check Commit Message
     runs-on: ubuntu-latest
     outputs:
@@ -19,10 +19,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: package.json
-          failOnWarnings: true
+      - name: Validate commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE="${{ github.event.before }}"
+          validate_one() {
+            git log -1 --pretty=format:%B "$1" > /tmp/commit-msg.txt
+            echo "--- $1: $(head -1 /tmp/commit-msg.txt)"
+            ./scripts/validate-commit-msg.sh /tmp/commit-msg.txt
+          }
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            validate_one HEAD
+          else
+            for sha in $(git rev-list "$BEFORE..${{ github.sha }}"); do
+              validate_one "$sha"
+            done
+          fi
 
       - name: Skip when release
         id: check-skip
@@ -41,13 +54,12 @@ jobs:
 
   build:
     name: Build
-    needs: [commitlint]
-    if: ${{ needs.commitlint.outputs.skip != 'true' }}
+    needs: [commit-msg]
+    if: ${{ needs.commit-msg.outputs.skip != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        jdk: [25]
       fail-fast: false
     steps:
       - uses: actions/checkout@v7
@@ -65,11 +77,11 @@ jobs:
           brew services start redis
           until redis-cli ping 2>/dev/null | grep -q PONG; do sleep 1; done
 
-      - name: Setup JDK ${{ matrix.jdk }}
+      - name: Setup JDK 25
         uses: actions/setup-java@v6
         with:
-          distribution: 'zulu'
-          java-version: ${{ matrix.jdk }}
+          distribution: zulu
+          java-version: 25
 
       - name: Setup Node.js
         uses: actions/setup-node@v7

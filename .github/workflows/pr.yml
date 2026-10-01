@@ -7,26 +7,39 @@ on:
       - master
 
 jobs:
-  commitlint:
+  commit-msg:
     name: Check Commit Message
     runs-on: ubuntu-latest
-    if: "${{ !startsWith(github.event.pull_request.title, 'chore: release') && !startsWith(github.event.pull_request.title, 'chore: bump version to') }}"
+    if: "${{ github.event_name != 'pull_request' || (github.event.pull_request.title != '' && !startsWith(github.event.pull_request.title, 'chore: release') && !startsWith(github.event.pull_request.title, 'chore: bump version to')) }}"
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: package.json
-          failOnWarnings: true
+      - name: Validate commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "${{ github.event.pull_request.title }}" > /tmp/pr-title.txt
+            ./scripts/validate-commit-msg.sh /tmp/pr-title.txt
+            RANGE="${{ github.event.pull_request.base.sha }}..HEAD"
+          else
+            RANGE="${{ github.event.merge_group.base_sha }}..HEAD"
+          fi
+          for sha in $(git rev-list "$RANGE"); do
+            git log -1 --pretty=format:%B "$sha" > /tmp/commit-msg.txt
+            echo "--- $sha: $(head -1 /tmp/commit-msg.txt)"
+            ./scripts/validate-commit-msg.sh /tmp/commit-msg.txt
+          done
+
   build:
     name: Build
-    needs: [commitlint]
+    needs: [commit-msg]
+    if: always() && (needs.commit-msg.result == 'success' || needs.commit-msg.result == 'skipped')
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        jdk: [25]
       fail-fast: false
     steps:
       - uses: actions/checkout@v7
@@ -44,11 +57,11 @@ jobs:
           brew services start redis
           until redis-cli ping 2>/dev/null | grep -q PONG; do sleep 1; done
 
-      - name: Setup JDK ${{ matrix.jdk }}
+      - name: Setup JDK 25
         uses: actions/setup-java@v6
         with:
-          distribution: 'zulu'
-          java-version: ${{ matrix.jdk }}
+          distribution: zulu
+          java-version: 25
 
       - name: Setup Node.js
         uses: actions/setup-node@v7

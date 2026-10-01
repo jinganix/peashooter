@@ -1,0 +1,15 @@
+---
+description: BDD test conventions for Java test files
+globs: **/src/test/java/**/*.java
+alwaysApply: false
+---
+
+# Java test conventions
+
+Follow `ai-kit/TEST_CONVENTIONS.md`.
+
+- `@DisplayName("should ... when ...")` — lowercase start.
+- Method names: `shouldReturnXWhenY` / `shouldThrowXWhenY`.
+- Prefer flat tests; max one `@Nested` level.
+- Use `// Given`, `// When`, `// Then` in non-trivial tests.
+- AssertJ for assertions; Mockito when isolating collaborators.
