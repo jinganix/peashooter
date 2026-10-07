@@ -2,8 +2,8 @@
 
 ## Development docs
 
-- Java code: [ai-kit/CODE_CONVENTIONS.md](ai-kit/CODE_CONVENTIONS.md)
-- Tests: [ai-kit/TEST_CONVENTIONS.md](ai-kit/TEST_CONVENTIONS.md)
+- Java code: [docs/ai-conventions/CODE_CONVENTIONS.md](docs/ai-conventions/CODE_CONVENTIONS.md)
+- Tests: [docs/ai-conventions/TEST_CONVENTIONS.md](docs/ai-conventions/TEST_CONVENTIONS.md)
 
 Run the full check from the repository root:
 
@@ -23,7 +23,8 @@ Generate coverage reports for all subprojects with tests:
 ./gradlew coverageReport
 ```
 
-JaCoCo XML reports are written under each Java module's `build/reports/jacoco/test/`.
+The aggregated JaCoCo XML report is written to `aggregation/build/reports/jacoco/coverage/coverage.xml`
+(the same file CI uploads to Codecov).
 
 ## Conventional Commits
 

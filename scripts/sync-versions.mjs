@@ -24,7 +24,13 @@ function parseArgs() {
   let consumerVersion = null;
   let syncConsumerFiles = false;
   for (let index = 0; index < args.length; index++) {
-    if (args[index] === "--consumer-version" && args[index + 1]) {
+    if (args[index] === "--consumer-version") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        console.error("sync-versions: --consumer-version requires a value");
+        process.exitCode = 1;
+        return { consumerVersion: null, syncConsumerFiles: false, invalid: true };
+      }
       consumerVersion = args[++index];
       syncConsumerFiles = true;
     } else if (args[index] === "--all") {
@@ -34,40 +40,78 @@ function parseArgs() {
   return { consumerVersion, syncConsumerFiles };
 }
 
+// x.y.z plus an optional fourth segment and optional pre-release/build suffixes
+// (e.g. 0.0.11, 0.0.11.1, 1.0.0-rc.1, 1.0.0+build.5). The old x.y.z-only pattern matched a
+// prefix of longer versions (silently corrupting 0.0.11.1 into <target>.1) and missed
+// suffixed ones entirely while still reporting success.
+const VERSION_PATTERN = "[0-9]+\\.[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:[-+][0-9A-Za-z.-]+)?";
+
 function syncReadme(readmePath, version) {
-  let content = readFileSync(readmePath, "utf8");
-  const original = content;
+  const content = readFileSync(readmePath, "utf8");
 
-  content = content.replace(
-    /(io\.github\.jinganix\.peashooter:peashooter:)[0-9]+\.[0-9]+\.[0-9]+/g,
-    `$1${version}`,
+  const gradlePattern = new RegExp(
+    `(io\\.github\\.jinganix\\.peashooter:peashooter:)${VERSION_PATTERN}`,
+    "g",
   );
-  content = content.replace(
-    /(<artifactId>peashooter<\/artifactId>\s*\n\s*<version>)[0-9]+\.[0-9]+\.[0-9]+(<\/version>)/g,
-    `$1${version}$2`,
+  const mavenPattern = new RegExp(
+    `(<artifactId>peashooter<\\/artifactId>\\s*\n\\s*<version>)${VERSION_PATTERN}(<\\/version>)`,
+    "g",
   );
-
-  if (content !== original) {
-    writeFileSync(readmePath, content);
-    return true;
+  // Count replacements in one pass per pattern (a /g test() would be lastIndex-stateful).
+  let matches = 0;
+  const updated = content
+    .replace(gradlePattern, (match, prefix) => {
+      matches++;
+      return `${prefix}${version}`;
+    })
+    .replace(mavenPattern, (match, prefix, suffix) => {
+      matches++;
+      return `${prefix}${version}${suffix}`;
+    });
+  if (matches === 0) {
+    return "missing";
   }
-  return false;
+
+  if (updated !== content) {
+    writeFileSync(readmePath, updated);
+    return "changed";
+  }
+  return "unchanged";
 }
 
 const devVersion = readGradleVersion();
-const { consumerVersion, syncConsumerFiles } = parseArgs();
+const { consumerVersion, syncConsumerFiles, invalid } = parseArgs();
+if (invalid) {
+  process.exit(1);
+}
+if (consumerVersion !== null) {
+  const fullMatch = new RegExp(`^${VERSION_PATTERN}$`);
+  if (!fullMatch.test(consumerVersion)) {
+    console.error(`sync-versions: invalid --consumer-version '${consumerVersion}'`);
+    process.exit(1);
+  }
+}
 const targetVersion = consumerVersion ?? devVersion;
 
 let anyChanged = false;
+let anyMissing = false;
 if (syncConsumerFiles) {
   for (const readmePath of readmePaths) {
-    if (syncReadme(readmePath, targetVersion)) {
+    const status = syncReadme(readmePath, targetVersion);
+    if (status === "changed") {
       anyChanged = true;
+    } else if (status === "missing") {
+      console.error(`sync-versions: no version reference found in ${readmePath}`);
+      anyMissing = true;
     }
   }
 }
 
-if (anyChanged) {
+if (anyMissing) {
+  // A requested sync that matches nothing is a format drift (or a broken pattern), never a
+  // successful no-op: fail loudly instead of reporting "unchanged".
+  process.exitCode = 1;
+} else if (anyChanged) {
   console.log(`sync-versions: consumer ${targetVersion}, dev ${devVersion}`);
 } else {
   console.log(`sync-versions: dev ${devVersion} (unchanged)`);

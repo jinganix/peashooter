@@ -18,7 +18,25 @@
 
 package io.github.jinganix.peashooter;
 
-/** Stat execution, mainly for yield check. */
+/**
+ * Per-batch execution statistics, mainly for yield checks.
+ *
+ * <p>Lifecycle per runner invocation holding the lock: {@link #reset()} once after the lock is
+ * acquired (a runner that fails to acquire never resets, so it cannot clear another batch's
+ * counters), {@link #record()} after each executed task, reads in {@code shouldYield}. An async
+ * handoff continuation owns the same lock hold but starts a new counting window. Instances are used
+ * by one queue runner at a time but may hand off across threads; implementations must ensure the
+ * handoff is visible across threads without relying on the backing {@link
+ * java.util.concurrent.Executor} for happens-before, which custom {@code Executor}s are not
+ * required to provide.
+ *
+ * <p>Throwing contract: implementations must not throw for control flow. An {@link Exception} is
+ * contained (a throwing {@code reset} reschedules the runner, a throwing {@code record}/{@code
+ * shouldYield} ends the batch; all are logged by {@link
+ * io.github.jinganix.peashooter.queue.LockableTaskQueue}). An {@link Error} stays loud and
+ * fail-open: the runner claim is dropped, the backlog is preserved for the next explicit submit,
+ * and no automatic retry is scheduled.
+ */
 public interface ExecutionStats {
 
   /** Reset stats. */
@@ -26,4 +44,15 @@ public interface ExecutionStats {
 
   /** Record stats. */
   void record();
+
+  /**
+   * Execution count since last {@link #reset}.
+   *
+   * <p>Saturates at {@link Integer#MAX_VALUE} instead of overflowing: never compare with {@code ==
+   * N}, test {@code >= N}, because a saturated counter stays at {@code MAX_VALUE} and an equality
+   * check would never yield again.
+   *
+   * @return executions recorded in the current batch
+   */
+  int getExecutionCount();
 }

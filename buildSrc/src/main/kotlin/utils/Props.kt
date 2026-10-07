@@ -19,55 +19,23 @@
 package utils
 
 import org.gradle.api.Project
-import kotlin.reflect.KMutableProperty
-import kotlin.reflect.full.memberProperties
+import org.gradle.kotlin.dsl.create
+import org.gradle.kotlin.dsl.findByType
 
-object Props {
-  private var initialized = false
+/**
+ * Per-project build coordinates. Registered as a project extension (see [props]), so every
+ * project owns an independent immutable instance: no shared mutable state, safe under
+ * `org.gradle.parallel=true` and the configuration cache.
+ */
+open class PropsExtension(project: Project) {
+  private val required = project.requiredValues(listOf("group", "version"), "Props", "values")
 
-  lateinit var group: String
-  lateinit var version: String
-  var jacocoMinCoverage: Double = 1.0
-  var releaseRepo: String = ""
-  var snapshotRepo: String = ""
-
-  fun initialize(project: Project) {
-    if (initialized) {
-      return
-    }
-    this::class.memberProperties.forEach {
-      val key = it.name
-      if (project.hasProperty(key)) {
-        if (it is KMutableProperty<*>) {
-          val value = project.property(key) as String
-          when {
-            (it.returnType.classifier == Int::class) -> {
-              it.setter.call(this, value.toInt())
-            }
-
-            (it.returnType.classifier == Long::class) -> {
-              it.setter.call(this, value.toLong())
-            }
-
-            (it.returnType.classifier == Float::class) -> {
-              it.setter.call(this, value.toFloat())
-            }
-
-            (it.returnType.classifier == Double::class) -> {
-              it.setter.call(this, value.toDouble())
-            }
-
-            (it.returnType.classifier == Boolean::class) -> {
-              it.setter.call(this, value.toBoolean())
-            }
-
-            else -> {
-              it.setter.call(this, value)
-            }
-          }
-        }
-      }
-    }
-    initialized = true
-  }
+  val group: String by required
+  val version: String by required
+  val jacocoMinCoverage: Double =
+    project.providers.gradleProperty("jacocoMinCoverage").orNull?.toDouble() ?: 0.9
 }
+
+/** Returns this project's [PropsExtension], creating and freezing it on first call. */
+fun Project.props(): PropsExtension =
+  extensions.findByType<PropsExtension>() ?: extensions.create("props", this)

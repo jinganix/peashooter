@@ -6,7 +6,7 @@ alwaysApply: false
 
 # Java test conventions
 
-Follow `ai-kit/TEST_CONVENTIONS.md`.
+Follow `docs/ai-conventions/TEST_CONVENTIONS.md`.
 
 - `@DisplayName("should ... when ...")` — lowercase start.
 - Method names: `shouldReturnXWhenY` / `shouldThrowXWhenY`.

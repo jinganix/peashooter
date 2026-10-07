@@ -13,10 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish deployment to Maven Central
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ github.event.inputs.deploymentId }}
+          NEXUS_REPO_USERNAME: ${{ secrets.NEXUS_REPO_USERNAME }}
+          NEXUS_REPO_PASSWORD: ${{ secrets.NEXUS_REPO_PASSWORD }}
         run: |
+          set -euo pipefail
+          if ! [[ "${DEPLOYMENT_ID}" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "ERROR: invalid deploymentId"
+            exit 1
+          fi
+          umask 077
+          netrc_file="$(mktemp)"
+          trap 'rm -f "${netrc_file}"' EXIT
+          {
+            echo "machine central.sonatype.com"
+            echo "login ${NEXUS_REPO_USERNAME}"
+            echo "password ${NEXUS_REPO_PASSWORD}"
+          } > "${netrc_file}"
           code=$(curl -s -o /tmp/publish_response.txt -w "%{http_code}" \
-            -u "${{ secrets.NEXUS_REPO_USERNAME }}:${{ secrets.NEXUS_REPO_PASSWORD }}" \
-            -X POST "https://central.sonatype.com/api/v1/publisher/deployment/${{ github.event.inputs.deploymentId }}")
+            --netrc-file "${netrc_file}" \
+            -X POST "https://central.sonatype.com/api/v1/publisher/deployment/${DEPLOYMENT_ID}")
           echo "HTTP status: ${code}"
           cat /tmp/publish_response.txt
           if [ "${code}" != "204" ]; then

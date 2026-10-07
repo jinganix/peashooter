@@ -18,25 +18,56 @@
 
 package io.github.jinganix.peashooter.utils;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class SequentialTask implements Runnable {
 
-  private final AtomicBoolean lock;
+  private final AtomicReference<Thread> guard;
 
   private final Runnable delegate;
 
-  public SequentialTask(AtomicBoolean lock, Runnable delegate) {
-    this.lock = lock;
-    this.delegate = delegate;
+  private volatile String key;
+
+  public SequentialTask(AtomicReference<Thread> guard, Runnable delegate) {
+    this.guard = Objects.requireNonNull(guard, "guard");
+    this.delegate = Objects.requireNonNull(delegate, "delegate");
+  }
+
+  /** Attaches key context for failure diagnostics; may be called once before use. */
+  public SequentialTask withKey(String key) {
+    this.key = key;
+    return this;
   }
 
   @Override
   public void run() {
-    if (!lock.compareAndSet(false, true)) {
-      throw new RuntimeException("Task is running concurrently");
+    Thread current = Thread.currentThread();
+    if (!guard.compareAndSet(null, current)) {
+      Thread holding = guard.get();
+      throw new RuntimeException(
+          "Task is running concurrently"
+              + (key != null ? " for key '" + key + "'" : "")
+              + " on thread '"
+              + current.getName()
+              + "', owned by '"
+              + (holding != null ? holding.getName() : "unknown")
+              + "'");
     }
-    this.delegate.run();
-    lock.set(false);
+    try {
+      this.delegate.run();
+    } finally {
+      if (!guard.compareAndSet(current, null)) {
+        // Unreachable when the delegate runs inline on this thread: the guard still holds
+        // us. Reset loudly instead of clobbering another holder or leaking the guard.
+        guard.set(null);
+        throw new IllegalStateException(
+            "SequentialTask guard corrupted on thread '"
+                + current.getName()
+                + "', expected owner '"
+                + current.getName()
+                + "'");
+      }
+    }
   }
 }

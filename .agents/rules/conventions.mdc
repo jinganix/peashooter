@@ -1,0 +1,19 @@
+---
+description: Project conventions for Java production code and tests
+alwaysApply: true
+---
+
+# peashooter conventions
+
+Before editing code or tests, read the matching doc under `docs/ai-conventions/`:
+
+- Java production code: `docs/ai-conventions/CODE_CONVENTIONS.md`
+- Java tests: `docs/ai-conventions/TEST_CONVENTIONS.md`
+
+Key rules:
+
+- Java control flow always uses braced blocks on their own line.
+- Tests are behavior-first: `should ... when ...`; at most one `@Nested` level.
+- Test package mirrors source package under `lib/src/test/java/io/github/jinganix/peashooter/`.
+
+After Java changes: `./gradlew spotlessApply && ./gradlew build`.

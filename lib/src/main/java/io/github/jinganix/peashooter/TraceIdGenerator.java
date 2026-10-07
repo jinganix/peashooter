@@ -18,24 +18,31 @@
 
 package io.github.jinganix.peashooter;
 
-import io.github.jinganix.peashooter.trace.TraceIds;
-
 /** Generator for W3C-compatible trace and span ids. */
 public interface TraceIdGenerator {
 
   /**
    * Generate a 128-bit trace id (32 lowercase hex characters).
    *
-   * @return trace id
+   * <p><b>MUST be globally unique:</b> {@link io.github.jinganix.peashooter.trace.SpanIdKey
+   * SpanIdKey} compares only trace and span ids, so reusing an id pair for distinct spans makes
+   * their keys compare equal and collide as {@link java.util.Map} keys. Never return all zeros or a
+   * constant in tests that build more than one span with the same ids.
+   *
+   * @return trace id, globally unique and W3C-valid
    */
-  String nextId();
+  String nextTraceId();
 
   /**
    * Generate a 64-bit span id (16 lowercase hex characters).
    *
-   * @return span id
+   * <p>Intentionally abstract: a custom {@code nextTraceId} silently paired with a global span id
+   * fallback would split observability, so generators must implement both explicitly.
+   *
+   * <p><b>MUST be globally unique</b> (same contract as {@link #nextTraceId}): span ids are never
+   * reused across distinct spans; see {@link io.github.jinganix.peashooter.trace.SpanIdKey}.
+   *
+   * @return span id, globally unique and W3C-valid
    */
-  default String nextSpanId() {
-    return TraceIds.nextSpanId();
-  }
+  String nextSpanId();
 }

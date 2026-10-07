@@ -24,31 +24,19 @@ import io.github.jinganix.peashooter.trace.Span;
 public interface TraceCallback {
 
   /**
-   * Before task called.
+   * Observation only: must not touch thread state. TraceScope owns the single save/restore around
+   * this callback; any pollution is restored with a warning before the delegate runs.
    *
    * @param span {@link Span}
    */
   void beforeCall(Span span);
 
   /**
-   * After task called.
+   * Observation only: must not touch thread state. TraceScope owns the single save/restore around
+   * this callback. Outcome is reported as-is: null on success, task failure otherwise.
    *
    * @param span {@link Span}
-   * @param e if any {@link Exception} is thrown by task
+   * @param e task outcome, {@code null} on success
    */
-  void afterCall(Span span, Exception e);
-
-  /**
-   * After task called, including {@link Error}s.
-   *
-   * <p>Default implementation forwards {@link Exception}s to {@link #afterCall(Span, Exception)}
-   * and reports {@code null} otherwise, so existing implementations keep working unchanged.
-   * Override to observe {@link Error}s thrown by tasks.
-   *
-   * @param span {@link Span}
-   * @param e if any {@link Throwable} is thrown by task
-   */
-  default void afterCall(Span span, Throwable e) {
-    afterCall(span, e instanceof Exception ex ? ex : null);
-  }
+  void afterCall(Span span, Throwable e);
 }

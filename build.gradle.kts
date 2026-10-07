@@ -13,33 +13,20 @@ tasks.register("publish") {
 }
 
 subprojects {
-  afterEvaluate {
-    if (tasks.findByName("publishToMavenLocal") != null) {
-      rootProject.tasks.named("publishToMavenLocal") {
-        dependsOn(tasks.named("publishToMavenLocal"))
-      }
+  plugins.withId("maven-publish") {
+    val subPublish = tasks.named("publish")
+    rootProject.tasks.named("publish") {
+      dependsOn(subPublish)
     }
-    if (tasks.findByName("publish") != null) {
-      rootProject.tasks.named("publish") {
-        dependsOn(tasks.named("publish"))
-      }
+    val subPublishToMavenLocal = tasks.named("publishToMavenLocal")
+    rootProject.tasks.named("publishToMavenLocal") {
+      dependsOn(subPublishToMavenLocal)
     }
   }
 }
 
-val jacocoProjects =
-  listOf(
-    ":lib",
-  )
-
-tasks.register("jacocoReport") {
-  group = "verification"
-  description = "Generate JaCoCo XML reports for all Java subprojects with unit tests"
-  dependsOn(jacocoProjects.map { project(it).tasks.named("jacocoTestReport") })
-}
-
 tasks.register("coverageReport") {
   group = "verification"
-  description = "Generate coverage reports for all subprojects with tests"
-  dependsOn(tasks.named("jacocoReport"))
+  description = "Generate aggregated JaCoCo coverage report (delegates to :aggregation:coverage)"
+  dependsOn(project(":aggregation").tasks.named("coverage"))
 }

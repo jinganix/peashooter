@@ -1,71 +1,55 @@
-import utils.Props.jacocoMinCoverage
 import utils.createConfiguration
-import utils.extractDependencies
 
 plugins {
   id("java")
   jacoco
 }
 
-repositories {
-  mavenLocal()
-  mavenCentral()
-  gradlePluginPortal()
-}
-
-val buildSrcDependencies = extractDependencies(file("${rootDir}/buildSrc/build.gradle.kts"))
-
-dependencies {
-  implementation(project(":lib"))
-
-  buildSrcDependencies.forEach {
-    testCompileOnly(it)
-  }
-}
-
-configurations.implementation.get().dependencies.forEach {
-  if (it is ModuleDependency) {
-    it.isTransitive = false
-  }
+// Match the tool version used by the modules that produced the exec data, so the report and
+// verification parse it with the same JaCoCo release instead of Gradle's bundled default.
+jacoco {
+  toolVersion = project.property("versionJacoco") as String
 }
 
 val incomingClassDirs = createConfiguration("incomingClassDirs", "classDirs") {
-  extendsFrom(configurations.implementation.get())
   isCanBeResolved = true
   isCanBeConsumed = false
 }
 
 val incomingSourceDirs = createConfiguration("incomingSourceDirs", "sourceDirs") {
-  extendsFrom(configurations.implementation.get())
   isCanBeResolved = true
   isCanBeConsumed = false
 }
 
 val incomingCoverageData = createConfiguration("incomingCoverageData", "coverageData") {
-  extendsFrom(configurations.implementation.get())
   isCanBeResolved = true
   isCanBeConsumed = false
 }
 
-fun generateJacocoReport(base: JacocoReportBase) {
-  base.additionalClassDirs(incomingClassDirs.incoming.artifactView {
-    lenient(true)
-  }.files.asFileTree.matching {
-  })
-  base.additionalSourceDirs(incomingSourceDirs.incoming.artifactView { lenient(true) }.files)
-  base.executionData(incomingCoverageData.incoming.artifactView { lenient(true) }.files.filter { it.exists() })
+dependencies {
+  incomingClassDirs(project(":lib"))
+  incomingSourceDirs(project(":lib"))
+  incomingCoverageData(project(":lib"))
 }
 
-val coverageVerification by tasks.registering(JacocoCoverageVerification::class) {
+fun generateJacocoReport(base: JacocoReportBase) {
+  base.additionalClassDirs(incomingClassDirs.incoming.artifactView {}.files)
+  base.additionalSourceDirs(incomingSourceDirs.incoming.artifactView {}.files)
+  base.executionData(incomingCoverageData.incoming.artifactView {}.files.filter { it.exists() })
+}
+
+val jacocoMinCoverage = BigDecimal(project.property("jacocoMinCoverage").toString())
+
+val coverageVerification = tasks.register<JacocoCoverageVerification>("coverageVerification") {
   group = "verification"
   generateJacocoReport(this)
 
   violationRules {
-    rule { limit { minimum = BigDecimal.valueOf(jacocoMinCoverage) } }
+    rule { limit { minimum = jacocoMinCoverage } }
   }
 }
 
-val coverage by tasks.registering(JacocoReport::class) {
+val coverage = tasks.register<JacocoReport>("coverage") {
   group = "verification"
   generateJacocoReport(this)
 

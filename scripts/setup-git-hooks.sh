@@ -10,10 +10,12 @@ if [ -d .husky ]; then
   echo "setup-git-hooks: refuse to enable — found .husky/ (use shell .githooks only)" >&2
   exit 1
 fi
-if ls commitlint.config.* 2>/dev/null | grep -q .; then
-  echo "setup-git-hooks: refuse to enable — found commitlint config (use shell .githooks only)" >&2
-  exit 1
-fi
+for config in commitlint.config.*; do
+  if [ -e "$config" ]; then
+    echo "setup-git-hooks: refuse to enable — found commitlint config (use shell .githooks only)" >&2
+    exit 1
+  fi
+done
 if git grep -l -e husky -e commitlint -- '*package.json' >/dev/null 2>&1; then
   echo "setup-git-hooks: refuse to enable — package.json references husky/commitlint (use shell .githooks only)" >&2
   git grep -n -e husky -e commitlint -- '*package.json' >&2 || true

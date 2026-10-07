@@ -43,7 +43,7 @@ class TraceCallableTest {
   void shouldRestoreParentSpanWhenDelegateThrowsError() {
     // Given
     DefaultTracer tracer = new DefaultTracer();
-    Span parent = new Span(tracer, null);
+    Span parent = Span.child(tracer, null);
     tracer.setSpan(parent);
     TraceCallable<Integer> traceCallable =
         new TraceCallable<>(
@@ -55,6 +55,95 @@ class TraceCallableTest {
     // When / Then
     assertThatThrownBy(traceCallable::call).isInstanceOf(OutOfMemoryError.class);
     assertThat(tracer.getSpan()).isEqualTo(parent);
+  }
+
+  @Test
+  @DisplayName("should suppress afterCall failure when delegate already failed")
+  void shouldSuppressAfterCallFailureWhenDelegateAlreadyFailed() throws Exception {
+    // Given a delegate that fails and an afterCall that also fails (parity with TraceRunnable)
+    DefaultTracer tracer = new DefaultTracer();
+    RuntimeException delegateFailure = new RuntimeException("delegate boom");
+    RuntimeException afterFailure = new RuntimeException("afterCall boom");
+    io.github.jinganix.peashooter.Tracer recording =
+        new io.github.jinganix.peashooter.Tracer() {
+          @Override
+          public Span getSpan() {
+            return tracer.getSpan();
+          }
+
+          @Override
+          public void setSpan(Span span) {
+            tracer.setSpan(span);
+          }
+
+          @Override
+          public void clearSpan() {
+            tracer.clearSpan();
+          }
+
+          @Override
+          public String nextTraceId() {
+            return tracer.nextTraceId();
+          }
+
+          @Override
+          public void beforeCall(Span span) {}
+
+          @Override
+          public void afterCall(Span span, Throwable e) {
+            throw afterFailure;
+          }
+
+          @Override
+          public String nextSpanId() {
+            return tracer.nextSpanId();
+          }
+        };
+    TraceCallable<Integer> callable =
+        new TraceCallable<>(
+            recording,
+            () -> {
+              throw delegateFailure;
+            });
+
+    // When / Then delegate failure wins, afterCall failure is suppressed
+    try {
+      callable.call();
+      assertThat(false).as("expected delegate failure").isTrue();
+    } catch (RuntimeException e) {
+      assertThat(e).isEqualTo(delegateFailure);
+      assertThat(e.getSuppressed()).containsExactly(afterFailure);
+    }
+    tracer.clearSpan();
+  }
+
+  @Test
+  @DisplayName("should restore interrupt flag when delegate throws InterruptedException")
+  void shouldRestoreInterruptFlagWhenDelegateThrowsInterruptedException() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+    InterruptedException interrupted = new InterruptedException("sleep interrupted");
+    TraceCallable<Integer> traceCallable =
+        new TraceCallable<>(
+            tracer,
+            () -> {
+              throw interrupted;
+            });
+
+    // When
+    try {
+      traceCallable.call();
+    } catch (InterruptedException e) {
+      // expected
+    } catch (Exception e) {
+      throw new AssertionError("expected InterruptedException", e);
+    }
+
+    // Then interrupt status must be restored (sleep-style contract)
+    assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    // cleanup for other tests
+    Thread.interrupted();
+    assertThat(tracer.getSpan()).isNull();
   }
 
   @Test
@@ -71,5 +160,75 @@ class TraceCallableTest {
 
     // When / Then
     assertThatThrownBy(traceCallable::call).isEqualTo(exception);
+  }
+
+  @Test
+  @DisplayName("should wrap smuggled direct throwable in CompletionException")
+  void shouldPropagateSmuggledDirectThrowableWithoutWrapping() {
+    // Given a delegate smuggling a direct Throwable past the Callable signature
+    // (Callable declares throws Exception: only Exceptions propagate unwrapped)
+    Throwable failure = new Throwable("smuggled");
+    TraceCallable<Integer> traceCallable =
+        new TraceCallable<>(
+            new DefaultTracer(),
+            () -> {
+              sneakyThrow(failure);
+              return null;
+            });
+
+    // When / Then the foreign checked failure surfaces wrapped, never masquerading as Exception
+    assertThatThrownBy(traceCallable::call)
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCause(failure);
+  }
+
+  @Test
+  @DisplayName("should rethrow afterCall failure when delegate succeeds")
+  void shouldRethrowAfterCallFailureWhenDelegateSucceeds() throws Exception {
+    DefaultTracer tracer = new DefaultTracer();
+    RuntimeException afterFailure = new RuntimeException("afterCall boom");
+    io.github.jinganix.peashooter.Tracer recording =
+        new io.github.jinganix.peashooter.Tracer() {
+          @Override
+          public Span getSpan() {
+            return tracer.getSpan();
+          }
+
+          @Override
+          public void setSpan(Span span) {
+            tracer.setSpan(span);
+          }
+
+          @Override
+          public void clearSpan() {
+            tracer.clearSpan();
+          }
+
+          @Override
+          public String nextTraceId() {
+            return tracer.nextTraceId();
+          }
+
+          @Override
+          public void beforeCall(Span span) {}
+
+          @Override
+          public void afterCall(Span span, Throwable e) {
+            throw afterFailure;
+          }
+
+          @Override
+          public String nextSpanId() {
+            return tracer.nextSpanId();
+          }
+        };
+
+    assertThatThrownBy(new TraceCallable<>(recording, () -> 1)::call).isEqualTo(afterFailure);
+    tracer.clearSpan();
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <E extends Throwable> void sneakyThrow(Throwable throwable) throws E {
+    throw (E) throwable;
   }
 }

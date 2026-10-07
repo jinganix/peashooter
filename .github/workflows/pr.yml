@@ -17,14 +17,19 @@ jobs:
           fetch-depth: 0
       - name: Validate commit messages
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "${{ github.event.pull_request.title }}" > /tmp/pr-title.txt
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            printf '%s\n' "$PR_TITLE" > /tmp/pr-title.txt
             ./scripts/validate-commit-msg.sh /tmp/pr-title.txt
-            RANGE="${{ github.event.pull_request.base.sha }}..HEAD"
+            RANGE="$PR_BASE_SHA..HEAD"
           else
-            RANGE="${{ github.event.merge_group.base_sha }}..HEAD"
+            RANGE="$MERGE_GROUP_BASE_SHA..HEAD"
           fi
           for sha in $(git rev-list "$RANGE"); do
             git log -1 --pretty=format:%B "$sha" > /tmp/commit-msg.txt
@@ -62,11 +67,6 @@ jobs:
         with:
           distribution: zulu
           java-version: 25
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24
 
       - name: Build with Gradle
         env:
