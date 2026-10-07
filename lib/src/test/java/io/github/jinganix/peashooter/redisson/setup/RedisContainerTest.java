@@ -31,7 +31,10 @@ class RedisContainerTest {
     String previous = System.getProperty("os.arch");
     System.setProperty("os.arch", arch);
     try {
-      return new RedisContainer().getDockerImageName();
+      // Docker-free: getDockerImageName() resolves RemoteDockerImage (Docker client + pull),
+      // which fails without Docker or on arch mismatch. getImage() returns the unresolved
+      // RemoteDockerImage whose toString embeds the canonical name without any Docker call.
+      return new RedisContainer().getImage().toString();
     } finally {
       if (previous == null) {
         System.clearProperty("os.arch");
@@ -44,20 +47,20 @@ class RedisContainerTest {
   @Test
   @DisplayName("should use the arm image for aarch64")
   void shouldUseArmImageForAarch64() {
-    assertThat(imageForArch("aarch64")).startsWith("arm64v8/redis:");
+    assertThat(imageForArch("aarch64")).contains("imageName=arm64v8/redis:");
   }
 
   @Test
   @DisplayName("should use the arm image for arm64")
   void shouldUseArmImageForArm64() {
     // Some distributions report "arm64" instead of "aarch64": both must resolve to ARM.
-    assertThat(imageForArch("arm64")).startsWith("arm64v8/redis:");
+    assertThat(imageForArch("arm64")).contains("imageName=arm64v8/redis:");
   }
 
   @Test
   @DisplayName("should use the x86 image for amd64")
   void shouldUseX86ImageForAmd64() {
-    assertThat(imageForArch("amd64")).startsWith("redis:").doesNotContain("arm64v8");
+    assertThat(imageForArch("amd64")).contains("imageName=redis:").doesNotContain("arm64v8");
   }
 
   @Test

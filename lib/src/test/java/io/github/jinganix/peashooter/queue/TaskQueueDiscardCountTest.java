@@ -18,14 +18,17 @@
 
 package io.github.jinganix.peashooter.queue;
 
+import static io.github.jinganix.peashooter.utils.TestUtils.awaitCountDown;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -54,12 +57,11 @@ class TaskQueueDiscardCountTest {
     CountDownLatch latch = new CountDownLatch(1);
     Executor healthy = command -> new Thread(command).start();
     queue.execute(healthy, latch::countDown);
-    try {
-      assertThat(latch.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException(e);
-    }
+    awaitCountDown(latch);
+    // The latch fires inside the task body while the runner still holds its claim; the claim
+    // is released only on the runner's next (empty) poll, so poll for quiescence instead of
+    // asserting immediately.
+    await().atMost(Duration.ofSeconds(10)).until(queue::isIdle);
     assertThat(queue.isIdle()).isTrue();
   }
 }
