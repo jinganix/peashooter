@@ -1,6 +1,7 @@
 import org.gradle.api.publish.maven.tasks.GenerateMavenPom
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.kotlin.dsl.the
+import org.gradle.plugins.signing.Sign
 import utils.VersExtension
 import utils.signAndPublish
 
@@ -32,10 +33,12 @@ val verifyPublishedPom =
     group = "verification"
     description = "Fails when a published POM is not a single jar-packaged module with its runtime deps"
     val publications = layout.buildDirectory.dir("publications")
-    // The directory also holds the Gradle module metadata; both generators are declared so the
-    // input carries no implicit task dependency.
+    // The directory also holds the Gradle module metadata and (when signing is enabled on CI)
+    // the .asc signatures; all producers are declared so the input carries no implicit task
+    // dependency.
     dependsOn(tasks.withType<GenerateMavenPom>())
     dependsOn(tasks.withType<GenerateModuleMetadata>())
+    dependsOn(tasks.withType<Sign>())
     inputs.dir(publications).withPropertyName("publications")
     doLast {
       val poms =
