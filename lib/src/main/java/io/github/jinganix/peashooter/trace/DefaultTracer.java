@@ -21,42 +21,45 @@ package io.github.jinganix.peashooter.trace;
 import io.github.jinganix.peashooter.Tracer;
 
 /** Default implementation for {@link Tracer}. */
-public class DefaultTracer implements Tracer {
+public class DefaultTracer extends AbstractTracer {
 
-  private static final ThreadLocal<Span> SPAN = new ThreadLocal<>();
+  private final ThreadLocal<Span> spanHolder = new ThreadLocal<>();
 
   /** Constructor. */
   public DefaultTracer() {}
 
   @Override
   public Span getSpan() {
-    return SPAN.get();
+    return spanHolder.get();
   }
 
   @Override
   public void setSpan(Span span) {
-    SPAN.set(span);
+    if (span == null) {
+      spanHolder.remove();
+    } else {
+      spanHolder.set(span);
+    }
   }
 
   @Override
   public void clearSpan() {
-    SPAN.remove();
+    spanHolder.remove();
   }
 
   @Override
-  public String nextId() {
+  public String nextTraceId() {
     return TraceIds.nextTraceId();
+  }
+
+  @Override
+  public String nextSpanId() {
+    return TraceIds.nextSpanId();
   }
 
   @Override
   public void beforeCall(Span span) {}
 
   @Override
-  public void afterCall(Span span, Exception e) {
-    if (span.isRoot()) {
-      clearSpan();
-    } else {
-      setSpan(span.getParent());
-    }
-  }
+  public void afterCall(Span span, Throwable e) {}
 }

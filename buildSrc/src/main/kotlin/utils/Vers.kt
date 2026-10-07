@@ -19,46 +19,55 @@
 package utils
 
 import org.gradle.api.Project
-import java.util.*
-import kotlin.reflect.KMutableProperty
-import kotlin.reflect.full.memberProperties
+import org.gradle.kotlin.dsl.create
+import org.gradle.kotlin.dsl.findByType
 
-object Vers {
-  private var initialized = false
+/**
+ * Per-project dependency versions. Registered as a project extension (see [vers]), so every
+ * project owns an independent immutable instance: no shared mutable state, safe under
+ * `org.gradle.parallel=true` and the configuration cache.
+ */
+open class VersExtension(project: Project) {
+  private val required =
+    project.requiredValues(
+      listOf(
+        "versionAssertj",
+        "versionAwaitility",
+        "versionCaffeine",
+        "versionGoogleJavaFormat",
+        "versionGradleMavenPublishPlugin",
+        "versionGradleVersionsPlugin",
+        "versionJacoco",
+        "versionJupiter",
+        "versionLogback",
+        "versionMockitoCore",
+        "versionNetty",
+        "versionRedisson",
+        "versionSlf4j",
+        "versionSpotlessPluginGradle",
+        "versionTestContainers",
+      ),
+      "Vers",
+      "versions",
+    )
 
-  lateinit var peashooter: String
-  lateinit var versionAssertj: String
-  lateinit var versionAwaitility: String
-  lateinit var versionCaffeine: String
-  lateinit var versionGoogleJavaFormat: String
-  lateinit var versionGradleMavenPublishPlugin: String
-  lateinit var versionGradleVersionsPlugin: String
-  lateinit var versionJacocoAgent: String
-  lateinit var versionJupiter: String
-  lateinit var versionMockitoCore: String
-  lateinit var versionMockitoInline: String
-  lateinit var versionNetty: String
-  lateinit var versionRedisson: String
-  lateinit var versionSlf4j: String
-  lateinit var versionSpotlessPluginGradle: String
-  lateinit var versionTestContainers: String
-
-  fun initialize(project: Project, override: Properties) {
-    if (initialized) {
-      return
-    }
-    this.peashooter = project.version.toString()
-    this::class.memberProperties.forEach {
-      if (it !is KMutableProperty<*>) {
-        return
-      }
-      val key = it.name
-      if (override.containsKey(key)) {
-        it.setter.call(this, override.getProperty(key))
-      } else if (project.hasProperty(key)) {
-        it.setter.call(this, project.property(key))
-      }
-    }
-    initialized = true
-  }
+  val versionAssertj: String by required
+  val versionAwaitility: String by required
+  val versionCaffeine: String by required
+  val versionGoogleJavaFormat: String by required
+  val versionGradleMavenPublishPlugin: String by required
+  val versionGradleVersionsPlugin: String by required
+  val versionJacoco: String by required
+  val versionJupiter: String by required
+  val versionLogback: String by required
+  val versionMockitoCore: String by required
+  val versionNetty: String by required
+  val versionRedisson: String by required
+  val versionSlf4j: String by required
+  val versionSpotlessPluginGradle: String by required
+  val versionTestContainers: String by required
 }
+
+/** Returns this project's [VersExtension], creating and freezing it on first call. */
+fun Project.vers(): VersExtension =
+  extensions.findByType<VersExtension>() ?: extensions.create("vers", this)

@@ -4,8 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Enter release version, eg: 0.0.1'
+        description: 'Release version (x.y.z). Required when republishing only.'
         required: false
+      publish_only:
+        description: 'Republish only (tag must already exist)'
+        type: boolean
+        default: false
 
 jobs:
   prepare:
@@ -21,20 +25,31 @@ jobs:
 
       - name: Validate version
         id: validate-version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          PUBLISH_ONLY: ${{ github.event.inputs.publish_only }}
         run: |
           current_version=$(grep -m1 'version =' gradle.properties | grep -oE '([0-9]+\.[0-9]+\.[0-9]+)')
-          input_version=${{ github.event.inputs.version }}
-          echo "Current version: ${current_version}, Input version: ${input_version}"
-          if [[ -n "${input_version}" ]]; then
+          input_version="${INPUT_VERSION}"
+          publish_only="${PUBLISH_ONLY}"
+          echo "Current version: ${current_version}, Input version: ${input_version}, Publish only: ${publish_only}"
+          if [[ "${publish_only}" == "true" ]]; then
+            if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "ERROR: publish_only requires a valid version number (x.y.z)"
+              exit 1
+            fi
+            release_version=${input_version}
+          elif [[ -n "${input_version}" ]]; then
             if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "ERROR: Invalid version number ${input_version}. Please use format x.y.z"
               exit 1
             fi
-            p1=(${input_version//./ })
-            p2=(${current_version//./ })
-            if [ ${p1[0]} -lt ${p2[0]} ] \
-              || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -lt ${p2[1]} ]] \
-              || [[ ${p1[0]} -eq ${p2[0]} && ${p1[1]} -eq ${p2[1]} && ${p1[2]} -lt ${p2[2]} ]]; then
+            IFS='.' read -ra p1 <<< "${input_version}"
+            IFS='.' read -ra p2 <<< "${current_version}"
+            if [ "${p1[0]}" -lt "${p2[0]}" ] \
+              || [[ "${p1[0]}" -eq "${p2[0]}" && "${p1[1]}" -lt "${p2[1]}" ]] \
+              || [[ "${p1[0]}" -eq "${p2[0]}" && "${p1[1]}" -eq "${p2[1]}" && "${p1[2]}" -lt "${p2[2]}" ]]; then
               echo "ERROR: Input version is less than the current version"
               exit 1
             fi
@@ -46,9 +61,17 @@ jobs:
           echo "Release version: ${release_version}"
 
       - name: Check tag existence
+        shell: bash
+        env:
+          PUBLISH_ONLY: ${{ github.event.inputs.publish_only }}
         run: |
-          if [ $(git tag -l v"${{ env.release_version }}") ]; then
-            echo "ERROR: Tag v${{ env.release_version }} already exists"
+          if [[ "${PUBLISH_ONLY}" == "true" ]]; then
+            if [ -z "$(git tag -l "v${release_version}")" ]; then
+              echo "ERROR: Tag v${release_version} does not exist"
+              exit 1
+            fi
+          elif [ -n "$(git tag -l "v${release_version}")" ]; then
+            echo "ERROR: Tag v${release_version} already exists"
             exit 1
           fi
 
@@ -59,19 +82,20 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp/release_version
           retention-days: 30
 
   update-release:
     name: Update release version
     needs: [prepare]
+    if: github.event.inputs.publish_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp
 
       - name: Read release version
@@ -87,14 +111,21 @@ jobs:
           fetch-depth: 0
           ref: master
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
       - name: Commit release version
+        shell: bash
         run: |
-          release_version=${{ env.release_version }}
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           if [[ $(grep -m1 'version =' gradle.properties) == *-SNAPSHOT ]]; then
             sed -i "s/version = .*/version = ${release_version}/" gradle.properties
-            git add gradle.properties
+            node scripts/sync-versions.mjs --all
+            git add gradle.properties README.md README.zh.md
             git commit -m "chore: release ${release_version}" --quiet
           fi
 
@@ -111,26 +142,28 @@ jobs:
       - name: Auto merge pull request
         continue-on-error: true
         if: steps.cpr.outputs.pull-request-operation == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
         run: |
-          pr_number=${{ steps.cpr.outputs.pull-request-number }}
+          pr_number="${PR_NUMBER}"
           echo "Pull Request number: ${pr_number}"
           if [ -z "$pr_number" ]; then
             echo "Error: pull Request number is empty or does not exist"
             exit 1
           fi
-          gh pr merge ${pr_number} --squash --admin
-        env:
-          GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+          gh pr merge "${pr_number}" --squash --admin
 
   bump-snapshot:
     name: Bump snapshot version
     needs: [update-release]
+    if: github.event.inputs.publish_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp
 
       - name: Read release version
@@ -148,7 +181,7 @@ jobs:
 
       - name: Find release commit
         run: |
-          release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)
+          release_commit=$(git log --grep="chore: release ${release_version}" -n 10 --pretty=format:%H)
           echo "Release commit: ${release_commit}"
           if [ -z "$release_commit" ]; then
             echo "Error: release_commit is empty or does not exist"
@@ -156,10 +189,16 @@ jobs:
           fi
           echo "release_commit=${release_commit}" >> "${GITHUB_ENV}"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
       - name: Bump snapshot version
+        shell: bash
         run: |
-          release_version=${{ env.release_version }}
-          parts=(${release_version//./ })
+          IFS='.' read -ra parts <<< "${release_version}"
           major=${parts[0]}
           minor=${parts[1]}
           patch=${parts[2]}
@@ -169,8 +208,8 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git config --global user.name "github-actions"
           sed -i "s/version = .*/version = ${snapshot_version}-SNAPSHOT/" gradle.properties
-          sed -i -E "s/\b([:>])[0-9]+\.[0-9]+\.[0-9]+\b/\1${release_version}/g" README.md
-          git add gradle.properties
+          node scripts/sync-versions.mjs --consumer-version "${release_version}"
+          git add gradle.properties README.md README.zh.md
           git commit -m "chore: bump version to ${snapshot_version}-SNAPSHOT"
 
       - name: Create pull request
@@ -186,19 +225,21 @@ jobs:
       - name: Auto merge pull request
         continue-on-error: true
         if: steps.cpr.outputs.pull-request-operation == 'created'
-        run: gh pr merge ${{ steps.cpr.outputs.pull-request-number }} --squash --admin
         env:
           GH_TOKEN: ${{ secrets.ACTION_TOKEN }}
+          PR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+        run: gh pr merge "${PR_NUMBER}" --squash --admin
 
   release:
     name: Release
     needs: [update-release]
+    if: github.event.inputs.publish_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp
 
       - name: Read release version
@@ -216,7 +257,7 @@ jobs:
 
       - name: Find release commit
         run: |
-          release_commit=$(git log --grep="chore: release ${{ env.release_version }}" -n 10 --pretty=format:%H)
+          release_commit=$(git log --grep="chore: release ${release_version}" -n 10 --pretty=format:%H)
           if [ -z "$release_commit" ]; then
             echo "Error: release_commit is empty or does not exist"
             exit 1
@@ -234,19 +275,21 @@ jobs:
       - name: Create github release
         uses: ncipollo/release-action@v1
         with:
+          token: ${{ secrets.ACTION_TOKEN }}
           tag: ${{ steps.tag_version.outputs.new_tag }}
           name: Release ${{ steps.tag_version.outputs.new_tag }}
           body: ${{ steps.tag_version.outputs.changelog }}
 
   publish:
     name: Publish
-    needs: [release]
+    needs: [prepare, release]
+    if: always() && needs.prepare.result == 'success' && (github.event.inputs.publish_only == 'true' || needs.release.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Download release_version
         uses: actions/download-artifact@v8
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp
 
       - name: Read release version

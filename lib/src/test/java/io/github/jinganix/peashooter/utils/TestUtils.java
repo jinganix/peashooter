@@ -22,7 +22,6 @@ import static org.awaitility.Awaitility.await;
 
 import io.github.jinganix.peashooter.ThrowingRunnable;
 import java.time.Duration;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 
 public class TestUtils {
@@ -33,28 +32,45 @@ public class TestUtils {
     await().atMost(DEFAULT_AWAIT).until(() -> latch.getCount() == 0);
   }
 
+  /**
+   * Waits {@code millis} for test orchestration (task bodies, lock contention windows).
+   *
+   * <p>Stays on {@link Thread#sleep} rather than Awaitility ({@link #awaitCountDown} covers
+   * condition waits): a duration wait must fail fast on interrupt, while Awaitility waits
+   * uninterruptibly and would swallow cancellation. Stays unchecked rather than declaring {@link
+   * InterruptedException} because callers are {@link Runnable} task bodies that cannot throw
+   * checked failures; the interrupt status is restored before wrapping so cancellation still
+   * propagates, matching {@link #uncheckedRun}.
+   *
+   * @param millis wait in milliseconds
+   * @return {@code millis}
+   */
   public static long sleep(long millis) {
     try {
       Thread.sleep(millis);
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       throw new RuntimeException(e);
     }
     return millis;
   }
 
-  public static <T> T uncheckedCall(Callable<T> callable) {
-    try {
-      return callable.call();
-    } catch (RuntimeException e) {
-      throw e;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
+  /**
+   * Runs a throwing task as a {@link Runnable} body, preserving apparent failures.
+   *
+   * <p>An {@link InterruptedException} restores the interrupt status before wrapping (like {@link
+   * #sleep}): without this, a task interrupted mid-wait would surface as a plain {@link
+   * RuntimeException} with the flag cleared, and callers testing {@code Thread.interrupted()} would
+   * lose the cancellation.
+   *
+   * @param runnable task to run
+   */
   public static void uncheckedRun(ThrowingRunnable runnable) {
     try {
       runnable.run();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RuntimeException(e);
     } catch (RuntimeException e) {
       throw e;
     } catch (Exception e) {

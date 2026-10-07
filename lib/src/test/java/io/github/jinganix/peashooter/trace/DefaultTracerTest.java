@@ -38,6 +38,121 @@ import org.junit.jupiter.api.Test;
 class DefaultTracerTest {
 
   @Test
+  @DisplayName("should not touch thread state on afterCall")
+  void shouldNotTouchThreadStateOnAfterCall() {
+    // Given a child span installed on the thread (afterCall is observation only,
+    // TraceScope owns the single restore)
+    DefaultTracer tracer = new DefaultTracer();
+    Span parent = Span.child(tracer, null);
+    tracer.setSpan(parent);
+    Span child = Span.child(tracer, parent);
+    tracer.setSpan(child);
+
+    // When the outcome is reported, with success and with failure
+    tracer.afterCall(child, null);
+    assertThat(tracer.getSpan()).isSameAs(child);
+    tracer.afterCall(child, new RuntimeException("boom"));
+
+    // Then the thread state is untouched
+    assertThat(tracer.getSpan()).isSameAs(child);
+    tracer.clearSpan();
+  }
+
+  @Test
+  @DisplayName("should ignore null span on afterCall without touching thread state")
+  void shouldIgnoreNullSpanOnAfterCallWithoutTouchingThreadState() {
+    // Given an installed span (afterCall must never touch thread state, even for null input)
+    DefaultTracer tracer = new DefaultTracer();
+    Span root = Span.child(tracer, null);
+    tracer.setSpan(root);
+
+    // When / Then a null span is ignored instead of restoring or throwing
+    tracer.afterCall(null, new RuntimeException("boom"));
+    assertThat(tracer.getSpan()).isSameAs(root);
+    tracer.clearSpan();
+  }
+
+  @Test
+  @DisplayName("should write thread state exactly once per scope")
+  void shouldWriteThreadStateExactlyOncePerScope() {
+    // Given a counting tracer (install + single restore = 2 writes; a restoring
+    // afterCall would add a third write)
+    java.util.concurrent.atomic.AtomicInteger writes =
+        new java.util.concurrent.atomic.AtomicInteger();
+    DefaultTracer tracer =
+        new DefaultTracer() {
+          @Override
+          public void setSpan(Span span) {
+            writes.incrementAndGet();
+            super.setSpan(span);
+          }
+
+          @Override
+          public void clearSpan() {
+            writes.incrementAndGet();
+            super.clearSpan();
+          }
+        };
+    Span previous = Span.child(tracer, null);
+    tracer.setSpan(previous);
+    writes.set(0);
+
+    // When a scope runs to completion
+    TraceScope.run(tracer, () -> Span.child(tracer, null), () -> {});
+
+    // Then exactly one install and one restore happened, and the previous span is back
+    assertThat(writes.get()).isEqualTo(2);
+    assertThat(tracer.getSpan()).isSameAs(previous);
+    tracer.clearSpan();
+  }
+
+  @Test
+  @DisplayName("should clear span when setSpan receives null")
+  void shouldClearSpanWhenSetSpanReceivesNull() {
+    DefaultTracer tracer = new DefaultTracer();
+    tracer.setSpan(Span.child(tracer, null));
+
+    tracer.setSpan(null);
+
+    assertThat(tracer.getSpan()).isNull();
+  }
+
+  @Test
+  @DisplayName("should deliver Error distinctly to Throwable afterCall override")
+  void shouldDeliverErrorDistinctlyToThrowableAfterCallOverride() {
+    // Given a subclass observing the Throwable variant (the migration target)
+    java.util.concurrent.atomic.AtomicReference<Throwable> observed =
+        new java.util.concurrent.atomic.AtomicReference<>();
+    DefaultTracer tracer =
+        new DefaultTracer() {
+          @Override
+          public void afterCall(Span span, Throwable e) {
+            observed.set(e);
+            super.afterCall(span, e);
+          }
+        };
+    Span root = Span.child(tracer, null);
+    tracer.setSpan(root);
+
+    // When an Error is reported
+    AssertionError failure = new AssertionError("boom");
+    tracer.afterCall(root, failure);
+
+    // Then the override observes the Error itself, not a null standing for success
+    assertThat(observed.get()).isSameAs(failure);
+  }
+
+  @Test
+  @DisplayName("should generate trace ids via nextTraceId")
+  void shouldGenerateTraceIdsViaNextTraceId() {
+    // Given
+    DefaultTracer tracer = new DefaultTracer();
+
+    // When / Then ids come from the single generator
+    assertThat(tracer.nextTraceId()).matches("[0-9a-f]{32}");
+  }
+
+  @Test
   @DisplayName("should return null span when span was cleared")
   void shouldReturnNullSpanWhenSpanWasCleared() {
     // Given
@@ -54,13 +169,32 @@ class DefaultTracerTest {
     // Given
     Tracer tracer = new DefaultTracer();
     tracer.clearSpan();
-    Span span = new Span(new DefaultTracer(), null);
+    Span span = Span.child(new DefaultTracer(), null);
 
     // When
     tracer.setSpan(span);
 
     // Then
     assertThat(tracer.getSpan()).isEqualTo(span);
+  }
+
+  @Test
+  @DisplayName("should isolate spans across tracer instances on the same thread")
+  void shouldIsolateSpansAcrossTracerInstancesOnTheSameThread() {
+    // Given two independent tracers sharing one thread (e.g. two executors)
+    Tracer first = new DefaultTracer();
+    Tracer second = new DefaultTracer();
+    first.clearSpan();
+    second.clearSpan();
+    Span span = Span.child(first, null);
+
+    // When
+    first.setSpan(span);
+
+    // Then the other instance must not observe it
+    assertThat(second.getSpan()).isNull();
+    assertThat(first.getSpan()).isEqualTo(span);
+    first.clearSpan();
   }
 
   @Test
@@ -77,7 +211,7 @@ class DefaultTracerTest {
                         () -> {
                           List<String> values = new ArrayList<>(1000);
                           for (int i = 0; i < 1000; i++) {
-                            values.add(tracer.nextId());
+                            values.add(tracer.nextTraceId());
                           }
                           return values;
                         })

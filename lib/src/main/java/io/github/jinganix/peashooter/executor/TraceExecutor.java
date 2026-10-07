@@ -19,8 +19,8 @@
 package io.github.jinganix.peashooter.executor;
 
 import io.github.jinganix.peashooter.Tracer;
-import io.github.jinganix.peashooter.trace.Span;
 import io.github.jinganix.peashooter.trace.TraceRunnable;
+import java.util.Objects;
 import java.util.concurrent.Executor;
 
 /** Executor with tracing. */
@@ -37,8 +37,8 @@ public class TraceExecutor implements Executor {
    * @param tracer {@link Tracer}
    */
   public TraceExecutor(Executor delegate, Tracer tracer) {
-    this.delegate = delegate;
-    this.tracer = tracer;
+    this.delegate = Objects.requireNonNull(delegate, "delegate");
+    this.tracer = Objects.requireNonNull(tracer, "tracer");
   }
 
   /**
@@ -51,16 +51,25 @@ public class TraceExecutor implements Executor {
   }
 
   /**
-   * Get the {@link Span}.
+   * Returns the backing {@link Executor} for lifecycle and sizing introspection.
    *
-   * @return {@link Span}
+   * @return backing executor
    */
-  public Span getSpan() {
-    return tracer.getSpan();
+  public Executor getDelegate() {
+    return delegate;
   }
 
+  /**
+   * Executes with tracing. Direct use propagates delegate rejections to the caller per {@link
+   * Executor} contract; when routed through {@link io.github.jinganix.peashooter.queue.TaskQueue},
+   * scheduling failures reject only the triggering submission (propagated to its submitter) while
+   * the remaining backlog is preserved.
+   */
   @Override
   public void execute(Runnable runnable) {
+    Objects.requireNonNull(runnable, "runnable");
+    // TraceRunnable already implements RejectionAware and forwards discards to its delegate,
+    // so a single branch preserves rejection signals without a redundant wrapper subtype.
     if (runnable instanceof TraceRunnable) {
       this.delegate.execute(runnable);
     } else {

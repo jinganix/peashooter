@@ -27,13 +27,16 @@ import io.github.jinganix.peashooter.executor.OrderedTraceExecutor;
 import io.github.jinganix.peashooter.executor.TraceExecutor;
 import io.github.jinganix.peashooter.redisson.setup.RedisClient;
 import io.github.jinganix.peashooter.redisson.setup.RedisExtension;
-import io.github.jinganix.peashooter.redisson.setup.RedisTaskQueueProvider;
+import io.github.jinganix.peashooter.redisson.setup.RedisLockableTaskQueue;
 import io.github.jinganix.peashooter.redisson.setup.TestItem;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
+import io.github.jinganix.peashooter.utils.InMemoryTaskQueueProvider;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,20 +48,28 @@ import org.redisson.api.RedissonClient;
 @ExtendWith(RedisExtension.class)
 class RedisTaskQueueTest {
 
-  private final OrderedTraceExecutor traceExecutor = createExecutor();
+  private final ExecutorService pool = Executors.newCachedThreadPool();
 
-  private final RedissonClient client = RedisClient.client;
+  private final OrderedTraceExecutor traceExecutor = createExecutor(pool);
 
-  static OrderedTraceExecutor createExecutor() {
+  private final RedissonClient client = RedisClient.get();
+
+  static OrderedTraceExecutor createExecutor(ExecutorService pool) {
     Tracer tracer = new DefaultTracer();
-    TraceExecutor traceExecutor = new TraceExecutor(Executors.newCachedThreadPool(), tracer);
+    TraceExecutor traceExecutor = new TraceExecutor(pool, tracer);
     DefaultExecutorSelector selector = new DefaultExecutorSelector(traceExecutor);
-    return new OrderedTraceExecutor(new RedisTaskQueueProvider(), selector, tracer);
+    return new OrderedTraceExecutor(
+        new InMemoryTaskQueueProvider(RedisLockableTaskQueue::new), selector, tracer);
   }
 
   @BeforeEach
   void setup() {
     client.getKeys().flushall();
+  }
+
+  @AfterEach
+  void closePool() {
+    pool.shutdownNow();
   }
 
   @Test

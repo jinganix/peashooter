@@ -18,13 +18,48 @@
 
 package io.github.jinganix.peashooter.redisson.setup;
 
+import java.util.Objects;
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
 
-public class RedisClient {
+public final class RedisClient {
 
-  public static final RedissonClient client = createClient();
+  private static volatile RedissonClient client;
+
+  static {
+    Runtime.getRuntime().addShutdownHook(new Thread(RedisClient::close, "redis-client-shutdown"));
+  }
+
+  private RedisClient() {}
+
+  public static RedissonClient get() {
+    RedissonClient result = client;
+    if (result == null) {
+      synchronized (RedisClient.class) {
+        result = client;
+        if (result == null) {
+          result = createClient();
+          client = result;
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Shuts down the cached client and clears it, releasing netty threads. Idempotent; also wired as
+   * a JVM shutdown hook so the single-test JVM never leaks threads.
+   */
+  public static void close() {
+    synchronized (RedisClient.class) {
+      RedissonClient cached = client;
+      client = null;
+      if (cached != null) {
+        cached.shutdown();
+      }
+    }
+  }
 
   public static RedissonClient createClient() {
     Config config = new Config();
@@ -32,6 +67,11 @@ public class RedisClient {
     if (address == null) {
       address = System.getProperty("redis-host");
     }
+    Objects.requireNonNull(
+        address,
+        "redis-host is not set. Set env var 'redis-host' or system property 'redis-host'"
+            + " to a redis URL (e.g. redis://127.0.0.1:6379)."
+            + " RedisExtension normally sets it via Testcontainers.");
     config.useSingleServer().setAddress(address);
     return Redisson.create(config);
   }

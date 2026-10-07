@@ -1,0 +1,44 @@
+/*
+ * Copyright (c) 2020 The Peashooter Authors, All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * https://github.com/jinganix/peashooter
+ */
+
+package io.github.jinganix.peashooter.trace;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import io.github.jinganix.peashooter.TraceIdGenerator;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+@DisplayName("OrderedSpan invokedBy bound")
+class OrderedSpanBoundTest {
+
+  @Test
+  @DisplayName("should fail closed past the walk bound")
+  void shouldFailClosedPastWalkBound() {
+    TraceIdGenerator gen = new DefaultTracer();
+    Span chain = null;
+    int depth = OrderedSpan.MAX_INVOKED_BY_WALK + 100;
+    for (int i = 0; i < depth; i++) {
+      chain = OrderedSpan.child(gen, chain, "k-" + i, true);
+    }
+    // Absent key would walk to the root and return false; past the bound it fails closed.
+    assertThat(OrderedSpan.invokedBy(chain, "absent")).isTrue();
+    // Shallow match still resolves normally.
+    assertThat(OrderedSpan.invokedBy(chain, "k-" + (depth - 1))).isTrue();
+  }
+}

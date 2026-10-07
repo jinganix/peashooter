@@ -25,14 +25,28 @@ import org.gradle.api.artifacts.Configuration
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.DocsType
 import org.gradle.api.attributes.Usage
-import org.gradle.api.publish.PublishingExtension
-import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.named
-import org.gradle.kotlin.dsl.the
-import org.gradle.plugins.signing.SigningExtension
-import java.io.File
-import java.util.Locale
+
+/**
+ * Reads [keys] as required Gradle properties (gradle.properties plus `-P` overrides) for this
+ * project, throwing once with the full sorted list when any are missing or blank. Values are
+ * resolved eagerly per project, so the result is an immutable snapshot with no shared state.
+ */
+internal fun Project.requiredValues(keys: List<String>, owner: String, noun: String): Map<String, String> {
+  val resolved = keys.associateWith {
+    providers.gradleProperty(it).orNull?.takeIf(String::isNotEmpty)
+  }
+  val missing = resolved.filterValues { it == null }.keys.sorted()
+  if (missing.isNotEmpty()) {
+    throw IllegalStateException(
+      "$owner is missing $noun for: ${missing.joinToString()}. " +
+        "Add them to gradle.properties with exactly these keys."
+    )
+  }
+  @Suppress("UNCHECKED_CAST")
+  return resolved as Map<String, String>
+}
 
 fun Project.createConfiguration(
   name: String,
@@ -51,53 +65,6 @@ fun Project.createConfiguration(
   return conf
 }
 
-fun Project.extractDependencies(file: File): List<String> {
-  val text = file.readText()
-  val versionRegex = "(.*)\\$\\{?([\\w+]*)}?".toRegex()
-  return "(implementation|testImplementation)\\(\"(.*)\"\\)".toRegex()
-    .findAll(text)
-    .map { it.groupValues[2] }
-    .map {
-      val matchResult = versionRegex.find(it) ?: return@map it
-      val artifact = matchResult.groupValues[1]
-      val property = matchResult.groupValues[2]
-      "$artifact${project.property(property) as String}"
-    }
-    .toList()
-}
-
-fun Project.signAndPublish1(artifactId: String, configuration: Action<MavenPublication>) {
-  val extension = project.the<PublishingExtension>()
-  val publicationName = "[_-]+[a-zA-Z]".toRegex().replace(artifactId) {
-    it.value.replace("_", "").replace("-", "")
-      .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-  }
-  val publication = extension.publications.create(publicationName, MavenPublication::class.java)
-  publication.artifactId = artifactId
-  publication.pom {
-    name.set(publicationName)
-    url.set("https://github.com/jinganix/peashooter")
-    licenses {
-      license {
-        name.set("The Apache License, Version 2.0")
-        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-      }
-    }
-    developers {
-      developer {
-        id.set("gan.jin")
-        name.set("JinGan")
-        email.set("jinganix@gmail.com")
-      }
-    }
-    scm {
-      connection.set("scm:git:git://github.com/jinganix/peashooter.git")
-      developerConnection.set("scm:git:ssh://github.com/jinganix/peashooter.git")
-      url.set("https://github.com/jinganix/peashooter")
-    }
-  }
-}
-
 fun Project.signAndPublish(artifactId: String, desc: String) {
   val extension = extensions.getByType<MavenPublishBaseExtension>()
 
@@ -106,18 +73,14 @@ fun Project.signAndPublish(artifactId: String, desc: String) {
     extension.signAllPublications()
   }
 
-  val publicationName = "[_-]+[a-zA-Z]".toRegex().replace(artifactId) { it ->
-    it.value.replace("_", "").replace("-", "")
-      .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
-  }
-
+  // Exactly one publication owns these coordinates: the plugin's own (jar plus its runtime
+  // dependencies). Creating a second, artifact-less publication with the same coordinates made
+  // its empty POM (packaging=pom, no dependencies) overwrite the real one, so the published
+  // coordinate resolved to nothing for Maven consumers. POM metadata goes on the plugin's
+  // publication instead. `verifyPublishedPom` guards the generated POM.
   extension.coordinates(group.toString(), artifactId, version.toString())
-
-  val publishing = project.the<PublishingExtension>()
-  val publication = publishing.publications.create(publicationName, MavenPublication::class.java)
-  publication.artifactId = artifactId
-  publication.pom {
-    name.set(publicationName)
+  extension.pom {
+    name.set(artifactId)
     url.set("https://github.com/jinganix/peashooter")
     description.set(desc)
     licenses {

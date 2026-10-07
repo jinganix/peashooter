@@ -20,9 +20,12 @@ jobs:
 
       - name: Validate version
         id: validate-version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
           current_version=$(grep -m1 'version =' gradle.properties | grep -oE '([0-9]+\.[0-9]+\.[0-9]+)')
-          input_version=${{ github.event.inputs.version }}
+          input_version="${INPUT_VERSION}"
           echo "Current version: ${current_version}, Input version: ${input_version}"
           if ! [[ "${input_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "ERROR: Invalid version number ${input_version}. Please use format x.y.z"
@@ -33,8 +36,8 @@ jobs:
 
       - name: Check tag existence
         run: |
-          if ! [ $(git tag -l v"${{ env.publish_version }}") ]; then
-            echo "ERROR: Tag v${{ env.publish_version }} does not exist"
+          if [ -z "$(git tag -l "v${publish_version}")" ]; then
+            echo "ERROR: Tag v${publish_version} does not exist"
             exit 1
           fi
 
@@ -45,7 +48,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp/publish_version
           retention-days: 30
 
@@ -57,7 +60,7 @@ jobs:
       - name: Download publish_version
         uses: actions/download-artifact@v8
         with:
-          name: ${GITHUB_SHA}
+          name: ${{ github.sha }}
           path: /tmp
 
       - name: Read publish version

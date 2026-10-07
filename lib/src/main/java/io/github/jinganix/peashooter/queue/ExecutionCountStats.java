@@ -19,31 +19,52 @@
 package io.github.jinganix.peashooter.queue;
 
 import io.github.jinganix.peashooter.ExecutionStats;
+import java.util.concurrent.atomic.AtomicInteger;
 
-/** Stat execution count. */
+/**
+ * Stat execution count.
+ *
+ * <p>Confined to one queue batch at a time: the owning runner calls {@code reset} once after
+ * acquiring the lock, then {@code record} after each task in the same batch. No concurrent {@code
+ * record} runs alongside {@code reset}. The atomic count also keeps cross-thread handoffs visible
+ * without relying on the backing executor for happens-before, and concurrent {@code record} calls
+ * never lose an increment.
+ */
 public class ExecutionCountStats implements ExecutionStats {
 
-  private int executionCount;
+  private final AtomicInteger executionCount = new AtomicInteger();
 
   /** Constructor. */
   public ExecutionCountStats() {}
 
   @Override
   public void reset() {
-    executionCount = 0;
+    executionCount.set(0);
   }
 
   @Override
   public void record() {
-    executionCount++;
+    // Zero-allocation saturating increment: hand-rolled get/CAS loop instead of
+    // updateAndGet (which allocates its lambda on every call on this hot path).
+    int current;
+    do {
+      current = executionCount.get();
+      if (current == Integer.MAX_VALUE) {
+        return;
+      }
+    } while (!executionCount.compareAndSet(current, current + 1));
   }
 
   /**
    * Get execution count after start or last yield.
    *
+   * <p>Count saturates at {@link Integer#MAX_VALUE} instead of wrapping; yield policies must test
+   * {@code getExecutionCount() >= N}, never {@code == N}.
+   *
    * @return execution count
    */
+  @Override
   public int getExecutionCount() {
-    return executionCount;
+    return executionCount.get();
   }
 }

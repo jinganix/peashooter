@@ -18,25 +18,17 @@
 
 package io.github.jinganix.peashooter;
 
-import io.github.jinganix.peashooter.trace.Span;
-
-/** Tracer to trace task call chain. */
-public interface Tracer extends TraceIdGenerator, TraceCallback {
-
-  /**
-   * Get a {@link Span}.
-   *
-   * @return {@link Span}
-   */
-  Span getSpan();
-
-  /**
-   * Set a {@link Span}.
-   *
-   * @param span {@link Span}
-   */
-  void setSpan(Span span);
-
-  /** Clear the stored {@link Span}. */
-  void clearSpan();
-}
+/**
+ * Tracer to trace task call chain.
+ *
+ * <p>Convenience combination of the three narrow facets ({@link SpanAccessor}, {@link
+ * TraceIdGenerator}, {@link TraceCallback}) for call sites that genuinely need all three (span
+ * creation plus scoped execution). New code that needs only one facet must inject that narrow
+ * interface instead: storage-only bridges take {@link SpanAccessor}, id-only factories take {@link
+ * TraceIdGenerator} (see {@link io.github.jinganix.peashooter.trace.Span#child}), callback-only
+ * observers take {@link TraceCallback}, and composition stays explicit via {@link
+ * io.github.jinganix.peashooter.trace.DelegatingTracer}.
+ *
+ * <p>TraceScope owns the single save/restore around callbacks; callbacks only observe.
+ */
+public interface Tracer extends SpanAccessor, TraceIdGenerator, TraceCallback {}

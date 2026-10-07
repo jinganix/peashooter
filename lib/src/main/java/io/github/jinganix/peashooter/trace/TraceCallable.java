@@ -19,6 +19,7 @@
 package io.github.jinganix.peashooter.trace;
 
 import io.github.jinganix.peashooter.Tracer;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 
 /**
@@ -44,27 +45,15 @@ public class TraceCallable<V> implements Callable<V> {
    * @param delegate {@link Callable}
    */
   public TraceCallable(Tracer tracer, Callable<V> delegate) {
-    this.tracer = tracer;
+    this.tracer = Objects.requireNonNull(tracer, "tracer");
     this.parent = tracer.getSpan();
-    this.delegate = delegate;
+    this.delegate = Objects.requireNonNull(delegate, "delegate");
   }
 
   @Override
   public V call() throws Exception {
-    Span span = new Span(tracer, this.parent);
-    tracer.setSpan(span);
-    tracer.beforeCall(span);
-    Throwable error = null;
-    try {
-      return this.delegate.call();
-    } catch (Exception e) {
-      error = e;
-      throw e;
-    } catch (Error e) {
-      error = e;
-      throw e;
-    } finally {
-      tracer.afterCall(span, error);
-    }
+    // Callable declares throws Exception: checked Exceptions propagate unwrapped, other
+    // checked Throwables surface wrapped in CompletionException.
+    return TraceScope.call(tracer, () -> Span.child(tracer, this.parent), this.delegate);
   }
 }

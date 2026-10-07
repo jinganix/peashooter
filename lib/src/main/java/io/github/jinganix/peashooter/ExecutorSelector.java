@@ -19,19 +19,26 @@
 package io.github.jinganix.peashooter;
 
 import io.github.jinganix.peashooter.queue.TaskQueue;
-import io.github.jinganix.peashooter.trace.TraceRunnable;
 import java.util.concurrent.Executor;
 
 /** Chooses which {@link Executor} schedules the next queue runner for an ordered submission. */
+@FunctionalInterface
 public interface ExecutorSelector {
 
   /**
    * Selects the executor that will run the next queue runner for an ordered submission.
    *
-   * @param queue per-key queue for the submission
-   * @param task traced runnable being enqueued
+   * <p>Implementations must be thread-safe; this is called concurrently from multiple submitter
+   * threads. They should not throw and must return a non-{@code null} {@link Executor}. If an
+   * implementation does throw (or returns {@code null}), the caller fails the submission fast — it
+   * releases the submit fence and notifies the submission (sync callers observe the original
+   * failure, {@code submitAsync} completes its future, or propagates {@code Error}s) — instead of
+   * stranding waiters. Throwing is therefore tolerated but must be treated as a bug.
+   *
+   * @param queue per-key queue for the submission; must not be {@code null}
    * @param sync {@code true} when the submission originated from a sync API
-   * @return executor that will call the queue runner
+   * @return executor that will call the queue runner, never {@code null}
+   * @throws NullPointerException if {@code queue} is {@code null}
    */
-  Executor getExecutor(TaskQueue queue, TraceRunnable task, boolean sync);
+  Executor getExecutor(TaskQueue queue, boolean sync);
 }
