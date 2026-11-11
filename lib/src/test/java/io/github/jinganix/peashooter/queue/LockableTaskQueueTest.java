@@ -52,6 +52,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
@@ -152,7 +153,12 @@ class LockableTaskQueueTest {
   void shouldRejectOnlyTheHeadWhenLockFailureRescheduleIsRejected() throws InterruptedException {
     // Given a contended lock with a flaky executor that rejects every retry after the first
     LockableTaskQueue taskQueue = mockWithSharedScheduler();
-    when(taskQueue.tryLock(any())).thenReturn(false);
+    // Dynamic answer, not a mid-test re-stub: re-stubbing while the timer thread is inside the
+    // mock races Mockito's stubbing capture (WrongTypeOfReturnValue flake), while flipping this
+    // flag is thread-safe and observed on the next tryLock.
+    AtomicBoolean lockAvailable = new AtomicBoolean(false);
+    when(taskQueue.tryLock(any())).thenAnswer(invocation -> lockAvailable.get());
+    when(taskQueue.shouldYield(any())).thenReturn(false);
     CountDownLatch runnerEntered = new CountDownLatch(1);
     CountDownLatch releaseRunner = new CountDownLatch(1);
     AtomicInteger executeCalls = new AtomicInteger();
@@ -199,8 +205,7 @@ class LockableTaskQueueTest {
     assertThat(taskQueue.isIdle()).isFalse();
 
     // And the preserved task still drains once the lock is available
-    when(taskQueue.tryLock(any())).thenReturn(true);
-    when(taskQueue.shouldYield(any())).thenReturn(false);
+    lockAvailable.set(true);
     awaitCountDown(secondDone);
     assertThat(taskQueue.isIdle()).isTrue();
   }
