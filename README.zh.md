@@ -100,10 +100,17 @@ int value =
 | 方法 | 说明 |
 |------|------|
 | `executeAsync(key, task)` | 将 `task` 入队到 `key` 对应队列；立即返回。 |
+| `submitAsync(key, task)` / `supplyAsync(key, supplier)` | 入队到 `key`；返回任务运行后完成的 future。 |
+| `supplyCheckedAsync(key, type, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | 异步版本，声明的 checked 异常经由 future 传播。 |
 | `executeSync(key, task)` | 在 `key` 的队列上运行 `task` 并阻塞至完成（默认超时 10 秒）。 |
 | `executeSync(keys, task)` | 将 `keys` 按自然 `String` 排序去重后由外向内依次获取，再运行 `task`。 |
 | `supply(key, supplier)` | 类似 `executeSync`，但返回 supplier 的结果。 |
 | `supply(keys, supplier)` | `supply` 的多 key 版本，采用相同的排序获取顺序。 |
+| `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` | 同步版本，声明的 checked 异常直接抛出而非包装。 |
+| `submitAsync(keys, task)` / `supplyAsync(keys, supplier)` | 异步多 key 版本，采用相同的排序获取顺序。 |
+| `isIdle(key)` | `key` 是否无排队任务且无运行中的 runner。 |
+| `getReentrantInlineCount()` | 累计的无 peer 嵌套同 key 同步内联执行次数。 |
+| `builder(executor)` | 构建器，用于自定义队列、selector、tracer、池大小与超时。 |
 | `setTimeout(Duration)` / `getTimeout()` | 配置 / 读取同步等待的超时时间。 |
 | `getTracer()` | 获取 tracer，用于自定义 span 集成。 |
 
