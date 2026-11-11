@@ -38,6 +38,6 @@ val versionSpotlessPluginGradle = project.property("versionSpotlessPluginGradle"
 dependencies {
   implementation("com.vanniktech:gradle-maven-publish-plugin:${versionGradleMavenPublishPlugin}")
   implementation("com.diffplug.spotless:spotless-plugin-gradle:${versionSpotlessPluginGradle}")
-  implementation("com.github.ben-manes:gradle-versions-plugin:${versionGradleVersionsPlugin}")
+  implementation("io.github.ben-manes:gradle-versions-plugin:${versionGradleVersionsPlugin}")
   implementation(kotlin("script-runtime"))
 }
