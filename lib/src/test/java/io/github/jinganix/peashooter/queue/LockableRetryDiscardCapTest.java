@@ -79,15 +79,14 @@ class LockableRetryDiscardCapTest {
     List<Runnable> retries = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              retries.add(inv.getArgument(0));
-              ScheduledFuture f = mock(ScheduledFuture.class);
-              // Undone, so the scheduled claim is live: the follow-up scheduled from the tick must
-              // coalesce onto it instead of relying on the done-claim reclaim path.
-              when(f.isDone()).thenReturn(false);
-              return f;
-            });
+        .thenAnswer(inv -> {
+          retries.add(inv.getArgument(0));
+          ScheduledFuture f = mock(ScheduledFuture.class);
+          // Undone, so the scheduled claim is live: the follow-up scheduled from the tick must
+          // coalesce onto it instead of relying on the done-claim reclaim path.
+          when(f.isDone()).thenReturn(false);
+          return f;
+        });
     NeverLockQueue queue = new NeverLockQueue(new ExecutionCountStats(), rescheduler);
     RejectAll rejecting = new RejectAll();
     int total = LockableTaskQueue.MAX_HEAD_DISCARD_PER_RETRY + 5;

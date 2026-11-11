@@ -38,12 +38,11 @@ class DirectExecutorTest {
     java.util.concurrent.atomic.AtomicReference<Integer> depthAfterTask =
         new java.util.concurrent.atomic.AtomicReference<>();
     Thread probe =
-        new Thread(
-            () -> {
-              int d = DirectExecutor.depth();
-              depthValue.set(d);
-              DirectExecutor.INSTANCE.execute(() -> depthAfterTask.set(DirectExecutor.depth()));
-            });
+        new Thread(() -> {
+          int d = DirectExecutor.depth();
+          depthValue.set(d);
+          DirectExecutor.INSTANCE.execute(() -> depthAfterTask.set(DirectExecutor.depth()));
+        });
     probe.start();
     probe.join();
     assertThat(depthValue.get()).isZero();

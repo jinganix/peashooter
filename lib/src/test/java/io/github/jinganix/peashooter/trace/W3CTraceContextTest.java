@@ -259,9 +259,8 @@ class W3CTraceContextTest {
     assertThatThrownBy(() -> new W3CTraceContext.Context("bad", "00f067aa0ba902b7", true, "00"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("traceId");
-    assertThatThrownBy(
-            () ->
-                new W3CTraceContext.Context("4bf92f3577b34da6a3ce929d0e0e4736", "bad", true, "00"))
+    assertThatThrownBy(() ->
+            new W3CTraceContext.Context("4bf92f3577b34da6a3ce929d0e0e4736", "bad", true, "00"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("parentSpanId");
   }
@@ -286,13 +285,11 @@ class W3CTraceContextTest {
   void shouldRejectUndelimitedLongFlagsForFutureVersions() {
     // W3C keeps trace-flags at exactly 2 hex chars for every version; extra fields must be
     // '-'-delimited. A 4-char run with no delimiter is a malformed field, not an extension.
-    assertThatThrownBy(
-            () ->
-                W3CTraceContext.parse("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0100"))
+    assertThatThrownBy(() ->
+            W3CTraceContext.parse("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0100"))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                W3CTraceContext.parse("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01zz"))
+    assertThatThrownBy(() ->
+            W3CTraceContext.parse("01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01zz"))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -313,9 +310,8 @@ class W3CTraceContextTest {
   @Test
   @DisplayName("should still reject long flags for version 00")
   void shouldStillRejectLongFlagsForVersion00() {
-    assertThatThrownBy(
-            () ->
-                W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0100"))
+    assertThatThrownBy(() ->
+            W3CTraceContext.parse("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-0100"))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -362,22 +358,19 @@ class W3CTraceContextTest {
   @Test
   @DisplayName("should reject invalid versions on direct Context construction")
   void shouldRejectInvalidVersionsOnDirectConstruction() {
-    assertThatThrownBy(
-            () ->
-                new W3CTraceContext.Context(
-                    "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, "ff"))
+    assertThatThrownBy(() ->
+            new W3CTraceContext.Context(
+                "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, "ff"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("version");
-    assertThatThrownBy(
-            () ->
-                new W3CTraceContext.Context(
-                    "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, "0"))
+    assertThatThrownBy(() ->
+            new W3CTraceContext.Context(
+                "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, "0"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("version");
-    assertThatThrownBy(
-            () ->
-                new W3CTraceContext.Context(
-                    "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, null))
+    assertThatThrownBy(() ->
+            new W3CTraceContext.Context(
+                "4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7", true, null))
         .isInstanceOf(NullPointerException.class);
   }
 
@@ -472,13 +465,18 @@ class W3CTraceContextTest {
             "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE", true),
         org.junit.jupiter.params.provider.Arguments.of("  rojo=00f067aa0ba902b7  ", true),
         org.junit.jupiter.params.provider.Arguments.of("rojo = 00f067aa0ba902b7", true),
+        org.junit.jupiter.params.provider.Arguments.of("rojo=ab cd", true),
+        org.junit.jupiter.params.provider.Arguments.of("rojo=ab cd ", true),
+        org.junit.jupiter.params.provider.Arguments.of("a=b, ,c=d", true),
+        org.junit.jupiter.params.provider.Arguments.of("a=b,,c=d", true),
+        org.junit.jupiter.params.provider.Arguments.of("a=b,c=d,", true),
         org.junit.jupiter.params.provider.Arguments.of("k=v=" + "x", false),
         org.junit.jupiter.params.provider.Arguments.of("rojo=", false),
+        org.junit.jupiter.params.provider.Arguments.of("rojo= ", false),
         org.junit.jupiter.params.provider.Arguments.of("=value", false),
         org.junit.jupiter.params.provider.Arguments.of("rojo", false),
         org.junit.jupiter.params.provider.Arguments.of("", false),
-        org.junit.jupiter.params.provider.Arguments.of("a=b,,c=d", false),
-        org.junit.jupiter.params.provider.Arguments.of("a=b,c=d,", false),
+        org.junit.jupiter.params.provider.Arguments.of("rojo=ab\tcd", false),
         org.junit.jupiter.params.provider.Arguments.of("a=b\u007Fc=d", false),
         org.junit.jupiter.params.provider.Arguments.of("a=b\nc=d", false),
         org.junit.jupiter.params.provider.Arguments.of("a=" + longValue, false));
@@ -492,18 +490,38 @@ class W3CTraceContextTest {
   }
 
   @Test
-  @DisplayName("should reject tracestate with inner whitespace while keeping edge whitespace")
-  void shouldRejectTracestateWithInnerWhitespaceWhileKeepingEdgeWhitespace() {
-    // Inner spaces/tabs inside a key or value are never valid
-    assertThat(W3CTraceContext.isValidTracestate("rojo=ab cd")).isFalse();
-    assertThat(W3CTraceContext.isValidTracestate("ro ja=v")).isFalse();
+  @DisplayName("should accept spaces inside values and reject tabs inside key or value")
+  void shouldAcceptSpacesInsideValuesAndRejectTabsInsideKeyOrValue() {
+    // W3C chr allows %x20 (space) inside a value: data, not OWS. It must still end with
+    // nblk-chr, and trailing spaces are OWS.
+    assertThat(W3CTraceContext.isValidTracestate("rojo=ab cd")).isTrue();
+    assertThat(W3CTraceContext.isValidTracestate("rojo=ab cd ef")).isTrue();
+    assertThat(W3CTraceContext.isValidTracestate("a=b, c =d e")).isTrue();
+
+    // HTAB is not a value char and never valid inside a key: only edge OWS survives
     assertThat(W3CTraceContext.isValidTracestate("rojo=ab\tcd")).isFalse();
-    assertThat(W3CTraceContext.isValidTracestate("a=b, c =d e")).isFalse();
+    assertThat(W3CTraceContext.isValidTracestate("ro ja=v")).isFalse();
 
     // Leading/trailing OWS around the header and around key/value stays tolerated
     assertThat(W3CTraceContext.isValidTracestate("  rojo=00f067aa0ba902b7  ")).isTrue();
     assertThat(W3CTraceContext.isValidTracestate("rojo = 00f067aa0ba902b7")).isTrue();
     assertThat(W3CTraceContext.isValidTracestate("a=b,\tc=d")).isTrue();
+  }
+
+  @Test
+  @DisplayName("should forward tracestate carrying a space inside its value")
+  void shouldForwardTracestateCarryingSpaceInsideValue() {
+    // Given a W3C-conformant inbound tracestate whose value contains spaces (chr %x20)
+    Span span = Span.ofIds(TraceIds.nextTraceId(), TraceIds.nextSpanId(), null);
+    String tracestate = "rojo=00f067aa0ba902b7,congo=value with spaces";
+
+    // When propagating alongside the downgraded traceparent
+    W3CTraceContext.Headers headers = W3CTraceContext.inject(span, true, tracestate);
+
+    // Then the legal value is forwarded untouched instead of being rejected
+    assertThat(headers.tracestate()).isSameAs(tracestate);
+    assertThat(headers.traceparent())
+        .isEqualTo("00-" + span.getTraceId() + "-" + span.getSpanId() + "-01");
   }
 
   @Test

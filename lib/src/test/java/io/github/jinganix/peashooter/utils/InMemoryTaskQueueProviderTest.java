@@ -138,13 +138,12 @@ class InMemoryTaskQueueProviderTest {
     AssertionError fatal = new AssertionError("task boom");
 
     // When the inline task throws Error (enqueued, runner died fail-open)
-    assertThatThrownBy(
-            () ->
-                queue.execute(
-                    DirectExecutor.INSTANCE,
-                    () -> {
-                      throw fatal;
-                    }))
+    assertThatThrownBy(() ->
+            queue.execute(
+                DirectExecutor.INSTANCE,
+                () -> {
+                  throw fatal;
+                }))
         .isSameAs(fatal);
 
     // Then the failure path added no fence and the live entry is untouched
@@ -174,12 +173,11 @@ class InMemoryTaskQueueProviderTest {
     // Given a factory recording the instance it builds
     AtomicReference<TaskQueue> created = new AtomicReference<>();
     InMemoryTaskQueueProvider provider =
-        new InMemoryTaskQueueProvider(
-            key -> {
-              TaskQueue queue = new TaskQueue();
-              created.set(queue);
-              return queue;
-            });
+        new InMemoryTaskQueueProvider(key -> {
+          TaskQueue queue = new TaskQueue();
+          created.set(queue);
+          return queue;
+        });
 
     // When handing out the queue for submit Then it must be the delegate itself:
     // a subclass wrapper would waste its own inherited deque/monitor while all

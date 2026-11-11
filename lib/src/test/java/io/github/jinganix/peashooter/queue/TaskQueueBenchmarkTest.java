@@ -98,12 +98,11 @@ class TaskQueueBenchmarkTest {
       // When
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
-        executorService.submit(
-            () -> {
-              synchronized (monitor) {
-                count(latch, counter);
-              }
-            });
+        executorService.submit(() -> {
+          synchronized (monitor) {
+            count(latch, counter);
+          }
+        });
       }
       boolean completed = latch.await(120, TimeUnit.SECONDS);
 
@@ -122,15 +121,14 @@ class TaskQueueBenchmarkTest {
       // When
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
-        executorService.submit(
-            () -> {
-              lock.lock();
-              try {
-                count(latch, counter);
-              } finally {
-                lock.unlock();
-              }
-            });
+        executorService.submit(() -> {
+          lock.lock();
+          try {
+            count(latch, counter);
+          } finally {
+            lock.unlock();
+          }
+        });
       }
       boolean completed = latch.await(120, TimeUnit.SECONDS);
 

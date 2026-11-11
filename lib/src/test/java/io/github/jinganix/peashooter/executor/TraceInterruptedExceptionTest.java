@@ -43,9 +43,8 @@ class TraceInterruptedExceptionTest {
   @Test
   @DisplayName("should reject null cause")
   void shouldRejectNullCause() {
-    assertThatThrownBy(
-            () ->
-                new TraceInterruptedException("interrupted", null, "a", new CompletableFuture<>()))
+    assertThatThrownBy(() ->
+            new TraceInterruptedException("interrupted", null, "a", new CompletableFuture<>()))
         .isInstanceOf(NullPointerException.class)
         .hasMessageContaining("cause");
   }

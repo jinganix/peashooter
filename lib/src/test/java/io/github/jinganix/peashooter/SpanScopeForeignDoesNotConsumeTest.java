@@ -59,14 +59,13 @@ class SpanScopeForeignDoesNotConsumeTest {
 
     AtomicReference<Throwable> foreignError = new AtomicReference<>();
     Thread foreign =
-        new Thread(
-            () -> {
-              try {
-                scope.close();
-              } catch (Throwable e) {
-                foreignError.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            scope.close();
+          } catch (Throwable e) {
+            foreignError.set(e);
+          }
+        });
     foreign.start();
     foreign.join();
 

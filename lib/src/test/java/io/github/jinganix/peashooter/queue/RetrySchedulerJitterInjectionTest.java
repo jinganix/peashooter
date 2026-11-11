@@ -52,13 +52,12 @@ class RetrySchedulerJitterInjectionTest {
     List<Long> delays = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              delays.add((Long) inv.getArgument(1));
-              ScheduledFuture f = mock(ScheduledFuture.class);
-              when(f.isDone()).thenReturn(true);
-              return f;
-            });
+        .thenAnswer(inv -> {
+          delays.add((Long) inv.getArgument(1));
+          ScheduledFuture f = mock(ScheduledFuture.class);
+          when(f.isDone()).thenReturn(true);
+          return f;
+        });
     AtomicLong jitter = new AtomicLong(99L);
     RetryScheduler scheduler = new RetryScheduler(rescheduler, jitter::get);
 

@@ -89,14 +89,13 @@ class SequentialReuseNoDoubleNotifyTest {
     java.util.concurrent.atomic.AtomicReference<Throwable> loserFailure =
         new java.util.concurrent.atomic.AtomicReference<>();
     Thread winner =
-        new Thread(
-            () -> {
-              try {
-                runnable.run();
-              } catch (Throwable failure) {
-                loserFailure.compareAndSet(null, failure);
-              }
-            });
+        new Thread(() -> {
+          try {
+            runnable.run();
+          } catch (Throwable failure) {
+            loserFailure.compareAndSet(null, failure);
+          }
+        });
     winner.start();
     assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 

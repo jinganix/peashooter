@@ -44,13 +44,12 @@ class SyncWaitExecutionFailureTranslationTest {
     OrderedTraceExecutor executor = newExecutor();
     IllegalStateException runtime = new IllegalStateException("boom");
 
-    assertThatThrownBy(
-            () ->
-                executor.executeSync(
-                    "k",
-                    () -> {
-                      throw runtime;
-                    }))
+    assertThatThrownBy(() ->
+            executor.executeSync(
+                "k",
+                () -> {
+                  throw runtime;
+                }))
         .isSameAs(runtime);
   }
 
@@ -60,13 +59,12 @@ class SyncWaitExecutionFailureTranslationTest {
     OrderedTraceExecutor executor = newExecutor();
     AssertionError error = new AssertionError("fail");
 
-    assertThatThrownBy(
-            () ->
-                executor.executeSync(
-                    "k",
-                    () -> {
-                      throw error;
-                    }))
+    assertThatThrownBy(() ->
+            executor.executeSync(
+                "k",
+                () -> {
+                  throw error;
+                }))
         .isSameAs(error);
   }
 
@@ -76,14 +74,13 @@ class SyncWaitExecutionFailureTranslationTest {
     OrderedTraceExecutor executor = newExecutor();
     Exception checked = new Exception("checked");
 
-    assertThatThrownBy(
-            () ->
-                executor.supply(
-                    "k",
-                    () -> {
-                      sneakyThrow(checked);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            executor.supply(
+                "k",
+                () -> {
+                  sneakyThrow(checked);
+                  return null;
+                }))
         .isInstanceOf(CompletionException.class)
         .hasCause(checked);
   }
@@ -94,14 +91,13 @@ class SyncWaitExecutionFailureTranslationTest {
     OrderedTraceExecutor executor = newExecutor();
     IOException witnessed = new IOException("witnessed");
 
-    assertThatThrownBy(
-            () ->
-                executor.supplyChecked(
-                    "k",
-                    IOException.class,
-                    () -> {
-                      throw witnessed;
-                    }))
+    assertThatThrownBy(() ->
+            executor.supplyChecked(
+                "k",
+                IOException.class,
+                () -> {
+                  throw witnessed;
+                }))
         .isSameAs(witnessed);
     assertThat(executor.isIdle("k")).isTrue();
   }

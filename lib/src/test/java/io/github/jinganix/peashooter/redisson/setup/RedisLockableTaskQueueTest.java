@@ -90,13 +90,12 @@ class RedisLockableTaskQueueTest {
     try (ExposedQueue queue = new ExposedQueue(name)) {
       // When contending for the same lock from a different thread
       Future<long[]> future =
-          pool.submit(
-              () -> {
-                long start = System.nanoTime();
-                boolean acquired = queue.exposedTryLock(new ExecutionCountStats());
-                long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
-                return new long[] {acquired ? 1 : 0, elapsedMs};
-              });
+          pool.submit(() -> {
+            long start = System.nanoTime();
+            boolean acquired = queue.exposedTryLock(new ExecutionCountStats());
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+            return new long[] {acquired ? 1 : 0, elapsedMs};
+          });
       long[] result = future.get(15, TimeUnit.SECONDS);
 
       // Then it must fail fast instead of blocking ~5s inside tryLock
@@ -119,14 +118,13 @@ class RedisLockableTaskQueueTest {
     try {
       // When a queue that never acquired the lock unlocks from a different thread
       Future<?> future =
-          pool.submit(
-              () -> {
-                try (ExposedQueue queue = new ExposedQueue(name)) {
-                  queue.exposedUnlock();
-                } catch (Exception ignored) {
-                  // Strict unlock may fail loudly when contended; either way the hold must survive.
-                }
-              });
+          pool.submit(() -> {
+            try (ExposedQueue queue = new ExposedQueue(name)) {
+              queue.exposedUnlock();
+            } catch (Exception ignored) {
+              // Strict unlock may fail loudly when contended; either way the hold must survive.
+            }
+          });
       future.get(15, TimeUnit.SECONDS);
 
       // Then the hold must survive instead of being force-released

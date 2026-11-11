@@ -41,12 +41,11 @@ class MultiKeySingleKeySyncReentrancyTest {
   void shouldRunNestedSingleKeyCollectionSyncInline() {
     // Given a one-thread pool: enqueueing behind the running caller can never complete
     ExecutorService pool =
-        Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable, "single-key-sync-reentrancy");
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable, "single-key-sync-reentrancy");
+          thread.setDaemon(true);
+          return thread;
+        });
     try {
       OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
       executor.setTimeout(Duration.ofSeconds(2));

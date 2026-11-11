@@ -84,21 +84,20 @@ class ExecutorOwnershipAndContextTest {
     long deadlineNanos = SyncWait.deadlineOf(waitNanos);
 
     Throwable thrown =
-        catchThrowable(
-            () -> {
-              try {
-                enqueueChecked.invoke(
-                    submissions,
-                    "k",
-                    (Runnable) () -> {},
-                    future,
-                    java.io.IOException.class,
-                    waitNanos,
-                    deadlineNanos);
-              } catch (InvocationTargetException e) {
-                throw e.getCause();
-              }
-            });
+        catchThrowable(() -> {
+          try {
+            enqueueChecked.invoke(
+                submissions,
+                "k",
+                (Runnable) () -> {},
+                future,
+                java.io.IOException.class,
+                waitNanos,
+                deadlineNanos);
+          } catch (InvocationTargetException e) {
+            throw e.getCause();
+          }
+        });
 
     assertThat(thrown).isInstanceOf(CompletionException.class);
     assertThat(thrown.getCause()).isInstanceOf(ExecutionException.class);

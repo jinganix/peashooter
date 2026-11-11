@@ -47,10 +47,9 @@ class TraceTimeoutExceptionTest {
   @Test
   @DisplayName("should reject null cause")
   void shouldRejectNullCause() {
-    assertThatThrownBy(
-            () ->
-                new TraceTimeoutException(
-                    "slow", (TimeoutException) null, "a", new CompletableFuture<>()))
+    assertThatThrownBy(() ->
+            new TraceTimeoutException(
+                "slow", (TimeoutException) null, "a", new CompletableFuture<>()))
         .isInstanceOf(NullPointerException.class)
         .hasMessageContaining("cause");
   }

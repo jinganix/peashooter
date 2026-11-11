@@ -40,12 +40,11 @@ class MultiKeyPoolFailFastTest {
   private static ThreadPoolExecutor singleThreadPool() {
     ThreadPoolExecutor pool =
         new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-    pool.setThreadFactory(
-        runnable -> {
-          Thread thread = new Thread(runnable, "single-pool");
-          thread.setDaemon(true);
-          return thread;
-        });
+    pool.setThreadFactory(runnable -> {
+      Thread thread = new Thread(runnable, "single-pool");
+      thread.setDaemon(true);
+      return thread;
+    });
     return pool;
   }
 

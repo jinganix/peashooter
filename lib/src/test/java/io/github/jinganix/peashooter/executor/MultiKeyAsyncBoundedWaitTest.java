@@ -38,12 +38,11 @@ class MultiKeyAsyncBoundedWaitTest {
   void asyncMultiKeyMustTimeOutInsteadOfHang() throws Exception {
     ThreadPoolExecutor pool =
         new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-    pool.setThreadFactory(
-        r -> {
-          Thread t = new Thread(r, "multi-pool");
-          t.setDaemon(true);
-          return t;
-        });
+    pool.setThreadFactory(r -> {
+      Thread t = new Thread(r, "multi-pool");
+      t.setDaemon(true);
+      return t;
+    });
     OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
     executor.setTimeout(Duration.ofMillis(300));
     java.util.concurrent.CountDownLatch blockerStarted = new java.util.concurrent.CountDownLatch(1);

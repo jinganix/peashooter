@@ -43,19 +43,18 @@ class TracerFallbackConcurrencyTest {
     CountDownLatch done = new CountDownLatch(threads);
     try {
       for (int i = 0; i < threads; i++) {
-        pool.execute(
-            () -> {
-              try {
-                start.await();
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-              }
-              for (int j = 0; j < perThread; j++) {
-                tracer.recordTracerFallback();
-              }
-              done.countDown();
-            });
+        pool.execute(() -> {
+          try {
+            start.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+          }
+          for (int j = 0; j < perThread; j++) {
+            tracer.recordTracerFallback();
+          }
+          done.countDown();
+        });
       }
 
       // When every thread records at once
