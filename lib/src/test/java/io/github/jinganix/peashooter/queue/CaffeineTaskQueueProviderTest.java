@@ -61,22 +61,20 @@ class CaffeineTaskQueueProviderTest {
     for (int t = 0; t < threads; t++) {
       final int slot = t;
       workers.add(
-          new Thread(
-              () -> {
-                for (int i = 0; i < perThread; i++) {
-                  provider.getForSubmit("contended-" + slot + "-" + i);
-                  submitted.incrementAndGet();
-                }
-              }));
+          new Thread(() -> {
+            for (int i = 0; i < perThread; i++) {
+              provider.getForSubmit("contended-" + slot + "-" + i);
+              submitted.incrementAndGet();
+            }
+          }));
     }
     Thread sweeper =
-        new Thread(
-            () -> {
-              for (int i = 0; i < 200; i++) {
-                provider.cleanUp();
-                sleep(5);
-              }
-            });
+        new Thread(() -> {
+          for (int i = 0; i < 200; i++) {
+            provider.cleanUp();
+            sleep(5);
+          }
+        });
 
     // When submissions race concurrent cleanUp sweeps (plus the submit slow-path piggyback)
     sweeper.start();
@@ -162,19 +160,15 @@ class CaffeineTaskQueueProviderTest {
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(() -> new CaffeineTaskQueueProvider(Duration.ofMinutes(5), 0))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                new CaffeineTaskQueueProvider(
-                    Duration.ofMinutes(5),
-                    0,
-                    com.github.benmanes.caffeine.cache.Ticker.systemTicker()))
+    assertThatThrownBy(() ->
+            new CaffeineTaskQueueProvider(
+                Duration.ofMinutes(5), 0, com.github.benmanes.caffeine.cache.Ticker.systemTicker()))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                new CaffeineTaskQueueProvider(
-                    Duration.ofMinutes(5),
-                    -1,
-                    com.github.benmanes.caffeine.cache.Ticker.systemTicker()))
+    assertThatThrownBy(() ->
+            new CaffeineTaskQueueProvider(
+                Duration.ofMinutes(5),
+                -1,
+                com.github.benmanes.caffeine.cache.Ticker.systemTicker()))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -498,21 +492,20 @@ class CaffeineTaskQueueProviderTest {
     AtomicInteger splits = new AtomicInteger();
     CountDownLatch done = new CountDownLatch(3);
     for (int i = 0; i < 3; i++) {
-      pool.execute(
-          () -> {
-            try {
-              for (int j = 0; j < 500; j++) {
-                TaskQueue q = provider.getForSubmit("hot");
-                if (q != first) {
-                  splits.incrementAndGet();
-                }
-                q.execute(pool, () -> {});
-                provider.cleanUp();
-              }
-            } finally {
-              done.countDown();
+      pool.execute(() -> {
+        try {
+          for (int j = 0; j < 500; j++) {
+            TaskQueue q = provider.getForSubmit("hot");
+            if (q != first) {
+              splits.incrementAndGet();
             }
-          });
+            q.execute(pool, () -> {});
+            provider.cleanUp();
+          }
+        } finally {
+          done.countDown();
+        }
+      });
     }
     assertThat(done.await(30, TimeUnit.SECONDS)).isTrue();
 

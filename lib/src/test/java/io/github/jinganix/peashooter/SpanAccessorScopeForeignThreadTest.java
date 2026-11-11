@@ -45,18 +45,17 @@ class SpanAccessorScopeForeignThreadTest {
       AtomicReference<Span> childBefore = new AtomicReference<>();
       AtomicReference<Span> childAfter = new AtomicReference<>();
       Thread foreign =
-          new Thread(
-              () -> {
-                tracer.setSpan(spanB);
-                childBefore.set(tracer.getSpan());
-                try {
-                  scope.close();
-                } catch (Throwable e) {
-                  error.set(e);
-                } finally {
-                  childAfter.set(tracer.getSpan());
-                }
-              });
+          new Thread(() -> {
+            tracer.setSpan(spanB);
+            childBefore.set(tracer.getSpan());
+            try {
+              scope.close();
+            } catch (Throwable e) {
+              error.set(e);
+            } finally {
+              childAfter.set(tracer.getSpan());
+            }
+          });
       foreign.start();
       foreign.join();
 

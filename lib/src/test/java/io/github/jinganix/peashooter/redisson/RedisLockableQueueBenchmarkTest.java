@@ -119,23 +119,22 @@ public class RedisLockableQueueBenchmarkTest {
       // When
       long startAt = System.nanoTime();
       for (int i = 0; i < taskCount; i++) {
-        executorService.submit(
-            () -> {
-              boolean acquired = false;
-              try {
-                acquired = lock.tryLock(5, TimeUnit.SECONDS);
-                if (acquired) {
-                  counter.count++;
-                  latch.countDown();
-                }
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-              } finally {
-                if (acquired) {
-                  lock.unlock();
-                }
-              }
-            });
+        executorService.submit(() -> {
+          boolean acquired = false;
+          try {
+            acquired = lock.tryLock(5, TimeUnit.SECONDS);
+            if (acquired) {
+              counter.count++;
+              latch.countDown();
+            }
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          } finally {
+            if (acquired) {
+              lock.unlock();
+            }
+          }
+        });
       }
       latch.await();
 

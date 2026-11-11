@@ -101,10 +101,17 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 | Method | Description |
 |--------|-------------|
 | `executeAsync(key, task)` | Enqueue `task` for `key`; returns immediately. |
+| `submitAsync(key, task)` / `supplyAsync(key, supplier)` | Enqueue for `key`; return a future completed after the task runs. |
+| `supplyCheckedAsync(key, type, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | Async variants propagating the declared checked failure via the future. |
 | `executeSync(key, task)` | Run `task` on the queue for `key` and block until it completes (default timeout 10 seconds). |
 | `executeSync(keys, task)` | Sort `keys` in natural `String` order, de-duplicate, then acquire outermost-first and run `task`. |
 | `supply(key, supplier)` | Like `executeSync`, but returns the supplier result. |
 | `supply(keys, supplier)` | Multi-key variant of `supply` with the same sorted acquisition. |
+| `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` | Sync variants propagating the declared checked failure unwrapped. |
+| `submitAsync(keys, task)` / `supplyAsync(keys, supplier)` | Async multi-key variants with the same sorted acquisition. |
+| `isIdle(key)` | Whether no tasks are queued and no runner is in flight for `key`. |
+| `getReentrantInlineCount()` | Cumulative peer-free nested same-key sync executions run inline. |
+| `builder(executor)` | Builder for custom queues, selector, tracer, pool sizing, and timeout. |
 | `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits. |
 | `getTracer()` | Access the tracer for custom span integration. |
 

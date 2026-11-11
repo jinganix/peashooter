@@ -115,18 +115,16 @@ class OrderedSpanTest {
     try (MockedStatic<TraceIds> mocked = mockStatic(TraceIds.class)) {
       mocked
           .when(() -> TraceIds.isValidTraceId(anyString()))
-          .thenAnswer(
-              invocation -> {
-                traceIdValidations.incrementAndGet();
-                return true;
-              });
+          .thenAnswer(invocation -> {
+            traceIdValidations.incrementAndGet();
+            return true;
+          });
       mocked
           .when(() -> TraceIds.isValidSpanId(anyString()))
-          .thenAnswer(
-              invocation -> {
-                spanIdValidations.incrementAndGet();
-                return true;
-              });
+          .thenAnswer(invocation -> {
+            spanIdValidations.incrementAndGet();
+            return true;
+          });
 
       // When one ordered span is created on the hot path
       OrderedSpan.childForValidatedKey(generator, null, "key", true);
@@ -246,10 +244,8 @@ class OrderedSpanTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> OrderedSpan.child(tracer, null, null, true))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                OrderedSpan.continueTrace(
-                    "cccccccccccccccccccccccccccccccc", tracer, null, " ", true))
+    assertThatThrownBy(() ->
+            OrderedSpan.continueTrace("cccccccccccccccccccccccccccccccc", tracer, null, " ", true))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

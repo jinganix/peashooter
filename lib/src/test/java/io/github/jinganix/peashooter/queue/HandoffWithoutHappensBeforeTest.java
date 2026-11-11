@@ -49,16 +49,15 @@ class HandoffWithoutHappensBeforeTest {
 
     NoHappensBeforeExecutor() {
       pump =
-          new Thread(
-              () -> {
-                while (!Thread.currentThread().isInterrupted()) {
-                  Runnable task = slot;
-                  if (task != null) {
-                    slot = null;
-                    task.run();
-                  }
-                }
-              });
+          new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+              Runnable task = slot;
+              if (task != null) {
+                slot = null;
+                task.run();
+              }
+            }
+          });
       pump.setDaemon(true);
       pump.start();
     }
@@ -126,12 +125,11 @@ class HandoffWithoutHappensBeforeTest {
       "should keep mutual exclusion when a LockableTaskQueue hands off over a no-HB executor")
   void lockableHandoffOverNoHbExecutorKeepsMutualExclusion() throws Exception {
     ScheduledExecutorService scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread thread = new Thread(r);
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadScheduledExecutor(r -> {
+          Thread thread = new Thread(r);
+          thread.setDaemon(true);
+          return thread;
+        });
     try {
       AtomicInteger concurrent = new AtomicInteger();
       AtomicInteger maxConcurrent = new AtomicInteger();

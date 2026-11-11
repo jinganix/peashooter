@@ -99,30 +99,28 @@ class OrderedTraceExecutorTest {
   }
 
   private static final ScheduledExecutorService UNLOCKED_RESCHEDULER =
-      Executors.newSingleThreadScheduledExecutor(
-          runnable -> {
-            Thread thread = new Thread(runnable);
-            thread.setDaemon(true);
-            return thread;
-          });
+      Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable);
+        thread.setDaemon(true);
+        return thread;
+      });
 
   static TaskQueueProvider unlockedQueues() {
-    return new InMemoryTaskQueueProvider(
-        key ->
-            new LockableTaskQueue(new ExecutionCountStats(), UNLOCKED_RESCHEDULER) {
-              @Override
-              protected boolean tryLock(ExecutionStats stats) {
-                return true;
-              }
+    return new InMemoryTaskQueueProvider(key ->
+        new LockableTaskQueue(new ExecutionCountStats(), UNLOCKED_RESCHEDULER) {
+          @Override
+          protected boolean tryLock(ExecutionStats stats) {
+            return true;
+          }
 
-              @Override
-              protected boolean shouldYield(ExecutionStats stats) {
-                return false;
-              }
+          @Override
+          protected boolean shouldYield(ExecutionStats stats) {
+            return false;
+          }
 
-              @Override
-              protected void unlock() {}
-            });
+          @Override
+          protected void unlock() {}
+        });
   }
 
   @Nested
@@ -335,14 +333,13 @@ class OrderedTraceExecutorTest {
         new java.util.concurrent.atomic.AtomicBoolean();
 
     // When
-    assertThatThrownBy(
-            () ->
-                executor.executeSync(
-                    "a",
-                    () -> {
-                      sleep(200);
-                      finished.set(true);
-                    }))
+    assertThatThrownBy(() ->
+            executor.executeSync(
+                "a",
+                () -> {
+                  sleep(200);
+                  finished.set(true);
+                }))
         .isInstanceOf(RuntimeException.class)
         .matches(t -> t.getCause() instanceof TimeoutException);
 
@@ -448,12 +445,10 @@ class OrderedTraceExecutorTest {
     assertThatThrownBy(() -> executor.executeSync("k", () -> {}))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("selector boom")
-        .satisfies(
-            failure ->
-                assertThat(failure.getSuppressed())
-                    .anySatisfy(
-                        suppressed ->
-                            assertThat(suppressed).hasMessageContaining("fence release boom")));
+        .satisfies(failure ->
+            assertThat(failure.getSuppressed())
+                .anySatisfy(suppressed ->
+                    assertThat(suppressed).hasMessageContaining("fence release boom")));
   }
 
   @Test
@@ -679,14 +674,13 @@ class OrderedTraceExecutorTest {
 
     // When / Then a checked supply must not catch the smuggled IOException as its own E:
     // infrastructure failures surface wrapped instead of masquerading under a false type
-    assertThatThrownBy(
-            () ->
-                executor.<String, CustomChecked>supplyChecked(
-                    "k",
-                    CustomChecked.class,
-                    () -> {
-                      throw new CustomChecked("task failure");
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, CustomChecked>supplyChecked(
+                "k",
+                CustomChecked.class,
+                () -> {
+                  throw new CustomChecked("task failure");
+                }))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasCauseInstanceOf(java.io.IOException.class);
   }
@@ -724,14 +718,13 @@ class OrderedTraceExecutorTest {
         "k",
         () -> {
           try {
-            sneakyCall(
-                () ->
-                    executor.<String, CustomChecked>supplyChecked(
-                        "k",
-                        CustomChecked.class,
-                        () -> {
-                          throw new CustomChecked("task failure");
-                        }));
+            sneakyCall(() ->
+                executor.<String, CustomChecked>supplyChecked(
+                    "k",
+                    CustomChecked.class,
+                    () -> {
+                      throw new CustomChecked("task failure");
+                    }));
           } catch (Throwable e) {
             nestedFailure.set(e);
           }
@@ -835,12 +828,10 @@ class OrderedTraceExecutorTest {
       // When a sync call queues behind the blocker Then the timeout message stays on one line
       assertThatThrownBy(() -> executor.executeSync(key, () -> {}))
           .isInstanceOf(TraceTimeoutException.class)
-          .satisfies(
-              ex -> {
-                assertThat(ex.getMessage())
-                    .doesNotContain("\n", "\r", "\u0000", "\u0007", "\u001B");
-                assertThat(((TraceTimeoutException) ex).getKey()).isEqualTo(key);
-              });
+          .satisfies(ex -> {
+            assertThat(ex.getMessage()).doesNotContain("\n", "\r", "\u0000", "\u0007", "\u001B");
+            assertThat(((TraceTimeoutException) ex).getKey()).isEqualTo(key);
+          });
     } finally {
       releaseBlocker.countDown();
     }
@@ -888,14 +879,13 @@ class OrderedTraceExecutorTest {
     java.io.IOException failure = new java.io.IOException("typed");
 
     // When / Then the checked failure keeps its static type (no RuntimeException re-wrap)
-    assertThatThrownBy(
-            () ->
-                executor.<String, java.io.IOException>supplyChecked(
-                    "a",
-                    java.io.IOException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, java.io.IOException>supplyChecked(
+                "a",
+                java.io.IOException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 
@@ -908,14 +898,13 @@ class OrderedTraceExecutorTest {
     java.io.IOException failure = new java.io.IOException("declared");
 
     // When / Then supplyChecked unwraps the declared failure via its Class witness
-    assertThatThrownBy(
-            () ->
-                executor.<String, java.io.IOException>supplyChecked(
-                    "a",
-                    java.io.IOException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, java.io.IOException>supplyChecked(
+                "a",
+                java.io.IOException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 
@@ -928,14 +917,13 @@ class OrderedTraceExecutorTest {
     RuntimeException failure = new RuntimeException("boom");
 
     // When / Then
-    assertThatThrownBy(
-            () ->
-                executor.<String, RuntimeException>supplyChecked(
-                    "a",
-                    RuntimeException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, RuntimeException>supplyChecked(
+                "a",
+                RuntimeException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 
@@ -999,14 +987,13 @@ class OrderedTraceExecutorTest {
     java.io.IOException failure = new java.io.IOException("typed");
 
     // When / Then the checked failure keeps its static type across key nesting
-    assertThatThrownBy(
-            () ->
-                executor.<String, java.io.IOException>supplyChecked(
-                    java.util.List.of("b", "a"),
-                    java.io.IOException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, java.io.IOException>supplyChecked(
+                java.util.List.of("b", "a"),
+                java.io.IOException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 
@@ -1057,15 +1044,14 @@ class OrderedTraceExecutorTest {
     Thread.currentThread().interrupt();
 
     // When / Then the waiter surfaces interruption without swallowing the flag
-    assertThatThrownBy(
-            () ->
-                executor.<String, RuntimeException>supplyChecked(
-                    "a",
-                    RuntimeException.class,
-                    () -> {
-                      sleep(100);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, RuntimeException>supplyChecked(
+                "a",
+                RuntimeException.class,
+                () -> {
+                  sleep(100);
+                  return null;
+                }))
         .isInstanceOf(TraceInterruptedException.class);
     assertThat(Thread.currentThread().isInterrupted()).isTrue();
     Thread.interrupted();
@@ -1080,15 +1066,14 @@ class OrderedTraceExecutorTest {
     executor.setTimeout(java.time.Duration.ofMillis(1));
 
     // When / Then
-    assertThatThrownBy(
-            () ->
-                executor.<String, RuntimeException>supplyChecked(
-                    "a",
-                    RuntimeException.class,
-                    () -> {
-                      sleep(100);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, RuntimeException>supplyChecked(
+                "a",
+                RuntimeException.class,
+                () -> {
+                  sleep(100);
+                  return null;
+                }))
         .isInstanceOf(TraceTimeoutException.class);
   }
 
@@ -1105,14 +1090,13 @@ class OrderedTraceExecutorTest {
         Duration.ofMillis(500),
         (org.junit.jupiter.api.function.ThrowingSupplier<Void>)
             () -> {
-              assertThatThrownBy(
-                      () ->
-                          executor.<String, RuntimeException>supplyChecked(
-                              "a",
-                              RuntimeException.class,
-                              () -> {
-                                throw failure;
-                              }))
+              assertThatThrownBy(() ->
+                      executor.<String, RuntimeException>supplyChecked(
+                          "a",
+                          RuntimeException.class,
+                          () -> {
+                            throw failure;
+                          }))
                   .isSameAs(failure);
               return null;
             });
@@ -1133,10 +1117,8 @@ class OrderedTraceExecutorTest {
         new RejectionAwareCheckedSupplier(rejectedCause, rejectedLatch);
 
     // When the checked supply is discarded Then the future fails and the supplier is notified
-    assertThatThrownBy(
-            () ->
-                executor.<String, RuntimeException>supplyChecked(
-                    "a", RuntimeException.class, supplier))
+    assertThatThrownBy(() ->
+            executor.<String, RuntimeException>supplyChecked("a", RuntimeException.class, supplier))
         .isInstanceOf(RejectedExecutionException.class);
     awaitCountDown(rejectedLatch);
     assertThat(rejectedCause.get()).isInstanceOf(RejectedExecutionException.class);
@@ -1226,14 +1208,13 @@ class OrderedTraceExecutorTest {
 
     // When / Then the infrastructure rejection surfaces wrapped (never masquerading as the
     // delegate's declared failure): the cause chain still carries the original rejection
-    assertThatThrownBy(
-            () ->
-                executor.<String, java.io.IOException>supplyChecked(
-                    "a",
-                    java.io.IOException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, java.io.IOException>supplyChecked(
+                "a",
+                java.io.IOException.class,
+                () -> {
+                  throw failure;
+                }))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasStackTraceContaining("rejection");
   }
@@ -1252,21 +1233,19 @@ class OrderedTraceExecutorTest {
     AtomicReference<io.github.jinganix.peashooter.trace.Span> innerSpan = new AtomicReference<>();
 
     // When the nested checked supplier fails Then the failure propagates from the inline path
-    assertThatThrownBy(
-            () ->
-                orderedExecutor.<String, RuntimeException>supplyChecked(
-                    "a",
-                    RuntimeException.class,
-                    () ->
-                        sneakyCall(
-                            () ->
-                                orderedExecutor.<String, RuntimeException>supplyChecked(
-                                    "a",
-                                    RuntimeException.class,
-                                    () -> {
-                                      innerSpan.set(tracer.getSpan());
-                                      throw failure;
-                                    }))))
+    assertThatThrownBy(() ->
+            orderedExecutor.<String, RuntimeException>supplyChecked(
+                "a",
+                RuntimeException.class,
+                () ->
+                    sneakyCall(() ->
+                        orderedExecutor.<String, RuntimeException>supplyChecked(
+                            "a",
+                            RuntimeException.class,
+                            () -> {
+                              innerSpan.set(tracer.getSpan());
+                              throw failure;
+                            }))))
         .isSameAs(failure);
     assertThat(innerSpan.get()).isNotNull();
   }
@@ -1284,20 +1263,18 @@ class OrderedTraceExecutorTest {
     java.io.IOException failure = new java.io.IOException("nested typed");
 
     // When the nested checked supplier fails Then the typed failure propagates inline
-    assertThatThrownBy(
-            () ->
-                orderedExecutor.<String, java.io.IOException>supplyChecked(
-                    "a",
-                    java.io.IOException.class,
-                    () ->
-                        sneakyCall(
-                            () ->
-                                orderedExecutor.<String, java.io.IOException>supplyChecked(
-                                    "a",
-                                    java.io.IOException.class,
-                                    () -> {
-                                      throw failure;
-                                    }))))
+    assertThatThrownBy(() ->
+            orderedExecutor.<String, java.io.IOException>supplyChecked(
+                "a",
+                java.io.IOException.class,
+                () ->
+                    sneakyCall(() ->
+                        orderedExecutor.<String, java.io.IOException>supplyChecked(
+                            "a",
+                            java.io.IOException.class,
+                            () -> {
+                              throw failure;
+                            }))))
         .isSameAs(failure);
   }
 
@@ -1357,10 +1334,9 @@ class OrderedTraceExecutorTest {
     try {
       assertThatThrownBy(() -> executor.executeSync("a", () -> {}))
           .isInstanceOf(TraceInterruptedException.class)
-          .matches(
-              t ->
-                  t.getCause() instanceof InterruptedException
-                      && ((TraceInterruptedException) t).getInterruptCause() == t.getCause());
+          .matches(t ->
+              t.getCause() instanceof InterruptedException
+                  && ((TraceInterruptedException) t).getInterruptCause() == t.getCause());
       assertThat(Thread.currentThread().isInterrupted()).isTrue();
     } finally {
       Thread.interrupted();
@@ -1461,13 +1437,12 @@ class OrderedTraceExecutorTest {
             new CaffeineTaskQueueProvider(), (queue, sync) -> DirectExecutor.INSTANCE, TRACER);
 
     // When submitAsync runs the runner inline Then the original Error propagates
-    assertThatThrownBy(
-            () ->
-                executor.submitAsync(
-                    "a",
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            executor.submitAsync(
+                "a",
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
   }
 
@@ -1719,13 +1694,12 @@ class OrderedTraceExecutorTest {
         Duration.ofMillis(500),
         (ThrowingSupplier<Void>)
             () -> {
-              assertThatThrownBy(
-                      () ->
-                          executor.supply(
-                              "a",
-                              () -> {
-                                throw error;
-                              }))
+              assertThatThrownBy(() ->
+                      executor.supply(
+                          "a",
+                          () -> {
+                            throw error;
+                          }))
                   .isEqualTo(error);
               return null;
             });
@@ -1741,14 +1715,13 @@ class OrderedTraceExecutorTest {
     Thread.currentThread().interrupt();
 
     // When
-    assertThatThrownBy(
-            () ->
-                executor.supply(
-                    "a",
-                    () -> {
-                      sleep(100);
-                      return 0L;
-                    }))
+    assertThatThrownBy(() ->
+            executor.supply(
+                "a",
+                () -> {
+                  sleep(100);
+                  return 0L;
+                }))
         .isInstanceOf(RuntimeException.class);
 
     // Then
@@ -1766,14 +1739,13 @@ class OrderedTraceExecutorTest {
 
     // When / Then the smuggled checked failure surfaces as CompletionException (not bare
     // RuntimeException), preserving the cause for inspection
-    assertThatThrownBy(
-            () ->
-                executor.supply(
-                    "a",
-                    () -> {
-                      sneakyThrow(throwable);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            executor.supply(
+                "a",
+                () -> {
+                  sneakyThrow(throwable);
+                  return null;
+                }))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasCause(throwable);
   }
@@ -1792,13 +1764,12 @@ class OrderedTraceExecutorTest {
         Duration.ofMillis(500),
         (ThrowingSupplier<Void>)
             () -> {
-              assertThatThrownBy(
-                      () ->
-                          executor.executeSync(
-                              "a",
-                              () -> {
-                                throw error;
-                              }))
+              assertThatThrownBy(() ->
+                      executor.executeSync(
+                          "a",
+                          () -> {
+                            throw error;
+                          }))
                   .isEqualTo(error);
               return null;
             });
@@ -1814,10 +1785,9 @@ class OrderedTraceExecutorTest {
       public Stream<? extends Arguments> provideArguments(
           ParameterDeclarations parameters, ExtensionContext context) {
         return EXECUTORS.executors().entrySet().stream()
-            .map(
-                x ->
-                    Arguments.of(
-                        x.getKey(), createExecutor(x.getValue(), new CaffeineTaskQueueProvider())));
+            .map(x ->
+                Arguments.of(
+                    x.getKey(), createExecutor(x.getValue(), new CaffeineTaskQueueProvider())));
       }
     }
 
@@ -1933,25 +1903,24 @@ class OrderedTraceExecutorTest {
       public Stream<? extends Arguments> provideArguments(
           ParameterDeclarations parameters, ExtensionContext context) {
         return EXECUTORS.executors().entrySet().stream()
-            .flatMap(
-                x ->
-                    Stream.of(
-                        Arguments.of(
-                            x.getKey(),
-                            "executeSync",
-                            createExecuteSync(x.getValue(), new CaffeineTaskQueueProvider())),
-                        Arguments.of(
-                            x.getKey(),
-                            "executeSync.lockable",
-                            createExecuteSync(x.getValue(), unlockedQueues())),
-                        Arguments.of(
-                            x.getKey(),
-                            "supply",
-                            createSupply(x.getValue(), new CaffeineTaskQueueProvider())),
-                        Arguments.of(
-                            x.getKey(),
-                            "supply.lockable",
-                            createSupply(x.getValue(), unlockedQueues()))));
+            .flatMap(x ->
+                Stream.of(
+                    Arguments.of(
+                        x.getKey(),
+                        "executeSync",
+                        createExecuteSync(x.getValue(), new CaffeineTaskQueueProvider())),
+                    Arguments.of(
+                        x.getKey(),
+                        "executeSync.lockable",
+                        createExecuteSync(x.getValue(), unlockedQueues())),
+                    Arguments.of(
+                        x.getKey(),
+                        "supply",
+                        createSupply(x.getValue(), new CaffeineTaskQueueProvider())),
+                    Arguments.of(
+                        x.getKey(),
+                        "supply.lockable",
+                        createSupply(x.getValue(), unlockedQueues()))));
       }
     }
 
@@ -1967,22 +1936,20 @@ class OrderedTraceExecutorTest {
 
       // When
       CompletableFuture.allOf(
-              runAsync(
-                  () ->
-                      callable.call(
-                          "a",
-                          () -> {
-                            start1.set(System.currentTimeMillis());
-                            return sleep(100);
-                          })),
-              runAsync(
-                  () ->
-                      callable.call(
-                          "a",
-                          () -> {
-                            start2.set(System.currentTimeMillis());
-                            return sleep(100);
-                          })))
+              runAsync(() ->
+                  callable.call(
+                      "a",
+                      () -> {
+                        start1.set(System.currentTimeMillis());
+                        return sleep(100);
+                      })),
+              runAsync(() ->
+                  callable.call(
+                      "a",
+                      () -> {
+                        start2.set(System.currentTimeMillis());
+                        return sleep(100);
+                      })))
           .get();
 
       // Then
@@ -2001,22 +1968,20 @@ class OrderedTraceExecutorTest {
 
       // When
       CompletableFuture.allOf(
-              runAsync(
-                  () ->
-                      callable.call(
-                          "a",
-                          () -> {
-                            start1.set(System.currentTimeMillis());
-                            return sleep(100);
-                          })),
-              runAsync(
-                  () ->
-                      callable.call(
-                          "b",
-                          () -> {
-                            start2.set(System.currentTimeMillis());
-                            return sleep(100);
-                          })))
+              runAsync(() ->
+                  callable.call(
+                      "a",
+                      () -> {
+                        start1.set(System.currentTimeMillis());
+                        return sleep(100);
+                      })),
+              runAsync(() ->
+                  callable.call(
+                      "b",
+                      () -> {
+                        start2.set(System.currentTimeMillis());
+                        return sleep(100);
+                      })))
           .get();
 
       // Then
@@ -2139,13 +2104,12 @@ class OrderedTraceExecutorTest {
       RuntimeException ex = new RuntimeException("error");
 
       // When / Then
-      assertThatThrownBy(
-              () ->
-                  callable.call(
-                      "a",
-                      () -> {
-                        throw ex;
-                      }))
+      assertThatThrownBy(() ->
+              callable.call(
+                  "a",
+                  () -> {
+                    throw ex;
+                  }))
           .isInstanceOf(RuntimeException.class)
           .matches(t -> t == ex);
     }
@@ -2161,14 +2125,13 @@ class OrderedTraceExecutorTest {
       Thread.currentThread().interrupt();
 
       // When / Then
-      assertThatThrownBy(
-              () ->
-                  callable.call(
-                      "a",
-                      () -> {
-                        sleep(100);
-                        return 0L;
-                      }))
+      assertThatThrownBy(() ->
+              callable.call(
+                  "a",
+                  () -> {
+                    sleep(100);
+                    return 0L;
+                  }))
           .isInstanceOf(RuntimeException.class);
     }
 
@@ -2197,10 +2160,9 @@ class OrderedTraceExecutorTest {
       // not bypass the queue inline (which would skip sorted acquisition and break the
       // global order promise): it queues behind itself and times out instead of succeeding.
       // RED before the fix: nested multi-key ran inline via isReentrant and completed.
-      assertThatThrownBy(
-              () ->
-                  executor.executeSync(
-                      "a", () -> executor.executeSync(Arrays.asList("a", "b"), () -> {})))
+      assertThatThrownBy(() ->
+              executor.executeSync(
+                  "a", () -> executor.executeSync(Arrays.asList("a", "b"), () -> {})))
           .isInstanceOf(TraceTimeoutException.class);
     }
 
@@ -2246,10 +2208,9 @@ class OrderedTraceExecutorTest {
       public Stream<? extends Arguments> provideArguments(
           ParameterDeclarations parameters, ExtensionContext context) {
         return EXECUTORS.executors().entrySet().stream()
-            .map(
-                x ->
-                    Arguments.of(
-                        x.getKey(), createExecutor(x.getValue(), new CaffeineTaskQueueProvider())));
+            .map(x ->
+                Arguments.of(
+                    x.getKey(), createExecutor(x.getValue(), new CaffeineTaskQueueProvider())));
       }
     }
 

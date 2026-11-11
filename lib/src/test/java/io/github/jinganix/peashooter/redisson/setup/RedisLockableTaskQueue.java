@@ -99,12 +99,11 @@ public class RedisLockableTaskQueue extends LockableTaskQueue implements AutoClo
   }
 
   private static ScheduledExecutorService newRescheduler() {
-    return Executors.newSingleThreadScheduledExecutor(
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setDaemon(true);
-          return thread;
-        });
+    return Executors.newSingleThreadScheduledExecutor(runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setDaemon(true);
+      return thread;
+    });
   }
 
   /**

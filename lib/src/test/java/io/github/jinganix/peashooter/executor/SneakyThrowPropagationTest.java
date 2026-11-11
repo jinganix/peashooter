@@ -57,15 +57,14 @@ class SneakyThrowPropagationTest {
 
     // When the supplier smuggles a checked type unrelated to E
     // Then it must surface wrapped as unchecked, never masquerading under E's static type
-    assertThatThrownBy(
-            () ->
-                executor.<String, CustomChecked>supplyChecked(
-                    "k",
-                    CustomChecked.class,
-                    () -> {
-                      sneakyThrow(foreign);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, CustomChecked>supplyChecked(
+                "k",
+                CustomChecked.class,
+                () -> {
+                  sneakyThrow(foreign);
+                  return null;
+                }))
         .isInstanceOf(CompletionException.class)
         .hasCause(foreign);
   }
@@ -83,14 +82,13 @@ class SneakyThrowPropagationTest {
     CustomChecked declared = new CustomChecked("declared boom");
 
     // When the supplier throws its declared type Then it propagates unwrapped with static type
-    assertThatThrownBy(
-            () ->
-                executor.<String, CustomChecked>supplyChecked(
-                    "k",
-                    CustomChecked.class,
-                    () -> {
-                      throw declared;
-                    }))
+    assertThatThrownBy(() ->
+            executor.<String, CustomChecked>supplyChecked(
+                "k",
+                CustomChecked.class,
+                () -> {
+                  throw declared;
+                }))
         .isSameAs(declared);
     assertThat(declared.getSuppressed()).isEmpty();
   }

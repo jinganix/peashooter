@@ -63,11 +63,10 @@ class RedisExtensionTest {
       List<Future<RedisContainer>> futures = new ArrayList<>();
       for (int i = 0; i < threads; i++) {
         futures.add(
-            pool.submit(
-                () -> {
-                  new RedisExtension().beforeAll(null);
-                  return RedisExtension.sharedContainer();
-                }));
+            pool.submit(() -> {
+              new RedisExtension().beforeAll(null);
+              return RedisExtension.sharedContainer();
+            }));
       }
 
       // When / Then every instance observes the single shared container

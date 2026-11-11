@@ -73,14 +73,13 @@ class ReentrantOvertakeFailFastTest {
 
       // Peer queues behind the holder and blocks.
       Thread peer =
-          new Thread(
-              () ->
-                  executor.executeSync(
-                      "k",
-                      () -> {
-                        order.add("peer");
-                        peerDone.countDown();
-                      }));
+          new Thread(() ->
+              executor.executeSync(
+                  "k",
+                  () -> {
+                    order.add("peer");
+                    peerDone.countDown();
+                  }));
       peer.start();
       Thread.sleep(300);
       peerQueued.countDown();

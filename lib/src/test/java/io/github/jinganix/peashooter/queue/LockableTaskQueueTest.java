@@ -52,6 +52,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterAll;
@@ -78,12 +79,11 @@ class LockableTaskQueueTest {
   }
 
   private static ScheduledExecutorService newSingleThreadTestScheduler() {
-    return Executors.newSingleThreadScheduledExecutor(
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setDaemon(true);
-          return thread;
-        });
+    return Executors.newSingleThreadScheduledExecutor(runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setDaemon(true);
+      return thread;
+    });
   }
 
   /**
@@ -153,7 +153,12 @@ class LockableTaskQueueTest {
   void shouldRejectOnlyTheHeadWhenLockFailureRescheduleIsRejected() throws InterruptedException {
     // Given a contended lock with a flaky executor that rejects every retry after the first
     LockableTaskQueue taskQueue = mockWithSharedScheduler();
-    when(taskQueue.tryLock(any())).thenReturn(false);
+    // Dynamic answer, not a mid-test re-stub: re-stubbing while the timer thread is inside the
+    // mock races Mockito's stubbing capture (WrongTypeOfReturnValue flake), while flipping this
+    // flag is thread-safe and observed on the next tryLock.
+    AtomicBoolean lockAvailable = new AtomicBoolean(false);
+    when(taskQueue.tryLock(any())).thenAnswer(invocation -> lockAvailable.get());
+    when(taskQueue.shouldYield(any())).thenReturn(false);
     CountDownLatch runnerEntered = new CountDownLatch(1);
     CountDownLatch releaseRunner = new CountDownLatch(1);
     AtomicInteger executeCalls = new AtomicInteger();
@@ -200,8 +205,7 @@ class LockableTaskQueueTest {
     assertThat(taskQueue.isIdle()).isFalse();
 
     // And the preserved task still drains once the lock is available
-    when(taskQueue.tryLock(any())).thenReturn(true);
-    when(taskQueue.shouldYield(any())).thenReturn(false);
+    lockAvailable.set(true);
     awaitCountDown(secondDone);
     assertThat(taskQueue.isIdle()).isTrue();
   }
@@ -228,14 +232,13 @@ class LockableTaskQueueTest {
     CountDownLatch done = new CountDownLatch(3);
 
     // When all three tasks are queued before the runner starts draining
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    blockingAsync,
-                    () -> {
-                      sleep(10);
-                      done.countDown();
-                    }))
+    new Thread(() ->
+        taskQueue.execute(
+            blockingAsync,
+            () -> {
+              sleep(10);
+              done.countDown();
+            }))
         .start();
     runnerStarted.await();
     taskQueue.execute(DirectExecutor.INSTANCE, done::countDown);
@@ -588,11 +591,10 @@ class LockableTaskQueueTest {
         command -> {
           CountDownLatch threadStarted = new CountDownLatch(1);
           Thread thread =
-              new Thread(
-                  () -> {
-                    threadStarted.countDown();
-                    command.run();
-                  });
+              new Thread(() -> {
+                threadStarted.countDown();
+                command.run();
+              });
           thread.setDaemon(true);
           thread.start();
           try {
@@ -683,10 +685,9 @@ class LockableTaskQueueTest {
     // the retry scheduler must always be caller-provided via the constructor.
     List<java.lang.reflect.Field> schedulerFields =
         Arrays.stream(LockableTaskQueue.class.getDeclaredFields())
-            .filter(
-                f ->
-                    java.lang.reflect.Modifier.isStatic(f.getModifiers())
-                        && ScheduledExecutorService.class.isAssignableFrom(f.getType()))
+            .filter(f ->
+                java.lang.reflect.Modifier.isStatic(f.getModifiers())
+                    && ScheduledExecutorService.class.isAssignableFrom(f.getType()))
             .toList();
     assertThat(schedulerFields).isEmpty();
   }
@@ -818,11 +819,10 @@ class LockableTaskQueueTest {
     java.io.IOException failure = new java.io.IOException("scheduler boom");
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              sneakyThrow(failure);
-              return null;
-            });
+        .thenAnswer(invocation -> {
+          sneakyThrow(failure);
+          return null;
+        });
     java.util.concurrent.atomic.AtomicBoolean ran = new java.util.concurrent.atomic.AtomicBoolean();
     LockableTaskQueue taskQueue =
         new LockableTaskQueue(new ExecutionCountStats(), rescheduler) {
@@ -855,11 +855,10 @@ class LockableTaskQueueTest {
     java.util.List<Runnable> timers = new java.util.ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     LockableTaskQueue taskQueue =
         new LockableTaskQueue(new ExecutionCountStats(), rescheduler) {
           @Override
@@ -945,13 +944,12 @@ class LockableTaskQueueTest {
     CountDownLatch releaseUnlock = new CountDownLatch(1);
     LockableTaskQueue taskQueue = mockWithSharedScheduler();
     when(taskQueue.tryLock(any()))
-        .thenAnswer(
-            invocation -> {
-              if (releaseUnlock.getCount() > 0) {
-                preReleaseAcquisitions.incrementAndGet();
-              }
-              return true;
-            });
+        .thenAnswer(invocation -> {
+          if (releaseUnlock.getCount() > 0) {
+            preReleaseAcquisitions.incrementAndGet();
+          }
+          return true;
+        });
     when(taskQueue.shouldYield(any())).thenReturn(false);
     doAnswer(
             invocation -> {
@@ -1042,11 +1040,10 @@ class LockableTaskQueueTest {
     java.util.List<Runnable> timers = new java.util.ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     java.io.IOException failure = new java.io.IOException("retry boom");
     java.util.concurrent.atomic.AtomicInteger executions =
         new java.util.concurrent.atomic.AtomicInteger();
@@ -1091,11 +1088,10 @@ class LockableTaskQueueTest {
     List<Runnable> timers = new java.util.ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     java.util.concurrent.atomic.AtomicBoolean allowLock =
         new java.util.concurrent.atomic.AtomicBoolean(false);
     AtomicInteger calls = new AtomicInteger();
@@ -1162,11 +1158,10 @@ class LockableTaskQueueTest {
     List<Runnable> timers = new java.util.ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     java.util.concurrent.atomic.AtomicBoolean allowLock =
         new java.util.concurrent.atomic.AtomicBoolean(false);
     AtomicInteger calls = new AtomicInteger();
@@ -1227,11 +1222,10 @@ class LockableTaskQueueTest {
     List<Runnable> timers = new java.util.ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     java.util.concurrent.atomic.AtomicBoolean allowLock =
         new java.util.concurrent.atomic.AtomicBoolean(false);
     AtomicInteger calls = new AtomicInteger();
@@ -1455,13 +1449,12 @@ class LockableTaskQueueTest {
     LockableTaskQueue taskQueue = mockWithSharedScheduler();
     AtomicInteger calls = new AtomicInteger();
     when(taskQueue.tryLock(any()))
-        .thenAnswer(
-            inv -> {
-              if (calls.getAndIncrement() == 0) {
-                throw new RuntimeException("lock boom");
-              }
-              return true;
-            });
+        .thenAnswer(inv -> {
+          if (calls.getAndIncrement() == 0) {
+            throw new RuntimeException("lock boom");
+          }
+          return true;
+        });
     CountDownLatch done = new CountDownLatch(1);
 
     // When
@@ -1484,15 +1477,14 @@ class LockableTaskQueueTest {
     CountDownLatch done = new CountDownLatch(2);
 
     // When the first task blocks while the second is enqueued, then releases
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    DirectExecutor.INSTANCE,
-                    () -> {
-                      task1Running.countDown();
-                      uncheckedRun(releaseTask1::await);
-                      done.countDown();
-                    }))
+    new Thread(() ->
+        taskQueue.execute(
+            DirectExecutor.INSTANCE,
+            () -> {
+              task1Running.countDown();
+              uncheckedRun(releaseTask1::await);
+              done.countDown();
+            }))
         .start();
     task1Running.await();
     taskQueue.execute(DirectExecutor.INSTANCE, done::countDown);
@@ -1650,15 +1642,14 @@ class LockableTaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch priorTasksDone = new CountDownLatch(3);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -1714,16 +1705,15 @@ class LockableTaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch runnerFinished = new CountDownLatch(1);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                      runnerFinished.countDown();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+              runnerFinished.countDown();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -1769,14 +1759,13 @@ class LockableTaskQueueTest {
     taskQueue.execute(newSingleThreadExecutor(), () -> {});
     unlockEntered.await();
     // And a second batch is submitted while unlock is still blocked
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    DirectExecutor.INSTANCE,
-                    () -> {
-                      secondRan.set(true);
-                      secondDone.countDown();
-                    }))
+    new Thread(() ->
+        taskQueue.execute(
+            DirectExecutor.INSTANCE,
+            () -> {
+              secondRan.set(true);
+              secondDone.countDown();
+            }))
         .start();
     sleep(300);
 
@@ -1795,14 +1784,13 @@ class LockableTaskQueueTest {
     CountDownLatch scheduled = new CountDownLatch(1);
     ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
     when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              captured.set(inv.getArgument(0));
-              scheduled.countDown();
-              @SuppressWarnings("unchecked")
-              ScheduledFuture<?> future = mock(ScheduledFuture.class);
-              return future;
-            });
+        .thenAnswer(inv -> {
+          captured.set(inv.getArgument(0));
+          scheduled.countDown();
+          @SuppressWarnings("unchecked")
+          ScheduledFuture<?> future = mock(ScheduledFuture.class);
+          return future;
+        });
     LockableTaskQueue queue =
         new LockableTaskQueue(new ExecutionCountStats(), scheduler) {
           @Override
@@ -1836,13 +1824,12 @@ class LockableTaskQueueTest {
     captured.get().run();
     org.awaitility.Awaitility.await()
         .atMost(java.time.Duration.ofSeconds(5))
-        .untilAsserted(
-            () ->
-                verify(scheduler, times(2))
-                    .schedule(
-                        any(Runnable.class),
-                        org.mockito.ArgumentMatchers.longThat(d -> d >= 1 && d <= 100),
-                        eq(TimeUnit.MILLISECONDS)));
+        .untilAsserted(() ->
+            verify(scheduler, times(2))
+                .schedule(
+                    any(Runnable.class),
+                    org.mockito.ArgumentMatchers.longThat(d -> d >= 1 && d <= 100),
+                    eq(TimeUnit.MILLISECONDS)));
   }
 
   @Test
@@ -1852,13 +1839,12 @@ class LockableTaskQueueTest {
     LockableTaskQueue taskQueue = mockWithSharedScheduler();
     AtomicInteger calls = new AtomicInteger();
     when(taskQueue.tryLock(any()))
-        .thenAnswer(
-            inv -> {
-              if (calls.getAndIncrement() == 0) {
-                sneakyThrow(new java.io.IOException("lock sneaky"));
-              }
-              return true;
-            });
+        .thenAnswer(inv -> {
+          if (calls.getAndIncrement() == 0) {
+            sneakyThrow(new java.io.IOException("lock sneaky"));
+          }
+          return true;
+        });
     CountDownLatch done = new CountDownLatch(1);
 
     // When / Then the runner survives like a failed lock and the task still runs
@@ -1928,16 +1914,14 @@ class LockableTaskQueueTest {
         new java.util.concurrent.atomic.AtomicReference<>();
     java.util.concurrent.CountDownLatch died = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.ExecutorService pool =
-        java.util.concurrent.Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setUncaughtExceptionHandler(
-                  (t, e) -> {
-                    uncaught.set(e);
-                    died.countDown();
-                  });
-              return thread;
-            });
+        java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setUncaughtExceptionHandler((t, e) -> {
+            uncaught.set(e);
+            died.countDown();
+          });
+          return thread;
+        });
     java.util.concurrent.atomic.AtomicBoolean secondRan =
         new java.util.concurrent.atomic.AtomicBoolean();
     AssertionError fatal = new AssertionError("boom");
@@ -2042,17 +2026,15 @@ class LockableTaskQueueTest {
     // When two runners race on an idle queue
     CountDownLatch start = new CountDownLatch(1);
     Thread first =
-        new Thread(
-            () -> {
-              uncheckedRun(start::await);
-              taskQueue.run();
-            });
+        new Thread(() -> {
+          uncheckedRun(start::await);
+          taskQueue.run();
+        });
     Thread second =
-        new Thread(
-            () -> {
-              uncheckedRun(start::await);
-              taskQueue.run();
-            });
+        new Thread(() -> {
+          uncheckedRun(start::await);
+          taskQueue.run();
+        });
     first.start();
     second.start();
     start.countDown();
@@ -2067,15 +2049,14 @@ class LockableTaskQueueTest {
     CountDownLatch releaseFirstTask = new CountDownLatch(1);
     CountDownLatch secondTaskDone = new CountDownLatch(1);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      firstTaskStarted.countDown();
-                      uncheckedRun(releaseFirstTask::await);
-                      command.run();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              firstTaskStarted.countDown();
+              uncheckedRun(releaseFirstTask::await);
+              command.run();
+            },
+            () -> {}))
         .start();
     firstTaskStarted.await();
 
@@ -2096,16 +2077,15 @@ class LockableTaskQueueTest {
     AtomicInteger scheduleCalls = new AtomicInteger();
     ScheduledExecutorService flakyScheduler = mock(ScheduledExecutorService.class);
     when(flakyScheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              int call = scheduleCalls.getAndIncrement();
-              if (call == 0) {
-                sneakyThrow(new java.io.IOException("scheduler boom"));
-              }
-              // Retries are recorded but never fired: the test only asserts that the
-              // second lock failure still attempts a schedule (claim was released).
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          int call = scheduleCalls.getAndIncrement();
+          if (call == 0) {
+            sneakyThrow(new java.io.IOException("scheduler boom"));
+          }
+          // Retries are recorded but never fired: the test only asserts that the
+          // second lock failure still attempts a schedule (claim was released).
+          return mock(ScheduledFuture.class);
+        });
     // Direct subclass instance (no spy: TaskQueue.runner captures this::run at
     // construction, so an instance-spy would split queue state across two objects).
     LockableTaskQueue taskQueue =
@@ -2178,10 +2158,9 @@ class LockableTaskQueueTest {
           command.run();
         };
     Thread submitter =
-        new Thread(
-            () -> {
-              taskQueue.execute(blocking, () -> {});
-            });
+        new Thread(() -> {
+          taskQueue.execute(blocking, () -> {});
+        });
     submitter.start();
     awaitCountDown(runnerStarted);
     Executor saturated =
@@ -2347,18 +2326,17 @@ class LockableTaskQueueTest {
     java.util.List<Runnable> timers = new java.util.concurrent.CopyOnWriteArrayList<>();
     ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
     when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            invocation -> {
-              timers.add(invocation.getArgument(0));
-              @SuppressWarnings("unchecked")
-              ScheduledFuture<?> future = mock(ScheduledFuture.class);
-              if (timers.size() == 1) {
-                // First timer lost: cancelled before firing, never clears the coalescing flag.
-                when(future.isDone()).thenReturn(true);
-                when(future.isCancelled()).thenReturn(true);
-              }
-              return future;
-            });
+        .thenAnswer(invocation -> {
+          timers.add(invocation.getArgument(0));
+          @SuppressWarnings("unchecked")
+          ScheduledFuture<?> future = mock(ScheduledFuture.class);
+          if (timers.size() == 1) {
+            // First timer lost: cancelled before firing, never clears the coalescing flag.
+            when(future.isDone()).thenReturn(true);
+            when(future.isCancelled()).thenReturn(true);
+          }
+          return future;
+        });
     LockableTaskQueue taskQueue =
         new LockableTaskQueue(new ExecutionCountStats(), scheduler) {
           @Override
@@ -2578,16 +2556,14 @@ class LockableTaskQueueTest {
     AtomicReference<Throwable> uncaught = new AtomicReference<>();
     CountDownLatch errorObserved = new CountDownLatch(1);
     Executor pool =
-        newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setUncaughtExceptionHandler(
-                  (t, e) -> {
-                    uncaught.set(e);
-                    errorObserved.countDown();
-                  });
-              return thread;
-            });
+        newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setUncaughtExceptionHandler((t, e) -> {
+            uncaught.set(e);
+            errorObserved.countDown();
+          });
+          return thread;
+        });
     CountDownLatch taskStarted = new CountDownLatch(1);
     CountDownLatch releaseTask = new CountDownLatch(1);
     CountDownLatch pendingRan = new CountDownLatch(1);
@@ -2669,16 +2645,14 @@ class LockableTaskQueueTest {
     AtomicReference<Throwable> uncaught = new AtomicReference<>();
     CountDownLatch errorObserved = new CountDownLatch(1);
     Executor pool =
-        newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setUncaughtExceptionHandler(
-                  (t, e) -> {
-                    uncaught.set(e);
-                    errorObserved.countDown();
-                  });
-              return thread;
-            });
+        newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setUncaughtExceptionHandler((t, e) -> {
+            uncaught.set(e);
+            errorObserved.countDown();
+          });
+          return thread;
+        });
     CountDownLatch firstRan = new CountDownLatch(1);
     CountDownLatch secondRan = new CountDownLatch(1);
     CountDownLatch explicitRan = new CountDownLatch(1);
@@ -2781,11 +2755,10 @@ class LockableTaskQueueTest {
     CountDownLatch releaseWorker = new CountDownLatch(1);
     try {
       // Park the only worker so the reserved retry stays queued instead of firing
-      rescheduler.execute(
-          () -> {
-            workerBusy.countDown();
-            uncheckedRun(releaseWorker::await);
-          });
+      rescheduler.execute(() -> {
+        workerBusy.countDown();
+        uncheckedRun(releaseWorker::await);
+      });
       assertThat(workerBusy.await(5, TimeUnit.SECONDS)).isTrue();
       CountDownLatch firstDone = new CountDownLatch(1);
       taskQueue.execute(DirectExecutor.INSTANCE, firstDone::countDown);

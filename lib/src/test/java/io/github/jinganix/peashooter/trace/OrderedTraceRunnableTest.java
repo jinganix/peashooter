@@ -135,14 +135,13 @@ class OrderedTraceRunnableTest {
     OrderedTraceRunnable runnable =
         OrderedTraceRunnable.forKey(tracer, "key", true, new ThrowingProbe());
     Thread winner =
-        new Thread(
-            () -> {
-              try {
-                runnable.run();
-              } catch (Throwable ignored) {
-                // Winner outcome is not under test; the loser assertion below carries the case.
-              }
-            });
+        new Thread(() -> {
+          try {
+            runnable.run();
+          } catch (Throwable ignored) {
+            // Winner outcome is not under test; the loser assertion below carries the case.
+          }
+        });
     winner.start();
     assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 
@@ -194,14 +193,13 @@ class OrderedTraceRunnableTest {
     OrderedTraceRunnable runnable =
         OrderedTraceRunnable.forKey(tracer, "key", true, new RethrowingProbe());
     Thread winner =
-        new Thread(
-            () -> {
-              try {
-                runnable.run();
-              } catch (Throwable ignored) {
-                // Winner outcome is not under test; the loser assertion below carries the case.
-              }
-            });
+        new Thread(() -> {
+          try {
+            runnable.run();
+          } catch (Throwable ignored) {
+            // Winner outcome is not under test; the loser assertion below carries the case.
+          }
+        });
     winner.start();
     assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
 
@@ -315,10 +313,9 @@ class OrderedTraceRunnableTest {
     assertThat(failures)
         .hasSize(1)
         .first()
-        .matches(
-            failure ->
-                failure instanceof IllegalStateException
-                    && failure.getMessage().contains("single-use"));
+        .matches(failure ->
+            failure instanceof IllegalStateException
+                && failure.getMessage().contains("single-use"));
     assertThat(builds.get()).isEqualTo(2);
   }
 
@@ -434,15 +431,14 @@ class OrderedTraceRunnableTest {
 
     // And a declared checked failure propagates with its static type (no CompletionException wrap)
     java.io.IOException failure = new java.io.IOException("checked boom");
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(
-                    tracer,
-                    "key",
-                    java.io.IOException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(
+                tracer,
+                "key",
+                java.io.IOException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
     assertThat(tracer.getSpan()).isNull();
   }
@@ -461,10 +457,9 @@ class OrderedTraceRunnableTest {
 
     // When the supplier smuggles a checked type unrelated to E
     // Then it surfaces wrapped as unchecked, never masquerading under E's static type
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(
-                    tracer, "key", java.io.IOException.class, () -> sneakyChecked(foreign)))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(
+                tracer, "key", java.io.IOException.class, () -> sneakyChecked(foreign)))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasCause(foreign);
     assertThat(tracer.getSpan()).isNull();
@@ -495,14 +490,13 @@ class OrderedTraceRunnableTest {
 
     // And unchecked failures propagate as-is
     RuntimeException failure = new RuntimeException("value boom");
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runValue(
-                    tracer,
-                    "key",
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runValue(
+                tracer,
+                "key",
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
     assertThat(tracer.getSpan()).isSameAs(previous);
     tracer.clearSpan();
@@ -512,23 +506,19 @@ class OrderedTraceRunnableTest {
   @DisplayName("should reject null arguments on runChecked")
   void shouldRejectNullArgumentsOnRunChecked() {
     DefaultTracer tracer = new DefaultTracer();
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(null, "key", java.io.IOException.class, () -> null))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(null, "key", java.io.IOException.class, () -> null))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(
-                    tracer, null, java.io.IOException.class, () -> null))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(tracer, null, java.io.IOException.class, () -> null))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(() -> OrderedTraceRunnable.runChecked(tracer, "key", null, () -> null))
         .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () -> OrderedTraceRunnable.runChecked(tracer, "key", java.io.IOException.class, null))
         .isInstanceOf(NullPointerException.class);
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(tracer, " ", java.io.IOException.class, () -> null))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(tracer, " ", java.io.IOException.class, () -> null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -541,15 +531,14 @@ class OrderedTraceRunnableTest {
     InterruptedException interrupted = new InterruptedException("boom");
 
     // When a checked supplier throws its declared InterruptedException Then it propagates as-is
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(
-                    tracer,
-                    "key",
-                    InterruptedException.class,
-                    () -> {
-                      throw interrupted;
-                    }))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(
+                tracer,
+                "key",
+                InterruptedException.class,
+                () -> {
+                  throw interrupted;
+                }))
         .isSameAs(interrupted);
 
     // And the interrupt status is preserved for callers relying on Thread.interrupted()
@@ -787,15 +776,14 @@ class OrderedTraceRunnableTest {
     AssertionError failure = new AssertionError("checked error boom");
 
     // When / Then the original Error propagates unwrapped and the span is restored
-    assertThatThrownBy(
-            () ->
-                OrderedTraceRunnable.runChecked(
-                    tracer,
-                    "key",
-                    RuntimeException.class,
-                    () -> {
-                      throw failure;
-                    }))
+    assertThatThrownBy(() ->
+            OrderedTraceRunnable.runChecked(
+                tracer,
+                "key",
+                RuntimeException.class,
+                () -> {
+                  throw failure;
+                }))
         .isSameAs(failure);
     assertThat(tracer.getSpan()).isNull();
   }

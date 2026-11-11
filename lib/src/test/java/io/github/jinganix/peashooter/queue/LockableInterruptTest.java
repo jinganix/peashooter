@@ -89,12 +89,11 @@ class LockableInterruptTest {
   void shouldRestoreInterruptAndEndBatchWhenLockedTaskIsInterrupted() throws Exception {
     // Given a locked queue with a parked runner and an interrupt task followed by a marker
     ScheduledExecutorService scheduler =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setDaemon(true);
-              return thread;
-            });
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setDaemon(true);
+          return thread;
+        });
     try {
       AlwaysLockQueue queue = new AlwaysLockQueue(new ExecutionCountStats(), scheduler);
       AtomicReference<Thread> runnerThread = new AtomicReference<>();
@@ -166,13 +165,12 @@ class LockableInterruptTest {
     List<Runnable> retries = new ArrayList<>();
     ScheduledExecutorService scheduler = mock(ScheduledExecutorService.class);
     when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              retries.add(inv.getArgument(0));
-              ScheduledFuture f = mock(ScheduledFuture.class);
-              when(f.isDone()).thenReturn(false);
-              return f;
-            });
+        .thenAnswer(inv -> {
+          retries.add(inv.getArgument(0));
+          ScheduledFuture f = mock(ScheduledFuture.class);
+          when(f.isDone()).thenReturn(false);
+          return f;
+        });
     AtomicBoolean lockOpen = new AtomicBoolean(false);
     ContendedLockQueue queue =
         new ContendedLockQueue(new ExecutionCountStats(), scheduler, lockOpen);
@@ -180,11 +178,10 @@ class LockableInterruptTest {
 
     // When a task is submitted inline on an already-interrupted thread and the lock is contended
     Thread runner =
-        new Thread(
-            () -> {
-              Thread.currentThread().interrupt();
-              queue.execute(DirectExecutor.INSTANCE, executed::incrementAndGet);
-            });
+        new Thread(() -> {
+          Thread.currentThread().interrupt();
+          queue.execute(DirectExecutor.INSTANCE, executed::incrementAndGet);
+        });
     runner.start();
     runner.join(5000);
 

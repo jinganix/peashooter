@@ -48,12 +48,11 @@ import org.junit.jupiter.api.Test;
 class TaskQueueTest {
 
   Executor createExecutor() {
-    return newSingleThreadExecutor(
-        runnable -> {
-          Thread thread = new Thread(runnable);
-          thread.setDaemon(true);
-          return thread;
-        });
+    return newSingleThreadExecutor(runnable -> {
+      Thread thread = new Thread(runnable);
+      thread.setDaemon(true);
+      return thread;
+    });
   }
 
   @Test
@@ -295,14 +294,13 @@ class TaskQueueTest {
 
     // When the head submit fails to schedule while the second task waits behind it
     Thread submitter =
-        new Thread(
-            () -> {
-              try {
-                taskQueue.execute(rejecting, () -> {});
-              } catch (Throwable e) {
-                backgroundFailure.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            taskQueue.execute(rejecting, () -> {});
+          } catch (Throwable e) {
+            backgroundFailure.set(e);
+          }
+        });
     submitter.start();
     rejectorEntered.await();
     taskQueue.execute(worker, new Second());
@@ -344,14 +342,13 @@ class TaskQueueTest {
 
     // When the head submit fails to schedule
     Thread submitter =
-        new Thread(
-            () -> {
-              try {
-                taskQueue.execute(rejecting, first);
-              } catch (Throwable e) {
-                backgroundFailure.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            taskQueue.execute(rejecting, first);
+          } catch (Throwable e) {
+            backgroundFailure.set(e);
+          }
+        });
     submitter.start();
     rejectorEntered.await();
     CountDownLatch survivorDone = new CountDownLatch(1);
@@ -393,14 +390,13 @@ class TaskQueueTest {
     // When the head submit fails to schedule Then the callback Error neither masks the
     // original rejection nor escapes to the background thread
     Thread submitter =
-        new Thread(
-            () -> {
-              try {
-                taskQueue.execute(rejecting, first);
-              } catch (Throwable e) {
-                backgroundFailure.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            taskQueue.execute(rejecting, first);
+          } catch (Throwable e) {
+            backgroundFailure.set(e);
+          }
+        });
     submitter.start();
     rejectorEntered.await();
     CountDownLatch survivorDone = new CountDownLatch(1);
@@ -507,16 +503,15 @@ class TaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch runnerFinished = new CountDownLatch(1);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                      runnerFinished.countDown();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+              runnerFinished.countDown();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -544,15 +539,14 @@ class TaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch priorTasksDone = new CountDownLatch(3);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -590,15 +584,14 @@ class TaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch priorTasksDone = new CountDownLatch(3);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -637,14 +630,13 @@ class TaskQueueTest {
     CountDownLatch releaseFirstTask = new CountDownLatch(1);
     Runnable discarded = mock(Runnable.class);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    worker,
-                    () -> {
-                      firstTaskStarted.countDown();
-                      uncheckedRun(releaseFirstTask::await);
-                    }))
+    new Thread(() ->
+        taskQueue.execute(
+            worker,
+            () -> {
+              firstTaskStarted.countDown();
+              uncheckedRun(releaseFirstTask::await);
+            }))
         .start();
     firstTaskStarted.await();
 
@@ -669,16 +661,15 @@ class TaskQueueTest {
     CountDownLatch releaseRunner = new CountDownLatch(1);
     CountDownLatch runnerFinished = new CountDownLatch(1);
 
-    new Thread(
-            () ->
-                taskQueue.execute(
-                    command -> {
-                      runnerStarted.countDown();
-                      uncheckedRun(releaseRunner::await);
-                      command.run();
-                      runnerFinished.countDown();
-                    },
-                    () -> {}))
+    new Thread(() ->
+        taskQueue.execute(
+            command -> {
+              runnerStarted.countDown();
+              uncheckedRun(releaseRunner::await);
+              command.run();
+              runnerFinished.countDown();
+            },
+            () -> {}))
         .start();
     runnerStarted.await();
 
@@ -1146,22 +1137,21 @@ class TaskQueueTest {
     java.util.concurrent.atomic.AtomicBoolean secondRan =
         new java.util.concurrent.atomic.AtomicBoolean();
     Thread runner =
-        new Thread(
-            () -> {
-              try {
-                queue.execute(
-                    DirectExecutor.INSTANCE,
-                    () -> {
-                      taskStarted.countDown();
-                      uncheckedRun(releaseTask::await);
-                      throw fatal;
-                    });
-              } catch (Throwable e) {
-                thrown.set(e);
-              } finally {
-                firstDone.countDown();
-              }
-            });
+        new Thread(() -> {
+          try {
+            queue.execute(
+                DirectExecutor.INSTANCE,
+                () -> {
+                  taskStarted.countDown();
+                  uncheckedRun(releaseTask::await);
+                  throw fatal;
+                });
+          } catch (Throwable e) {
+            thrown.set(e);
+          } finally {
+            firstDone.countDown();
+          }
+        });
     runner.start();
     awaitCountDown(taskStarted);
     queue.execute(DirectExecutor.INSTANCE, () -> secondRan.set(true));
@@ -1201,20 +1191,19 @@ class TaskQueueTest {
     AtomicReference<Throwable> thrown = new AtomicReference<>();
     CountDownLatch inlineSubmitterDone = new CountDownLatch(1);
     Thread inlineSubmitter =
-        new Thread(
-            () -> {
-              try {
-                queue.execute(
-                    parkedInline,
-                    () -> {
-                      throw fatal;
-                    });
-              } catch (Throwable e) {
-                thrown.set(e);
-              } finally {
-                inlineSubmitterDone.countDown();
-              }
-            });
+        new Thread(() -> {
+          try {
+            queue.execute(
+                parkedInline,
+                () -> {
+                  throw fatal;
+                });
+          } catch (Throwable e) {
+            thrown.set(e);
+          } finally {
+            inlineSubmitterDone.countDown();
+          }
+        });
     inlineSubmitter.start();
     awaitCountDown(wrapperFailed);
 
@@ -1265,17 +1254,15 @@ class TaskQueueTest {
         new java.util.concurrent.atomic.AtomicReference<>();
     java.util.concurrent.CountDownLatch died = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.ExecutorService pool =
-        java.util.concurrent.Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setUncaughtExceptionHandler(
-                  (t, e) -> {
-                    uncaught.set(e);
-                    died.countDown();
-                  });
-              thread.setDaemon(true);
-              return thread;
-            });
+        java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setUncaughtExceptionHandler((t, e) -> {
+            uncaught.set(e);
+            died.countDown();
+          });
+          thread.setDaemon(true);
+          return thread;
+        });
     java.util.concurrent.CountDownLatch runnerStarted = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.CountDownLatch releaseRunner = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.atomic.AtomicBoolean secondRan =
@@ -1397,17 +1384,15 @@ class TaskQueueTest {
         new java.util.concurrent.atomic.AtomicReference<>();
     java.util.concurrent.CountDownLatch died = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.ExecutorService pool =
-        java.util.concurrent.Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setUncaughtExceptionHandler(
-                  (t, e) -> {
-                    uncaught.set(e);
-                    died.countDown();
-                  });
-              thread.setDaemon(true);
-              return thread;
-            });
+        java.util.concurrent.Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setUncaughtExceptionHandler((t, e) -> {
+            uncaught.set(e);
+            died.countDown();
+          });
+          thread.setDaemon(true);
+          return thread;
+        });
     AssertionError fatal = new AssertionError("boom");
     java.util.concurrent.atomic.AtomicBoolean secondRan =
         new java.util.concurrent.atomic.AtomicBoolean();
@@ -1423,12 +1408,11 @@ class TaskQueueTest {
       // When the next submission arrives after the fatal death
       java.util.concurrent.CountDownLatch recovered = new java.util.concurrent.CountDownLatch(1);
       java.util.concurrent.ExecutorService recovery =
-          java.util.concurrent.Executors.newSingleThreadExecutor(
-              r -> {
-                Thread t = new Thread(r);
-                t.setDaemon(true);
-                return t;
-              });
+          java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+          });
       try {
         queue.execute(recovery, recovered::countDown);
 
@@ -1482,14 +1466,13 @@ class TaskQueueTest {
 
     // When the submission is scheduled through that executor
     Thread submitter =
-        new Thread(
-            () -> {
-              try {
-                taskQueue.execute(dispatchesThenThrows, new Probe());
-              } catch (Throwable e) {
-                submitFailure.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            taskQueue.execute(dispatchesThenThrows, new Probe());
+          } catch (Throwable e) {
+            submitFailure.set(e);
+          }
+        });
     submitter.start();
     submitter.join(5000);
 
@@ -1536,14 +1519,13 @@ class TaskQueueTest {
 
     // When the submission is scheduled through that executor
     Thread submitter =
-        new Thread(
-            () -> {
-              try {
-                taskQueue.execute(dispatchesThenThrows, new Probe());
-              } catch (Throwable e) {
-                submitFailure.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            taskQueue.execute(dispatchesThenThrows, new Probe());
+          } catch (Throwable e) {
+            submitFailure.set(e);
+          }
+        });
     submitter.start();
     submitter.join(5000);
 
@@ -1588,10 +1570,9 @@ class TaskQueueTest {
 
     // When the inline drain reaches the queued handoff to that executor
     Thread submitter =
-        new Thread(
-            () ->
-                taskQueue.execute(
-                    Runnable::run, () -> taskQueue.execute(dispatchesThenThrows, new Probe())));
+        new Thread(() ->
+            taskQueue.execute(
+                Runnable::run, () -> taskQueue.execute(dispatchesThenThrows, new Probe())));
     submitter.start();
     submitter.join(5000);
 

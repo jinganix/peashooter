@@ -85,11 +85,10 @@ class RetrySchedulerConcurrencyTest {
     List<Runnable> timers = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              timers.add(inv.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(inv -> {
+          timers.add(inv.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     RetryScheduler scheduler = new RetryScheduler(rescheduler, () -> 0L);
     scheduler.scheduleRetry(() -> {});
     assertThat(timers).hasSize(1);
@@ -110,11 +109,10 @@ class RetrySchedulerConcurrencyTest {
     List<Runnable> timers = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              timers.add(inv.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(inv -> {
+          timers.add(inv.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     RetryScheduler scheduler =
         new RetryScheduler(rescheduler, java.util.concurrent.ThreadLocalRandom.current()::nextLong);
 
@@ -137,13 +135,12 @@ class RetrySchedulerConcurrencyTest {
     List<Runnable> timers = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              timers.add(inv.getArgument(0));
-              insideSchedule.countDown();
-              releaseSchedule.await();
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(inv -> {
+          timers.add(inv.getArgument(0));
+          insideSchedule.countDown();
+          releaseSchedule.await();
+          return mock(ScheduledFuture.class);
+        });
     RetryScheduler scheduler = new RetryScheduler(rescheduler, () -> 0L);
 
     Thread first = new Thread(() -> scheduler.scheduleRetry(() -> {}));
@@ -173,23 +170,22 @@ class RetrySchedulerConcurrencyTest {
     AtomicInteger timersAfterFollowUp = new AtomicInteger();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              Runnable clearing = inv.getArgument(0);
-              timers.add(clearing);
-              ScheduledFuture<?> f = mock(ScheduledFuture.class);
-              when(f.isDone()).thenReturn(false);
-              futures.add(f);
-              if (timers.size() == 1) {
-                // Run the first retry on a separate thread before schedule() returns, so the
-                // caller publishes the future while the retry is already in flight.
-                Thread t = new Thread(clearing, "retry-1");
-                t.setDaemon(true);
-                t.start();
-                retryStarted.await();
-              }
-              return f;
-            });
+        .thenAnswer(inv -> {
+          Runnable clearing = inv.getArgument(0);
+          timers.add(clearing);
+          ScheduledFuture<?> f = mock(ScheduledFuture.class);
+          when(f.isDone()).thenReturn(false);
+          futures.add(f);
+          if (timers.size() == 1) {
+            // Run the first retry on a separate thread before schedule() returns, so the
+            // caller publishes the future while the retry is already in flight.
+            Thread t = new Thread(clearing, "retry-1");
+            t.setDaemon(true);
+            t.start();
+            retryStarted.await();
+          }
+          return f;
+        });
     RetryScheduler scheduler = new RetryScheduler(rescheduler, () -> 0L);
 
     Runnable retry1 =
@@ -224,11 +220,10 @@ class RetrySchedulerConcurrencyTest {
     CountDownLatch workerBusy = new CountDownLatch(1);
     CountDownLatch releaseWorker = new CountDownLatch(1);
     try {
-      rescheduler.execute(
-          () -> {
-            workerBusy.countDown();
-            awaitQuietly(releaseWorker);
-          });
+      rescheduler.execute(() -> {
+        workerBusy.countDown();
+        awaitQuietly(releaseWorker);
+      });
       assertThat(workerBusy.await(5, TimeUnit.SECONDS)).isTrue();
       RetryScheduler scheduler = new RetryScheduler(rescheduler, () -> 0L);
       AtomicBoolean retryRan = new AtomicBoolean();

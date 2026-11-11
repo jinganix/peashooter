@@ -38,12 +38,11 @@ class HandoffBoxCleanupTest {
     // Given a thread submitting through an async pool
     TaskQueue queue = new TaskQueue();
     Executor pool =
-        Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setDaemon(true);
+          return thread;
+        });
     CountDownLatch done = new CountDownLatch(1);
 
     // When the submission schedules async Then it completes without retaining the submitter
@@ -71,20 +70,18 @@ class HandoffBoxCleanupTest {
           command.run();
         };
     Executor pool =
-        Executors.newSingleThreadExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setDaemon(true);
+          return thread;
+        });
     CountDownLatch secondDone = new CountDownLatch(1);
     Thread drainer =
-        new Thread(
-            () -> {
-              // Parks inside the blocking head until the main thread releases it
-              queue.execute(blocking, () -> {});
-              uncheckedRun(secondDone::await);
-            });
+        new Thread(() -> {
+          // Parks inside the blocking head until the main thread releases it
+          queue.execute(blocking, () -> {});
+          uncheckedRun(secondDone::await);
+        });
     drainer.start();
 
     // A peer queued for an async pool while the drainer is parked forces an async handoff
@@ -103,12 +100,11 @@ class HandoffBoxCleanupTest {
   void shouldDrainPeerAfterLockableAsyncHandoff() throws InterruptedException {
     // Given a lockable queue drained on a dedicated thread with an executor switch mid-drain
     ScheduledExecutorService scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            runnable -> {
-              Thread thread = new Thread(runnable);
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadScheduledExecutor(runnable -> {
+          Thread thread = new Thread(runnable);
+          thread.setDaemon(true);
+          return thread;
+        });
     try {
       LockableTaskQueue queue =
           new LockableTaskQueue(new ExecutionCountStats(), scheduler) {
@@ -134,20 +130,18 @@ class HandoffBoxCleanupTest {
             command.run();
           };
       Executor pool =
-          Executors.newSingleThreadExecutor(
-              runnable -> {
-                Thread thread = new Thread(runnable);
-                thread.setDaemon(true);
-                return thread;
-              });
+          Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable);
+            thread.setDaemon(true);
+            return thread;
+          });
       CountDownLatch secondDone = new CountDownLatch(1);
       Thread drainer =
-          new Thread(
-              () -> {
-                // Parks inside the blocking head until the main thread releases it
-                queue.execute(blocking, () -> {});
-                uncheckedRun(secondDone::await);
-              });
+          new Thread(() -> {
+            // Parks inside the blocking head until the main thread releases it
+            queue.execute(blocking, () -> {});
+            uncheckedRun(secondDone::await);
+          });
       drainer.start();
 
       // A peer queued for an async pool while the drainer is parked forces an async handoff

@@ -94,12 +94,11 @@ class HandoffAllocationTest {
       throws InterruptedException {
     // Given a lockable queue parked on a blocking head
     ScheduledExecutorService scheduler =
-        Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              Thread t = new Thread(r);
-              t.setDaemon(true);
-              return t;
-            });
+        Executors.newSingleThreadScheduledExecutor(r -> {
+          Thread t = new Thread(r);
+          t.setDaemon(true);
+          return t;
+        });
     try {
       LockableTaskQueue queue =
           new LockableTaskQueue(new ExecutionCountStats(), scheduler) {
@@ -197,12 +196,11 @@ class HandoffAllocationTest {
     TaskQueue queue = new TaskQueue();
     List<Runnable> captured = Collections.synchronizedList(new ArrayList<>());
     java.util.concurrent.ExecutorService async =
-        Executors.newCachedThreadPool(
-            r -> {
-              Thread t = new Thread(r);
-              t.setDaemon(true);
-              return t;
-            });
+        Executors.newCachedThreadPool(r -> {
+          Thread t = new Thread(r);
+          t.setDaemon(true);
+          return t;
+        });
     try {
       Executor capturing =
           cmd -> {

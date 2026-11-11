@@ -11,6 +11,14 @@ Run the full check from the repository root:
 ./gradlew build
 ```
 
+`build` runs the Redis-backed tests through Testcontainers, so it needs a working Docker daemon
+(and can fail on hosts whose Docker socket cannot be bind-mounted, e.g. some colima setups). Point
+the tests at a local Redis and skip the long-running benchmarks instead:
+
+```bash
+env 'redis-host=redis://127.0.0.1:6379' skip_benchmark=true ./gradlew build
+```
+
 Run library tests only:
 
 ```bash

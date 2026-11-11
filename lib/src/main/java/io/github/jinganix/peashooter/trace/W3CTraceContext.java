@@ -435,29 +435,37 @@ public final class W3CTraceContext {
    * Whether {@code tracestate} is a valid W3C {@code tracestate} header value.
    *
    * <p>Lenient structural check for the passthrough path: 1-512 chars, comma-separated {@code
-   * key=value} members with non-blank keys and values, printable ASCII only (no controls, no {@code
-   * ','} / {@code '='} inside values beyond the first {@code '='}). Keys are not restricted to the
-   * lowercase registry here: intermediaries must forward what they do not understand.
+   * key=value} members with non-empty values, printable ASCII only (no controls, no {@code ','} /
+   * {@code '='} inside values beyond the first {@code '='}). A space inside a started value is
+   * data, not OWS per the W3C value ABNF ({@code value = 0*255(chr) nblk-chr}, {@code chr = %x20 /
+   * nblk-chr}), so a value must be non-empty and its trailing spaces are OWS, not data. Empty and
+   * whitespace-only list members are accepted because W3C requires vendors to accept them. Keys are
+   * not restricted to the lowercase registry here: intermediaries must forward what they do not
+   * understand.
    *
    * <p>Charset note vs {@link #parse(String)}: {@code traceparent} fields are strict lowercase hex
    * (fixed W3C alphabet), while {@code tracestate} values are opaque vendor data, so this check
    * accepts the full printable ASCII range ({@code 0x20-0x7E} minus the structural separators)
    * instead of reusing the hex parser. Only optional whitespace ({@code ' '}, HTAB) is tolerated
-   * around keys/values per the W3C OWS rule; everything else non-printable rejects.
+   * around list members and around {@code '='} (lenient passthrough); HTAB and every other
+   * non-printable inside a key or value rejects.
    *
    * @param tracestate candidate header value
-   * @return {@code true} if safe to forward as-is
+   * @return {@code true} if safe to forward as-is; {@code null} and empty report {@code false}
+   *     (absent, not a present value) — pair with {@link #inject(Span, boolean, String)}, which
+   *     maps any blank input to an absent tracestate
    */
   public static boolean isValidTracestate(String tracestate) {
     if (tracestate == null || tracestate.isEmpty() || tracestate.length() > MAX_TRACESTATE_CHARS) {
       return false;
     }
     // Single pass over the original string: no substring/isBlank/strip temporaries.
-    // Member = key '=' value, members separated by ',' with no empties. Only leading and
-    // trailing OWS (space/HTAB) around the header and around each key/value is tolerated per
-    // the W3C optional-whitespace rule; OWS inside a key or value rejects. All non-OWS chars
-    // must be printable ASCII 0x20-0x7E; exactly one '=' per member; trimmed key/value must
-    // be non-empty.
+    // Member = key '=' value, members separated by ','; empty and whitespace-only members are
+    // legal per W3C. Leading and trailing OWS (space/HTAB) around the header and each key/value
+    // is tolerated; a space inside a started value is a value char (W3C chr %x20), while
+    // HTAB inside a key or value is internal OWS and rejects. All non-OWS chars must be printable
+    // ASCII 0x20-0x7E; exactly one '=' per member; a member that started a key must have a
+    // non-empty value.
     int length = tracestate.length();
     int equalsPos = -1;
     int keyStart = -1;
@@ -469,14 +477,17 @@ public final class W3CTraceContext {
       boolean delimiter = i == length || c == ',';
       if (!delimiter) {
         // OWS first: HTAB (0x09) sits below the printable range but stays tolerated per W3C,
-        // only at token edges. A gap after a started token marks trailing OWS; any later
-        // token char before '=' / delimiter means the OWS was internal -> reject.
+        // only at token edges. A gap after a started key marks trailing OWS; any later key char
+        // before '=' means the OWS was internal -> reject. A space inside a started value is data
+        // (see the branch below), so only HTAB marks an internal value gap.
         if (c == ' ' || c == '\t') {
           if (equalsPos < 0) {
             if (keyStart >= 0) {
               keyGap = true;
             }
-          } else {
+          } else if (c == '\t') {
+            // chr = %x20 / nblk-chr (%x21-2B / %x2D-3C / %x3E-7E): a space inside a started
+            // value is data, while HTAB is not a value char and only survives as edge OWS.
             if (valueStart >= 0) {
               valueGap = true;
             }
@@ -510,9 +521,13 @@ public final class W3CTraceContext {
         }
         continue;
       }
-      // End of member: trimmed key/value must both be non-empty. The starts already point past
-      // any leading OWS, so a non-negative start proves the member has content.
-      if (equalsPos < 0 || keyStart < 0 || valueStart < 0) {
+      // End of member: a member that never started a key is empty or whitespace-only, which W3C
+      // requires vendors to accept; otherwise it must be key '=' value with a non-empty value.
+      if (equalsPos < 0) {
+        if (keyStart >= 0) {
+          return false;
+        }
+      } else if (valueStart < 0) {
         return false;
       }
       equalsPos = -1;

@@ -73,12 +73,11 @@ class TraceScopeTemplateTest {
 
   private boolean hasSevenArgBooleanExecute() {
     return java.util.Arrays.stream(TraceScope.class.getDeclaredMethods())
-        .anyMatch(
-            m ->
-                m.getName().equals("execute")
-                    && m.getParameterCount() == 7
-                    && java.util.Arrays.stream(m.getParameterTypes())
-                        .anyMatch(t -> t == boolean.class));
+        .anyMatch(m ->
+            m.getName().equals("execute")
+                && m.getParameterCount() == 7
+                && java.util.Arrays.stream(m.getParameterTypes())
+                    .anyMatch(t -> t == boolean.class));
   }
 
   private boolean hasMethod(String name) {

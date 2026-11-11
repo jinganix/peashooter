@@ -86,9 +86,8 @@ class TraceScopeTest {
     AtomicBoolean delegateRan = new AtomicBoolean();
 
     // When the scope fails to install the new span
-    assertThatThrownBy(
-            () ->
-                TraceScope.run(tracer, () -> Span.child(tracer, null), () -> delegateRan.set(true)))
+    assertThatThrownBy(() ->
+            TraceScope.run(tracer, () -> Span.child(tracer, null), () -> delegateRan.set(true)))
         .isSameAs(tracer.failure);
 
     // Then the delegate never runs and the thread keeps its previous span, not the pollution
@@ -156,14 +155,13 @@ class TraceScopeTest {
 
     // When the delegate fails and the final restore also fails
     Throwable thrown =
-        org.assertj.core.api.Assertions.catchThrowable(
-            () ->
-                TraceScope.run(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      throw taskFailure;
-                    }));
+        org.assertj.core.api.Assertions.catchThrowable(() ->
+            TraceScope.run(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  throw taskFailure;
+                }));
 
     // Then the task failure wins with the restore failure suppressed instead of masked
     assertThat(thrown).isSameAs(taskFailure);
@@ -276,15 +274,14 @@ class TraceScopeTest {
     AtomicBoolean delegateRan = new AtomicBoolean();
 
     // When the scope fails to install the new span
-    assertThatThrownBy(
-            () ->
-                TraceScope.call(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      delegateRan.set(true);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.call(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  delegateRan.set(true);
+                  return null;
+                }))
         .isSameAs(tracer.failure);
 
     // Then the delegate never runs and the thread keeps its previous span, not the pollution
@@ -343,14 +340,13 @@ class TraceScopeTest {
     // When the untraced delegate smuggles InterruptedException past the Runnable signature
     // Then it surfaces wrapped (never masquerading as an unchecked failure)
     InterruptedException interruption = new InterruptedException("boom");
-    assertThatThrownBy(
-            () ->
-                TraceScope.runLenient(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      throw sneakyThrow(interruption);
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.runLenient(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  throw sneakyThrow(interruption);
+                }))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasCause(interruption);
 
@@ -374,14 +370,13 @@ class TraceScopeTest {
     InterruptedException interruption = new InterruptedException("boom");
     java.util.concurrent.CompletionException wrapped =
         new java.util.concurrent.CompletionException(interruption);
-    assertThatThrownBy(
-            () ->
-                TraceScope.runLenient(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      throw wrapped;
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.runLenient(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  throw wrapped;
+                }))
         .isSameAs(wrapped);
 
     try {
@@ -402,14 +397,13 @@ class TraceScopeTest {
     // itself, but the scope must still restore the flag like the Callable path does)
     // Then it surfaces wrapped instead of masquerading as an unchecked failure
     InterruptedException interruption = new InterruptedException("boom");
-    assertThatThrownBy(
-            () ->
-                TraceScope.run(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      throw sneakyThrow(interruption);
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.run(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  throw sneakyThrow(interruption);
+                }))
         .isInstanceOf(java.util.concurrent.CompletionException.class)
         .hasCause(interruption);
 
@@ -581,15 +575,14 @@ class TraceScopeTest {
 
     // When the untraced delegate fails and the restore also fails
     Throwable thrown =
-        org.assertj.core.api.Assertions.catchThrowable(
-            () ->
-                TraceScope.runLenient(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      armed.set(true);
-                      throw sneakyThrow(taskFailure);
-                    }));
+        org.assertj.core.api.Assertions.catchThrowable(() ->
+            TraceScope.runLenient(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  armed.set(true);
+                  throw sneakyThrow(taskFailure);
+                }));
 
     // Then the delegate failure wins with the restore failure suppressed
     assertThat(thrown).isSameAs(taskFailure);
@@ -661,15 +654,14 @@ class TraceScopeTest {
     failInstall.set(true);
 
     // When / Then the shared failure propagates without self-suppression
-    assertThatThrownBy(
-            () ->
-                TraceScope.runLenient(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      armed.set(true);
-                      throw sneakyThrow(shared);
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.runLenient(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  armed.set(true);
+                  throw sneakyThrow(shared);
+                }))
         .isSameAs(shared);
     assertThat(shared.getSuppressed()).isEmpty();
   }
@@ -715,14 +707,13 @@ class TraceScopeTest {
         };
 
     // When / Then the task failure propagates without self-suppression
-    assertThatThrownBy(
-            () ->
-                TraceScope.run(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      throw sneakyThrow(taskFailure);
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.run(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  throw sneakyThrow(taskFailure);
+                }))
         .isSameAs(taskFailure);
     assertThat(taskFailure.getSuppressed()).isEmpty();
   }
@@ -753,15 +744,14 @@ class TraceScopeTest {
 
     // When the delegate arms the restore and fails with X
     // Then the task failure propagates without self-suppression
-    assertThatThrownBy(
-            () ->
-                TraceScope.run(
-                    tracer,
-                    () -> Span.child(tracer, null),
-                    () -> {
-                      armed.set(true);
-                      throw sneakyThrow(taskFailure);
-                    }))
+    assertThatThrownBy(() ->
+            TraceScope.run(
+                tracer,
+                () -> Span.child(tracer, null),
+                () -> {
+                  armed.set(true);
+                  throw sneakyThrow(taskFailure);
+                }))
         .isSameAs(taskFailure);
     assertThat(taskFailure.getSuppressed()).isEmpty();
   }
@@ -855,17 +845,16 @@ class TraceScopeTest {
     assertThat(overloads).as("only the prebuilt-span callChecked overload is used").isEqualTo(1);
     boolean prebuilt =
         java.util.Arrays.stream(TraceScope.class.getDeclaredMethods())
-            .anyMatch(
-                m ->
-                    m.getName().equals("callChecked")
-                        && java.util.Arrays.equals(
-                            m.getParameterTypes(),
-                            new Class<?>[] {
-                              Tracer.class,
-                              Span.class,
-                              Class.class,
-                              io.github.jinganix.peashooter.ThrowingSupplier.class
-                            }));
+            .anyMatch(m ->
+                m.getName().equals("callChecked")
+                    && java.util.Arrays.equals(
+                        m.getParameterTypes(),
+                        new Class<?>[] {
+                          Tracer.class,
+                          Span.class,
+                          Class.class,
+                          io.github.jinganix.peashooter.ThrowingSupplier.class
+                        }));
     assertThat(prebuilt).isTrue();
   }
 

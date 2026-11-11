@@ -130,11 +130,10 @@ class ExecutorFixtureTest {
       ExecutorService pool = (ExecutorService) first.executors().get("SingleThreadExecutor");
       CountDownLatch release = new CountDownLatch(1);
       Future<String> flight =
-          pool.submit(
-              () -> {
-                release.await();
-                return "done";
-              });
+          pool.submit(() -> {
+            release.await();
+            return "done";
+          });
 
       // When the other holder closes (e.g. another class's AfterAll)
       second.close();

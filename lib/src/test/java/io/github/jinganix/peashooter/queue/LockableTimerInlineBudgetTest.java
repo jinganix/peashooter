@@ -154,15 +154,14 @@ class LockableTimerInlineBudgetTest {
   private static ScheduledExecutorService capturingRescheduler(List<Runnable> retries) {
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
-        .thenAnswer(
-            inv -> {
-              retries.add(inv.getArgument(0));
-              ScheduledFuture f = mock(ScheduledFuture.class);
-              // Undone, so a scheduled retry coalesces subsequent requests: exactly one
-              // outstanding retry after the initial submissions.
-              when(f.isDone()).thenReturn(false);
-              return f;
-            });
+        .thenAnswer(inv -> {
+          retries.add(inv.getArgument(0));
+          ScheduledFuture f = mock(ScheduledFuture.class);
+          // Undone, so a scheduled retry coalesces subsequent requests: exactly one
+          // outstanding retry after the initial submissions.
+          when(f.isDone()).thenReturn(false);
+          return f;
+        });
     return rescheduler;
   }
 }
