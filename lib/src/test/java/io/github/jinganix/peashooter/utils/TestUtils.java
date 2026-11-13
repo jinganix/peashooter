@@ -21,8 +21,10 @@ package io.github.jinganix.peashooter.utils;
 import static org.awaitility.Awaitility.await;
 
 import io.github.jinganix.peashooter.ThrowingRunnable;
+import io.github.jinganix.peashooter.executor.OrderedTraceExecutor;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
+import java.util.stream.Stream;
 
 public class TestUtils {
 
@@ -30,6 +32,17 @@ public class TestUtils {
 
   public static void awaitCountDown(CountDownLatch latch) {
     await().atMost(DEFAULT_AWAIT).until(() -> latch.getCount() == 0);
+  }
+
+  /**
+   * Waits until every key's queue is quiescent. A completed future does not imply an idle queue:
+   * the runner clears its claim after the task body (which completes the future) returns.
+   *
+   * @param executor executor whose queues are observed
+   * @param keys keys that must all be idle
+   */
+  public static void awaitIdle(OrderedTraceExecutor executor, String... keys) {
+    await().atMost(DEFAULT_AWAIT).until(() -> Stream.of(keys).allMatch(executor::isIdle));
   }
 
   /**

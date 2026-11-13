@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.executor;
 
+import static io.github.jinganix.peashooter.utils.TestUtils.awaitIdle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -106,8 +107,7 @@ class CheckedAsyncSupplyTest {
 
       // Then
       assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(42);
-      assertThat(executor.isIdle("mka")).isTrue();
-      assertThat(executor.isIdle("mkb")).isTrue();
+      awaitIdle(executor, "mka", "mkb");
     } finally {
       pool.shutdownNow();
     }
@@ -156,7 +156,7 @@ class CheckedAsyncSupplyTest {
 
       // Then
       assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(9);
-      assertThat(executor.isIdle("checked-single")).isTrue();
+      awaitIdle(executor, "checked-single");
     } finally {
       pool.shutdownNow();
     }

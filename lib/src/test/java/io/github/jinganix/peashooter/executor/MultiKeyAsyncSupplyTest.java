@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.executor;
 
+import static io.github.jinganix.peashooter.utils.TestUtils.awaitIdle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -69,8 +70,7 @@ class MultiKeyAsyncSupplyTest {
       // Then
       assertThat(future.get(10, TimeUnit.SECONDS)).isEqualTo(42);
       assertThat(runs).containsExactly("run");
-      assertThat(executor.isIdle("mka")).isTrue();
-      assertThat(executor.isIdle("mkb")).isTrue();
+      awaitIdle(executor, "mka", "mkb");
     } finally {
       pool.shutdownNow();
     }
@@ -119,7 +119,7 @@ class MultiKeyAsyncSupplyTest {
       // Then
       assertThat(submitted.get(10, TimeUnit.SECONDS)).isNull();
       assertThat(supplied.get(10, TimeUnit.SECONDS)).isEqualTo(5);
-      assertThat(executor.isIdle("single-key")).isTrue();
+      awaitIdle(executor, "single-key");
     } finally {
       pool.shutdownNow();
     }
