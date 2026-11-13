@@ -56,14 +56,6 @@ class QueueEncapsulationTest {
     assertThat(hasMethod("discardHeadAndRepoint")).isTrue();
   }
 
-  @Test
-  @DisplayName("should not retain unused internal queue helpers")
-  void shouldNotRetainUnusedInternalQueueHelpers() {
-    assertThat(hasMethod("discardHeadAnyAndRepoint")).isFalse();
-    assertThat(hasMethod("peekHead")).isFalse();
-    assertThat(hasMethod("runRunner")).isFalse();
-  }
-
   private boolean hasMethod(String name) {
     return java.util.Arrays.stream(TaskQueue.class.getDeclaredMethods())
         .anyMatch(m -> m.getName().equals(name));

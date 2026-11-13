@@ -75,8 +75,8 @@ class TaskQueueDiscardLogTest {
   }
 
   @Test
-  @DisplayName("large backlog rejection must not log ERROR and must preserve survivors")
-  void largeBacklogRejectionMustPreserveSurvivors() throws Exception {
+  @DisplayName("should preserve survivors without logging error when a large backlog is rejected")
+  void shouldPreserveSurvivorsAndNotLogErrorWhenLargeBacklogRejected() throws Exception {
     // Given a runner parked on a blocking head with a large backlog behind a saturated handoff
     TaskQueue queue = new TaskQueue();
     CountDownLatch runnerStarted = new CountDownLatch(1);
@@ -137,8 +137,8 @@ class TaskQueueDiscardLogTest {
   }
 
   @Test
-  @DisplayName("rejection callback failure must not starve survivors")
-  void rejectionCallbackFailureMustNotStarveSurvivors() throws Exception {
+  @DisplayName("should not starve survivors when the rejection callback fails")
+  void shouldNotStarveSurvivorsWhenRejectionCallbackFails() throws Exception {
     // Given a parked runner with a hostile head (callback throws) followed by survivors
     TaskQueue queue = new TaskQueue();
     CountDownLatch runnerStarted = new CountDownLatch(1);

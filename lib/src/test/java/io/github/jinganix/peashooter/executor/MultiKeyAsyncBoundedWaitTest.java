@@ -34,8 +34,9 @@ import org.junit.jupiter.api.Test;
 class MultiKeyAsyncBoundedWaitTest {
 
   @Test
-  @DisplayName("async multi-key on contended inner key must time out, not hang forever")
-  void asyncMultiKeyMustTimeOutInsteadOfHang() throws Exception {
+  @DisplayName(
+      "should time out instead of hanging when an async multi-key waits on a contended inner key")
+  void shouldTimeOutInsteadOfHangWhenAsyncMultiKeyWaitsOnContendedInnerKey() throws Exception {
     ThreadPoolExecutor pool =
         new ThreadPoolExecutor(4, 4, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
     pool.setThreadFactory(r -> {

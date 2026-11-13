@@ -50,8 +50,8 @@ class ReentrantInlineCountTest {
   }
 
   @Test
-  @DisplayName("reentrantInlineCount skips depth-exceeding fail-fast on all three sync paths")
-  void reentrantInlineCountSkipsDepthExceedingFailFast() throws Exception {
+  @DisplayName("should not count the depth-exceeding fail-fast on any of the three sync paths")
+  void shouldNotCountDepthExceedingFailFastOnAllThreeSyncPaths() throws Exception {
     OrderedTraceExecutor executor = newExecutor();
     AtomicLong beforeRun = new AtomicLong();
     AtomicLong afterRun = new AtomicLong();
@@ -117,8 +117,8 @@ class ReentrantInlineCountTest {
   }
 
   @Test
-  @DisplayName("idle hint is debug-logged, not counted")
-  void idleHintIsDebugLoggedNotCounted() throws IOException {
+  @DisplayName("should log and not count when the idle inline hint hits")
+  void shouldLogAndNotCountWhenIdleHintHits() throws IOException {
     Path path = mainSource("io/github/jinganix/peashooter/executor/DefaultExecutorSelector.java");
     String src = Files.readString(path);
     assertThat(src).contains("debug");

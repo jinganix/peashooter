@@ -58,6 +58,12 @@ class RedisContainerTest {
   }
 
   @Test
+  @DisplayName("should use the multi-arch image for 32-bit arm")
+  void shouldUseMultiArchImageWhenArmIs32Bit() {
+    assertThat(imageForArch("armv7l")).contains("imageName=redis:").doesNotContain("arm64v8");
+  }
+
+  @Test
   @DisplayName("should use the x86 image for amd64")
   void shouldUseX86ImageForAmd64() {
     assertThat(imageForArch("amd64")).contains("imageName=redis:").doesNotContain("arm64v8");

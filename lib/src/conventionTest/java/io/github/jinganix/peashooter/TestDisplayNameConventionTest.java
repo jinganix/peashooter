@@ -51,17 +51,19 @@ class TestDisplayNameConventionTest {
   @DisplayName("should use BDD sentences rather than camelCase method names")
   void shouldUseBddSentencesRatherThanCamelCaseMethodNames() throws IOException {
     // Given the test sources
-    Path testRoot = testRoot();
+    List<Path> roots = testSourceRoots();
 
     // When scanning every test file Then no method-level DisplayName may use camelCase shouldXxx
     List<String> violations = new ArrayList<>();
-    try (Stream<Path> files = Files.walk(testRoot)) {
-      for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
-        List<String> lines = Files.readAllLines(file);
-        for (int i = 0; i < lines.size(); i++) {
-          Matcher matcher = CAMEL_CASE_SHOULD.matcher(lines.get(i));
-          if (matcher.find()) {
-            violations.add(testRoot.relativize(file) + ":" + (i + 1) + " " + lines.get(i).trim());
+    for (Path root : roots) {
+      try (Stream<Path> files = Files.walk(root)) {
+        for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+          List<String> lines = Files.readAllLines(file);
+          for (int i = 0; i < lines.size(); i++) {
+            Matcher matcher = CAMEL_CASE_SHOULD.matcher(lines.get(i));
+            if (matcher.find()) {
+              violations.add(root.relativize(file) + ":" + (i + 1) + " " + lines.get(i).trim());
+            }
           }
         }
       }
@@ -72,38 +74,41 @@ class TestDisplayNameConventionTest {
   }
 
   @Test
-  @DisplayName("should start every member-level DisplayName with a lowercase letter")
-  void shouldStartEveryMemberLevelDisplayNameWithLowercaseLetter() throws IOException {
+  @DisplayName("should start every member-level DisplayName with a BDD should clause")
+  void shouldStartEveryMemberLevelDisplayNameWithBddShouldClause() throws IOException {
     // Given the test sources
-    Path testRoot = testRoot();
+    List<Path> roots = testSourceRoots();
 
-    // When scanning every test file Then no member-level DisplayName may start uppercase:
-    // type-level DisplayNames are class names (allowed uppercase), member-level are BDD sentences.
+    // When scanning every test file Then no member-level DisplayName may skip the should clause:
+    // type-level DisplayNames are class names (exempt), member-level ones are BDD sentences.
     List<String> violations = new ArrayList<>();
-    try (Stream<Path> files = Files.walk(testRoot)) {
-      for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
-        List<String> lines = Files.readAllLines(file);
-        for (int i = 0; i < lines.size(); i++) {
-          Matcher matcher = DISPLAY_NAME.matcher(lines.get(i));
-          if (!matcher.find() || isTypeLevelDisplayName(lines, i)) {
-            continue;
-          }
-          String text = matcher.group(1);
-          if (text.isEmpty() || !Character.isLowerCase(text.charAt(0))) {
-            violations.add(testRoot.relativize(file) + ":" + (i + 1) + " " + text);
+    for (Path root : roots) {
+      try (Stream<Path> files = Files.walk(root)) {
+        for (Path file : files.filter(p -> p.toString().endsWith(".java")).sorted().toList()) {
+          List<String> lines = Files.readAllLines(file);
+          for (int i = 0; i < lines.size(); i++) {
+            Matcher matcher = DISPLAY_NAME.matcher(lines.get(i));
+            if (!matcher.find() || isTypeLevelDisplayName(lines, i)) {
+              continue;
+            }
+            String text = matcher.group(1);
+            if (!text.startsWith("should ")) {
+              violations.add(root.relativize(file) + ":" + (i + 1) + " " + text);
+            }
           }
         }
       }
     }
     assertThat(violations)
-        .as("member-level DisplayName must start lowercase (class-level may be a type name)")
+        .as("member-level DisplayName must be a BDD sentence starting with 'should '")
         .isEmpty();
   }
 
   /**
    * Whether the annotation at {@code index} decorates a type: its next non-blank, non-annotation
    * line declares a class (or interface/enum/record). Type-level DisplayNames carry class names and
-   * are exempt from the lowercase rule, which applies to test methods and {@code @Nested} members.
+   * are exempt from the BDD wording rule, which applies to test methods and {@code @Nested}
+   * members.
    */
   private static boolean isTypeLevelDisplayName(List<String> lines, int index) {
     for (int i = index + 1; i < lines.size(); i++) {
@@ -116,9 +121,20 @@ class TestDisplayNameConventionTest {
     return false;
   }
 
-  private static Path testRoot() {
+  /**
+   * Test source roots to scan: unit tests and the convention lint itself. Both use the {@code
+   * user.dir} fallback so the check runs from the repository root and from {@code lib}.
+   */
+  private static List<Path> testSourceRoots() {
     Path base = Path.of(System.getProperty("user.dir"));
-    Path direct = base.resolve("src/test");
-    return Files.exists(direct) ? direct : base.resolve("lib/src/test");
+    List<Path> roots = new ArrayList<>();
+    for (String name : List.of("src/test", "src/conventionTest")) {
+      Path root =
+          Files.exists(base.resolve(name)) ? base.resolve(name) : base.resolve("lib/" + name);
+      if (Files.exists(root)) {
+        roots.add(root);
+      }
+    }
+    return roots;
   }
 }

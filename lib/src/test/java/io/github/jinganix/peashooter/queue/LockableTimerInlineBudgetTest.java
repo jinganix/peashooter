@@ -65,8 +65,8 @@ class LockableTimerInlineBudgetTest {
   }
 
   @Test
-  @DisplayName("timer tick caps inline drain and reschedules the remainder without dropping it")
-  void capsInlineDrainAndPreservesRemainder() {
+  @DisplayName("should cap the inline drain and reschedule the remainder when a timer tick runs")
+  void shouldCapInlineDrainAndRescheduleRemainderWhenTimerTickRuns() {
     List<Runnable> retries = new ArrayList<>();
     ScheduledExecutorService rescheduler = capturingRescheduler(retries);
     AtomicBoolean lockOpen = new AtomicBoolean(false);
@@ -100,8 +100,8 @@ class LockableTimerInlineBudgetTest {
   }
 
   @Test
-  @DisplayName("timer tick bounds a synchronous non-DirectExecutor head inline")
-  void boundsSynchronousNonDirectExecutorHead() {
+  @DisplayName("should bound a synchronous non-DirectExecutor head when a timer tick runs")
+  void shouldBoundSynchronousNonDirectExecutorHeadWhenTimerTickRuns() {
     // A synchronous executor that is not exactly DirectExecutor (e.g. Runnable::run, or a
     // TraceExecutor wrapping a direct delegate) must still be bounded on the timer thread.
     Executor synchronous = Runnable::run;
@@ -126,8 +126,8 @@ class LockableTimerInlineBudgetTest {
   }
 
   @Test
-  @DisplayName("fatal task Error on the timer retry propagates instead of being swallowed")
-  void fatalTaskErrorOnTimerRetryPropagates() {
+  @DisplayName("should propagate a fatal task error when the timer retry runs")
+  void shouldPropagateFatalTaskErrorWhenTimerRetryRuns() {
     List<Runnable> retries = new ArrayList<>();
     ScheduledExecutorService rescheduler = capturingRescheduler(retries);
     AtomicBoolean lockOpen = new AtomicBoolean(false);

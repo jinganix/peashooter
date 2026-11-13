@@ -36,7 +36,7 @@ class TaskQueueSubclassingTest {
 
   @Test
   @DisplayName("should lock template methods to the package")
-  void templateMethodsLockedToPackage() throws Exception {
+  void shouldKeepTemplateMethodsPackagePrivateWhenScanned() throws Exception {
     if (TaskQueue.class.isSealed()) {
       assertThat(TaskQueue.class.getPermittedSubclasses()).contains(LockableTaskQueue.class);
       return;

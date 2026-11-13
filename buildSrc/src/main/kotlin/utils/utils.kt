@@ -21,12 +21,29 @@ package utils
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.gradle.api.Action
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.attributes.Category
 import org.gradle.api.attributes.DocsType
 import org.gradle.api.attributes.Usage
+import org.gradle.api.specs.Spec
+import java.io.File
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.named
+
+/**
+ * Execution-time [Spec] for the JaCoCo `onlyIf` gate: true when any `*Test.java` / `*Tests.java`
+ * source exists under the captured roots. A plain class instead of a lambda so Gradle can
+ * serialize it into the configuration cache (script- and project-capturing lambdas cannot).
+ */
+class HasUnitTestSourcesSpec(private val sourceDirs: List<File>) : Spec<Task> {
+  override fun isSatisfiedBy(task: Task): Boolean =
+    sourceDirs.any { dir ->
+      dir.walkTopDown().any { file ->
+        file.isFile && (file.name.endsWith("Test.java") || file.name.endsWith("Tests.java"))
+      }
+    }
+}
 
 /**
  * Reads [keys] as required Gradle properties (gradle.properties plus `-P` overrides) for this

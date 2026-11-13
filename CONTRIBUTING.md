@@ -86,7 +86,7 @@ chore: bump version to 0.0.11-SNAPSHOT
 
 ## Create a commit
 
-No npm install is needed at the repository root; git hooks and release scripts are plain shell + Gradle.
+No npm install is needed at the repository root: git hooks are plain shell, and release scripts are Gradle plus Node (see `.tool-versions`).
 
 ## Local git hooks (shell, no npm)
 

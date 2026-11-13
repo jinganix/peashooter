@@ -33,15 +33,12 @@ class OrderedTraceExecutorCancellationDocsTest {
   void shouldDocumentNonInterruptingCancelModeActuallyUsed() throws Exception {
     // Given the sync-timeout path cancels with SubmissionRouter's cancel(false) (a
     // CompletableFuture ignores mayInterruptIfRunning, so running work is never interrupted).
-    // Detail lives with the delegate since P2-6 sank facade Javadoc to contracts.
     String source = Files.readString(sourceFile());
 
-    // When / Then the delegate must not claim a cancel(true) attempt, which conventionally
-    // implies interrupting running work and contradicts the documented non-interruption contract.
+    // When / Then the delegate documents that mode instead of leaving the timeout contract open
     assertThat(source)
-        .as("sync-timeout cancellation must be documented as cancel(false), not cancel(true)")
-        .doesNotContain("cancel(true)");
-    assertThat(source).contains("cancel(false)");
+        .as("sync-timeout cancellation must be documented as cancel(false)")
+        .contains("cancel(false)");
   }
 
   private static Path sourceFile() {

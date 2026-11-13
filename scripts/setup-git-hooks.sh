@@ -5,7 +5,7 @@ set -e
 ROOT=$(git rev-parse --show-toplevel)
 cd "$ROOT"
 
-# 本仓统一使用 shell hooks，拒绝第二套校验（husky / commitlint）。
+# This repository uses shell hooks only and refuses a second validation stack (husky / commitlint).
 if [ -d .husky ]; then
   echo "setup-git-hooks: refuse to enable — found .husky/ (use shell .githooks only)" >&2
   exit 1

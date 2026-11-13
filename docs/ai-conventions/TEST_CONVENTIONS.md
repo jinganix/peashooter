@@ -30,8 +30,7 @@ Applies to **all** test types (unit, integration, benchmark):
 
 - Test package mirrors source package under `lib/src/test/java/io/github/jinganix/peashooter/`.
 - Test class: `{ClassName}Test`.
-- Prefer concise BDD format for `@DisplayName`: `should ... when ...`.
-- Keep `@DisplayName` text lowercase at the start (do not start with uppercase).
+- Every member-level `@DisplayName` is a BDD sentence that starts with `should ` (`should ... when ...`); a type-level `@DisplayName` is the class name. The convention lint enforces this for `src/test` and `src/conventionTest`.
 - Test method names: `shouldReturn{Outcome}When{Condition}` (or `shouldThrow...When...`).
 
 Do not use `Given ... -> should ...` in `@DisplayName`; use `should ... when ...` only. When touching older tests, migrate names and structure toward the BDD format above.

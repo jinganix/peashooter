@@ -38,11 +38,13 @@ import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 @DisplayName("TaskQueue")
 class TaskQueueTest {
@@ -179,12 +181,7 @@ class TaskQueueTest {
     // And the queue recovers: releasing the task drains and idles without a second runner
     releaseTask.countDown();
     awaitCountDown(taskDone);
-    // Poll for idle (runner needs a moment to loop and clear)
-    long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
-    while (!taskQueue.isIdle() && System.nanoTime() < deadline) {
-      sleep(10);
-    }
-    assertThat(taskQueue.isIdle()).isTrue();
+    await().atMost(Duration.ofSeconds(5)).until(taskQueue::isIdle);
   }
 
   @Test
@@ -1584,6 +1581,62 @@ class TaskQueueTest {
     // And the handoff runner completes the drain once the body releases
     releaseHandoff.countDown();
     await().atMost(Duration.ofSeconds(5)).until(taskQueue::isIdle);
+  }
+
+  @Test
+  @Timeout(10)
+  @DisplayName(
+      "should reject only the handoff head when the executor runs it inline and then throws")
+  void shouldRejectHandoffHeadWhenExecutorRunsInlineThenThrows() throws InterruptedException {
+    // Given a blocked runner so later submissions queue behind it
+    TaskQueue taskQueue = new TaskQueue();
+    CountDownLatch runnerStarted = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    Executor blocking =
+        command -> {
+          runnerStarted.countDown();
+          uncheckedRun(releaseRunner::await);
+          command.run();
+        };
+    AtomicReference<Throwable> rejection = new AtomicReference<>();
+    AtomicInteger poisonRuns = new AtomicInteger();
+    class Poison implements Runnable, RejectionAware {
+      @Override
+      public void run() {
+        poisonRuns.incrementAndGet();
+      }
+
+      @Override
+      public void rejected(Throwable cause) {
+        rejection.set(cause);
+      }
+    }
+    Executor inlineThenThrows =
+        command -> {
+          // Runs the handoff command inline (suppressing the inline drain) and then throws: the
+          // head never ran, but the queue must not strand its runner claim.
+          command.run();
+          throw new RuntimeException("executor threw after inline start");
+        };
+
+    Thread runner = new Thread(() -> taskQueue.execute(blocking, () -> {}));
+    runner.setDaemon(true);
+    runner.start();
+    assertThat(runnerStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+    // When a plain inline handoff is followed by an executor that runs the handoff inline and
+    // throws before the head can run
+    taskQueue.execute(Runnable::run, () -> {});
+    taskQueue.execute(inlineThenThrows, new Poison());
+    releaseRunner.countDown();
+
+    // Then only that executor's head is rejected and the queue drains with no stranded claim
+    await().atMost(Duration.ofSeconds(5)).until(taskQueue::isIdle);
+    assertThat(poisonRuns).hasValue(0);
+    assertThat(rejection.get()).hasMessageContaining("after inline start");
+    assertThat(taskQueue.hasPending()).isFalse();
+    runner.join(TimeUnit.SECONDS.toMillis(5));
+    assertThat(runner.isAlive()).isFalse();
   }
 
   @SuppressWarnings("unchecked")

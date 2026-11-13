@@ -47,8 +47,8 @@ class SpanAccessorScopeIdempotenceTest {
   }
 
   @Test
-  @DisplayName("double close keeps the restored span instead of clobbering it")
-  void doubleCloseIsNoOp() {
+  @DisplayName("should keep the restored span when the scope is closed twice")
+  void shouldKeepRestoredSpanWhenScopeClosedTwice() {
     SimpleAccessor accessor = new SimpleAccessor();
     Span outer = Span.ofIds("11111111111111111111111111111111", "2222222222222222", null);
     Span inner = Span.ofIds("11111111111111111111111111111111", "3333333333333333", outer);

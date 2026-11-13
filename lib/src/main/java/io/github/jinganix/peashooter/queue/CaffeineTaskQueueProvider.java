@@ -78,7 +78,9 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
   // comparison stays correct across the wrap.
   private static final long PINNED_NANOS = Duration.ofDays(365 * 100).toNanos();
 
-  private final Cache<String, PinnedTaskQueue> queues;
+  // Non-final so the cache-race tests can swap in proxy/counting caches; assigned once in
+  // construction, never reassigned by production code.
+  private Cache<String, PinnedTaskQueue> queues;
 
   /**
    * Soft entry bound applied by idle-only sweeping. Busy queues are never evicted to meet the
@@ -96,7 +98,7 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
   private static final int MAX_SWEEP_SCAN = 256;
 
   /** Default idle expiry: 5 minutes. Named so the default is documented in one place. */
-  private static final Duration DEFAULT_EXPIRE_AFTER_ACCESS = Duration.ofMinutes(5);
+  private static final Duration DEFAULT_EXPIRE_AFTER_IDLE = Duration.ofMinutes(5);
 
   /**
    * Default soft entry bound applied when no explicit bound is given.
@@ -109,7 +111,7 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
 
   /** Constructor with 5-minute idle expiry and {@link #DEFAULT_MAXIMUM_SIZE} soft bound. */
   public CaffeineTaskQueueProvider() {
-    this(DEFAULT_EXPIRE_AFTER_ACCESS, DEFAULT_MAXIMUM_SIZE, Ticker.systemTicker());
+    this(DEFAULT_EXPIRE_AFTER_IDLE, DEFAULT_MAXIMUM_SIZE, Ticker.systemTicker());
   }
 
   /**
@@ -124,12 +126,12 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
    * keys are in flight). Size the bound for peak key cardinality via {@link
    * #CaffeineTaskQueueProvider(Duration, long)} when 10k does not fit.
    *
-   * @param expireAfterAccess idle period after which an unused queue entry is evicted
-   * @throws NullPointerException if {@code expireAfterAccess} is {@code null}
-   * @throws IllegalArgumentException if {@code expireAfterAccess} is zero or negative
+   * @param expireAfterIdle idle period after which an unused queue entry is evicted
+   * @throws NullPointerException if {@code expireAfterIdle} is {@code null}
+   * @throws IllegalArgumentException if {@code expireAfterIdle} is zero or negative
    */
-  public CaffeineTaskQueueProvider(Duration expireAfterAccess) {
-    this(expireAfterAccess, DEFAULT_MAXIMUM_SIZE, Ticker.systemTicker());
+  public CaffeineTaskQueueProvider(Duration expireAfterIdle) {
+    this(expireAfterIdle, DEFAULT_MAXIMUM_SIZE, Ticker.systemTicker());
   }
 
   /**
@@ -140,15 +142,15 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
    * evicted to meet it, so the size may temporarily exceed the bound while many keys are in flight.
    * Size the bound for peak key cardinality.
    *
-   * @param expireAfterAccess idle period after which an unused queue entry is evicted
+   * @param expireAfterIdle idle period after which an unused queue entry is evicted
    * @param maximumSize soft maximum cached queues; idle entries are swept past this size, must be
    *     positive
-   * @throws NullPointerException if {@code expireAfterAccess} is {@code null}
-   * @throws IllegalArgumentException if {@code expireAfterAccess} is zero or negative, or {@code
+   * @throws NullPointerException if {@code expireAfterIdle} is {@code null}
+   * @throws IllegalArgumentException if {@code expireAfterIdle} is zero or negative, or {@code
    *     maximumSize} is not positive
    */
-  public CaffeineTaskQueueProvider(Duration expireAfterAccess, long maximumSize) {
-    this(expireAfterAccess, maximumSize, Ticker.systemTicker());
+  public CaffeineTaskQueueProvider(Duration expireAfterIdle, long maximumSize) {
+    this(expireAfterIdle, maximumSize, Ticker.systemTicker());
   }
 
   private static long requirePositiveMaximumSize(long maximumSize) {
@@ -166,11 +168,11 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
    * ticker makes idle expiry deterministic (wall-clock sleeps are flaky under load), so expiry
    * contracts can be asserted without timing margins.
    *
-   * @param expireAfterAccess idle period after which an unused queue entry is evicted
+   * @param expireAfterIdle idle period after which an unused queue entry is evicted
    * @param ticker time source for entry expiry
    */
-  CaffeineTaskQueueProvider(Duration expireAfterAccess, Ticker ticker) {
-    this(expireAfterAccess, DEFAULT_MAXIMUM_SIZE, ticker);
+  CaffeineTaskQueueProvider(Duration expireAfterIdle, Ticker ticker) {
+    this(expireAfterIdle, DEFAULT_MAXIMUM_SIZE, ticker);
   }
 
   /**
@@ -181,14 +183,14 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
    * ticker makes idle expiry deterministic (wall-clock sleeps are flaky under load), so expiry
    * contracts can be asserted without timing margins.
    *
-   * @param expireAfterAccess idle period after which an unused queue entry is evicted
+   * @param expireAfterIdle idle period after which an unused queue entry is evicted
    * @param maximumSize soft maximum cached queues, must be positive
    * @param ticker time source for entry expiry
    */
-  CaffeineTaskQueueProvider(Duration expireAfterAccess, long maximumSize, Ticker ticker) {
-    Objects.requireNonNull(expireAfterAccess, "expireAfterAccess");
-    if (expireAfterAccess.isNegative() || expireAfterAccess.isZero()) {
-      throw new IllegalArgumentException("expireAfterAccess must be positive");
+  CaffeineTaskQueueProvider(Duration expireAfterIdle, long maximumSize, Ticker ticker) {
+    Objects.requireNonNull(expireAfterIdle, "expireAfterIdle");
+    if (expireAfterIdle.isNegative() || expireAfterIdle.isZero()) {
+      throw new IllegalArgumentException("expireAfterIdle must be positive");
     }
     requirePositiveMaximumSize(maximumSize);
     Objects.requireNonNull(ticker, "ticker");
@@ -196,7 +198,7 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
     this.queues =
         Caffeine.newBuilder()
             .ticker(ticker)
-            .expireAfter(new QueueExpiry(expireAfterAccess))
+            .expireAfter(new QueueExpiry(expireAfterIdle))
             .scheduler(Scheduler.systemScheduler())
             .build();
   }
@@ -614,15 +616,15 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
 
     private final long idleNanos;
 
-    private QueueExpiry(Duration expireAfterAccess) {
+    private QueueExpiry(Duration expireAfterIdle) {
       // Beyond the nanos range (~292 years) Duration.toNanos throws ArithmeticException: compare
       // first so overflow saturates via an ordinary branch instead of exception control flow.
       // Saturates to the pinned duration (not Long.MAX_VALUE, which Caffeine would add to the
       // current time and overflow to negative), consistent with OrderedTraceExecutor.setTimeout.
-      if (expireAfterAccess.compareTo(Duration.ofNanos(Long.MAX_VALUE)) >= 0) {
+      if (expireAfterIdle.compareTo(Duration.ofNanos(Long.MAX_VALUE)) >= 0) {
         this.idleNanos = PINNED_NANOS;
       } else {
-        this.idleNanos = expireAfterAccess.toNanos();
+        this.idleNanos = expireAfterIdle.toNanos();
       }
     }
 

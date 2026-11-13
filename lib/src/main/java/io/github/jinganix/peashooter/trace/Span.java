@@ -29,6 +29,12 @@ import java.util.Objects;
  * IllegalArgumentException}, so malformed ids fail at construction instead of surfacing late at
  * {@link W3CTraceContext#inject(Span, boolean)} propagation. Tests needing arbitrary ids use the
  * package-private {@link #ofIdsUnchecked} factory in the same package.
+ *
+ * <p>Spans use identity equality ({@link Object#equals}): two distinct {@code Span} instances are
+ * never equal, even when they carry identical trace and span ids. Do not use a {@code Span} as a
+ * {@link java.util.Map} key when lookup by ids is intended; use {@link SpanIdKey} instead. Custom
+ * {@link io.github.jinganix.peashooter.TraceIdGenerator}s must still emit globally unique span ids
+ * (see {@link TraceIds}).
  */
 public sealed class Span permits OrderedSpan {
 
@@ -246,13 +252,4 @@ public sealed class Span permits OrderedSpan {
   public String toString() {
     return "Span{traceId=" + traceId + ", spanId=" + spanId + "}";
   }
-
-  /**
-   * Spans use identity equality ({@link Object#equals}): two distinct {@code Span} instances are
-   * never equal, even when they carry identical trace and span ids.
-   *
-   * <p>Do not use a {@code Span} as a {@link java.util.Map} key when lookup by ids is intended; use
-   * {@link SpanIdKey} instead. Custom {@link io.github.jinganix.peashooter.TraceIdGenerator}s must
-   * still emit globally unique span ids (see {@link TraceIds}).
-   */
 }

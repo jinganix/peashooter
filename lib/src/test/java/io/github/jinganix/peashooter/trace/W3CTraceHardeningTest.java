@@ -29,8 +29,8 @@ import org.junit.jupiter.api.Test;
 class W3CTraceHardeningTest {
 
   @Test
-  @DisplayName("parse rejects oversized traceparent fast")
-  void rejectsOversizedTraceparent() {
+  @DisplayName("should reject an oversized traceparent fast when parsed")
+  void shouldRejectOversizedTraceparentFastWhenParsed() {
     String huge = "00-" + "a".repeat(2000) + "-b16b716b2ad9e3c8-01";
     assertThatThrownBy(() -> W3CTraceContext.parse(huge))
         .isInstanceOf(IllegalArgumentException.class)
@@ -39,7 +39,7 @@ class W3CTraceHardeningTest {
 
   @Test
   @DisplayName("should neutralize zero-width chars in KeySanitizer")
-  void sanitizesZeroWidth() {
+  void shouldNeutralizeZeroWidthCharactersWhenSanitizing() {
     assertThat(KeySanitizer.sanitize("a\u2028b")).isEqualTo("a_b");
     assertThat(KeySanitizer.sanitize("a\u200Bb")).isEqualTo("a_b");
     assertThat(KeySanitizer.sanitize("a\u200Db")).isEqualTo("a_b");

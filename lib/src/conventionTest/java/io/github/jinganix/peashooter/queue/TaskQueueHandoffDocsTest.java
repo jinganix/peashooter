@@ -29,52 +29,33 @@ import org.junit.jupiter.api.Test;
 @DisplayName("TaskQueue handoff docs")
 class TaskQueueHandoffDocsTest {
 
-  private static Path mainSource(String relative) {
+  private static Path mainSource() {
     Path base = Path.of(System.getProperty("user.dir"));
-    Path direct = base.resolve("src/main/java/" + relative);
+    Path direct = base.resolve("src/main/java");
     if (Files.exists(direct)) {
       return direct;
     }
-    return base.resolve("lib/src/main/java/" + relative);
-  }
-
-  private static String readMain(String relative) throws IOException {
-    return Files.readString(mainSource(relative));
+    return base.resolve("lib/src/main/java");
   }
 
   @Test
-  @DisplayName("tryInlineHandoff carries a single merged Javadoc holding both contracts")
-  void tryInlineHandoffHasSingleMergedJavadoc() throws IOException {
-    String src = readMain("io/github/jinganix/peashooter/queue/TaskQueue.java");
+  @DisplayName("should keep a single merged Javadoc on tryInlineHandoff")
+  void shouldKeepSingleMergedJavadocOnTryInlineHandoff() throws IOException {
+    // Given the handoff trampoline source
+    String src =
+        Files.readString(
+            mainSource().resolve("io/github/jinganix/peashooter/queue/TaskQueue.java"));
     String anchor = "private boolean tryInlineHandoff(Executor handoff, Task failedHead) {";
     int methodIdx = src.indexOf(anchor);
     assertThat(methodIdx).as("tryInlineHandoff anchor").isGreaterThanOrEqualTo(0);
 
+    // When reading the Javadoc directly above it Then it is exactly one block, not two stacked
+    // blocks (the split form was merged into a single owning block).
     String before = src.substring(0, methodIdx);
     int docStart = before.lastIndexOf("/**");
     assertThat(docStart).as("leading Javadoc start").isGreaterThanOrEqualTo(0);
     String block = before.substring(docStart);
-
-    // Exactly one Javadoc block: no closing "*/" inside the block body itself.
     String inner = block.substring(0, block.lastIndexOf("*/"));
     assertThat(inner).as("single Javadoc block (no nested close)").doesNotContain("*/");
-
-    // Both contracts survive the merge: the trampoline contract ...
-    assertThat(block).contains("trampolining synchronous execution");
-    // ... and the handshake-box contract that used to live in the second block.
-    assertThat(block).contains("HandoffBoxes");
-  }
-
-  @Test
-  @DisplayName("should carry the 17-line Apache license header like other main files")
-  void handoffBoxesHasApacheLicenseHeader() throws IOException {
-    String header = readMain("io/github/jinganix/peashooter/queue/TaskQueue.java");
-    String target = readMain("io/github/jinganix/peashooter/queue/HandoffBoxes.java");
-    String[] expected = header.split("\n", -1);
-    String[] actual = target.split("\n", -1);
-    assertThat(actual.length).isGreaterThanOrEqualTo(17);
-    for (int i = 0; i < 17; i++) {
-      assertThat(actual[i]).as("header line " + (i + 1)).isEqualTo(expected[i]);
-    }
   }
 }

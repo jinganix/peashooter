@@ -4,6 +4,7 @@
 .idea/
 .kotlin/
 .tmp/
+.kilo/
 bin/
 build/
 node_modules/

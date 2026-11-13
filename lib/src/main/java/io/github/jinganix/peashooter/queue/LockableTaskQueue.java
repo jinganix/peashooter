@@ -19,7 +19,6 @@
 package io.github.jinganix.peashooter.queue;
 
 import io.github.jinganix.peashooter.ExecutionStats;
-import io.github.jinganix.peashooter.executor.DirectExecutor;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledExecutorService;
@@ -75,10 +74,11 @@ public abstract class LockableTaskQueue extends TaskQueue {
 
   /**
    * Maximum tasks executed inline on the timer thread per retry tick. When the head's executor runs
-   * the runner on the rescheduler thread (thread identity, e.g. {@link DirectExecutor} or any other
-   * synchronous executor), an unbounded drain would hold the shared scheduler for an entire backlog
-   * and delay every other key's backoff. The remainder is picked up by a follow-up retry instead of
-   * this tick. Async heads hand to their own executor and need no budget here.
+   * the runner on the rescheduler thread (thread identity, e.g. {@link
+   * io.github.jinganix.peashooter.executor.DirectExecutor} or any other synchronous executor), an
+   * unbounded drain would hold the shared scheduler for an entire backlog and delay every other
+   * key's backoff. The remainder is picked up by a follow-up retry instead of this tick. Async
+   * heads hand to their own executor and need no budget here.
    */
   static final int MAX_TASKS_PER_TIMER_RETRY = 8;
 
@@ -131,6 +131,10 @@ public abstract class LockableTaskQueue extends TaskQueue {
    *     window)
    * @param rescheduler scheduler for lock-contention retries; lifecycle stays with the caller
    */
+  // this-escape: the collaborators only store the reference (no callback, no thread start, no
+  // overridable call during construction), so a subclass never observes a partially initialized
+  // queue. Kept as a suppression rather than a factory to keep construction order explicit.
+  @SuppressWarnings("this-escape")
   public LockableTaskQueue(ExecutionStats stats, ScheduledExecutorService rescheduler) {
     super();
     Objects.requireNonNull(stats, "stats");
@@ -190,9 +194,9 @@ public abstract class LockableTaskQueue extends TaskQueue {
    *
    * @param maxTasks maximum tasks to run inline in this invocation; {@link Integer#MAX_VALUE} for
    *     pool threads (unbounded, batch size stays with {@code shouldYield}). Timer-thread retries
-   *     pass {@link #MAX_TASKS_PER_TIMER_RETRY} so a {@link DirectExecutor} backlog cannot hold the
-   *     shared scheduler: the remainder is rescheduled via the normal release path instead of this
-   *     tick.
+   *     pass {@link #MAX_TASKS_PER_TIMER_RETRY} so a {@link
+   *     io.github.jinganix.peashooter.executor.DirectExecutor} backlog cannot hold the shared
+   *     scheduler: the remainder is rescheduled via the normal release path instead of this tick.
    */
   void runOuter(RunState state, int maxTasks) {
     int tasksRun = 0;
@@ -221,7 +225,18 @@ public abstract class LockableTaskQueue extends TaskQueue {
               return;
             }
             case PollOutcome.Handoff(var handoff, var handoffHead) -> {
-              HandoffRouter.HandoffOutcome transferred = handoffs.transfer(handoff, handoffHead);
+              HandoffRouter.HandoffOutcome transferred;
+              try {
+                transferred = handoffs.transfer(handoff, handoffHead);
+              } catch (Throwable schedulingFailure) {
+                if (schedulingFailure instanceof Error fatal) {
+                  throw fatal;
+                }
+                // A throwing executor that ran the handoff command inline: the head never ran,
+                // so reject only it and keep draining under the held lock.
+                handoffs.rejectHead(handoffHead, schedulingFailure);
+                continue batchLoop;
+              }
               if (transferred == HandoffRouter.HandoffOutcome.SYNC_CONTINUE
                   || transferred == HandoffRouter.HandoffOutcome.REJECT_CONTINUE) {
                 continue batchLoop;

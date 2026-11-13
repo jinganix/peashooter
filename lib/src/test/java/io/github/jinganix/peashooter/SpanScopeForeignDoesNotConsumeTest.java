@@ -48,8 +48,8 @@ class SpanScopeForeignDoesNotConsumeTest {
   }
 
   @Test
-  @DisplayName("foreign close throws but owner close still restores previous")
-  void foreignCloseDoesNotConsumeScope() throws Exception {
+  @DisplayName("should throw when closed from a foreign thread without consuming the scope")
+  void shouldThrowWhenClosedFromForeignThreadWithoutConsumingScope() throws Exception {
     SimpleAccessor accessor = new SimpleAccessor();
     Span outer = Span.ofIds("11111111111111111111111111111111", "2222222222222222", null);
     Span inner = Span.ofIds("11111111111111111111111111111111", "3333333333333333", outer);

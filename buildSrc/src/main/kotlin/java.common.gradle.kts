@@ -1,8 +1,11 @@
 import com.diffplug.gradle.spotless.SpotlessExtension
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import utils.HasUnitTestSourcesSpec
 import utils.createConfiguration
 import utils.props
 import utils.vers
+import java.io.File
 import java.math.BigDecimal
 
 plugins {
@@ -25,6 +28,13 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
   options.release.set(21)
+}
+
+// Reproducible archives: identical sources must produce byte-identical jars, so published
+// artifacts never embed build timestamps or filesystem ordering.
+tasks.withType<AbstractArchiveTask>().configureEach {
+  isPreserveFileTimestamps = false
+  isReproducibleFileOrder = true
 }
 
 dependencies {
@@ -71,15 +81,14 @@ tasks.jacocoTestReport {
   }
 }
 
+// Source roots only (no configuration-time scan): the execution-time predicate below walks them
+// when the task runs, so configuration stays file-system free and the captured List<File> stays
+// configuration-cache serializable (a captured SourceSet or Project is not).
+val testJavaSourceDirs: List<File> = sourceSets.test.get().java.srcDirs.toList()
+
 tasks.jacocoTestCoverageVerification {
-  // Execution-time gate instead of a configuration-time file scan: the predicate runs when the
-  // task would execute, so configuration stays file-system free and configuration-cache clean.
   // Modules without Test/Tests classes skip verification without disabling the task at config.
-  onlyIf("no unit tests") {
-    sourceSets.test.get().allJava.files.any { file ->
-      file.name.endsWith("Test.java") || file.name.endsWith("Tests.java")
-    }
-  }
+  onlyIf("has unit tests", HasUnitTestSourcesSpec(testJavaSourceDirs))
   dependsOn(tasks.jacocoTestReport)
   violationRules {
     // Aggregate-only threshold, matching :aggregation:coverageVerification. A per-class LINE

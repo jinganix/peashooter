@@ -20,14 +20,15 @@ package io.github.jinganix.peashooter.queue;
 
 import static io.github.jinganix.peashooter.utils.TestUtils.awaitCountDown;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,22 +43,26 @@ import org.junit.jupiter.api.Test;
 class HandoffWithoutHappensBeforeTest {
 
   /** Executor with no happens-before: plain (non-volatile, unsynchronized) handoff slot. */
-  static final class NoHappensBeforeExecutor implements Executor {
+  static final class NoHappensBeforeExecutor implements Executor, AutoCloseable {
     Runnable slot;
 
     final Thread pump;
 
     NoHappensBeforeExecutor() {
       pump =
-          new Thread(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
-              Runnable task = slot;
-              if (task != null) {
-                slot = null;
-                task.run();
-              }
-            }
-          });
+          new Thread(
+              () -> {
+                while (!Thread.currentThread().isInterrupted()) {
+                  Runnable task = slot;
+                  if (task != null) {
+                    slot = null;
+                    task.run();
+                  } else {
+                    Thread.onSpinWait();
+                  }
+                }
+              },
+              "no-happens-before-pump");
       pump.setDaemon(true);
       pump.start();
     }
@@ -66,11 +71,17 @@ class HandoffWithoutHappensBeforeTest {
     public void execute(Runnable command) {
       slot = command;
     }
+
+    /** Stops the daemon pump thread; must run even when an assertion fails. */
+    @Override
+    public void close() {
+      pump.interrupt();
+    }
   }
 
   @Test
-  @DisplayName("handshake state uses atomics and no volatile fields")
-  void handshakeStateUsesAtomicsWithoutVolatile() throws Exception {
+  @DisplayName("should use atomics without volatile fields when the handshake state is scanned")
+  void shouldUseAtomicsWithoutVolatileFieldsWhenHandshakeStateScanned() throws Exception {
     Class<?> box = HandoffBoxes.HandoffBox.class;
     for (Field field : box.getDeclaredFields()) {
       assertThat(Modifier.isVolatile(field.getModifiers()))
@@ -93,44 +104,43 @@ class HandoffWithoutHappensBeforeTest {
   @Test
   @DisplayName(
       "should run every task exactly once when a TaskQueue hands off over a no-HB executor")
-  void taskQueueHandoffOverNoHbExecutorRunsEveryTaskExactlyOnce() throws Exception {
-    TaskQueue queue = new TaskQueue();
-    NoHappensBeforeExecutor noHb = new NoHappensBeforeExecutor();
-    Executor inline = Runnable::run;
-    int total = 100;
-    CountDownLatch done = new CountDownLatch(total);
-    AtomicInteger runs = new AtomicInteger();
-    for (int i = 0; i < total; i++) {
-      Executor exec = (i & 1) == 0 ? inline : noHb;
-      queue.execute(
-          exec,
-          () -> {
-            runs.incrementAndGet();
-            done.countDown();
-          });
+  void shouldRunEveryTaskExactlyOnceWhenTaskQueueHandsOffOverNoHappensBeforeExecutor()
+      throws Exception {
+    try (NoHappensBeforeExecutor noHb = new NoHappensBeforeExecutor()) {
+      TaskQueue queue = new TaskQueue();
+      Executor inline = Runnable::run;
+      int total = 100;
+      CountDownLatch done = new CountDownLatch(total);
+      AtomicInteger runs = new AtomicInteger();
+      for (int i = 0; i < total; i++) {
+        Executor exec = (i & 1) == 0 ? inline : noHb;
+        queue.execute(
+            exec,
+            () -> {
+              runs.incrementAndGet();
+              done.countDown();
+            });
+      }
+      awaitCountDown(done);
+      assertThat(done.getCount()).isZero();
+      await().atMost(Duration.ofSeconds(5)).until(queue::isIdle);
+      assertThat(runs).hasValue(total);
+      assertThat(queue.isIdle()).isTrue();
     }
-    awaitCountDown(done);
-    assertThat(done.getCount()).isZero();
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-    while (!queue.isIdle() && System.nanoTime() < deadline) {
-      Thread.sleep(10);
-    }
-    assertThat(runs).hasValue(total);
-    assertThat(queue.isIdle()).isTrue();
-    noHb.pump.interrupt();
   }
 
   @Test
   @DisplayName(
       "should keep mutual exclusion when a LockableTaskQueue hands off over a no-HB executor")
-  void lockableHandoffOverNoHbExecutorKeepsMutualExclusion() throws Exception {
+  void shouldKeepMutualExclusionWhenLockableQueueHandsOffOverNoHappensBeforeExecutor()
+      throws Exception {
     ScheduledExecutorService scheduler =
         Executors.newSingleThreadScheduledExecutor(r -> {
           Thread thread = new Thread(r);
           thread.setDaemon(true);
           return thread;
         });
-    try {
+    try (NoHappensBeforeExecutor noHb = new NoHappensBeforeExecutor()) {
       AtomicInteger concurrent = new AtomicInteger();
       AtomicInteger maxConcurrent = new AtomicInteger();
       AtomicBoolean violated = new AtomicBoolean();
@@ -149,7 +159,6 @@ class HandoffWithoutHappensBeforeTest {
             @Override
             protected void unlock() {}
           };
-      NoHappensBeforeExecutor noHb = new NoHappensBeforeExecutor();
       Executor inline = Runnable::run;
       int total = 100;
       CountDownLatch done = new CountDownLatch(total);
@@ -175,14 +184,10 @@ class HandoffWithoutHappensBeforeTest {
       }
       awaitCountDown(done);
       assertThat(done.getCount()).isZero();
-      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-      while (!queue.isIdle() && System.nanoTime() < deadline) {
-        Thread.sleep(10);
-      }
+      await().atMost(Duration.ofSeconds(10)).until(queue::isIdle);
       assertThat(violated).isFalse();
       assertThat(maxConcurrent.get()).isLessThanOrEqualTo(1);
       assertThat(queue.isIdle()).isTrue();
-      noHb.pump.interrupt();
     } finally {
       scheduler.shutdownNow();
     }
