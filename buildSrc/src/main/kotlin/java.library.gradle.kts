@@ -22,7 +22,8 @@ dependencies {
   testRuntimeOnly("org.junit.platform:junit-platform-launcher:${vers.versionJupiter}")
 }
 
-signAndPublish("peashooter", "Call tasks sequentially and prevent deadlocks.")
+val artifactId = "peashooter"
+signAndPublish(artifactId, "Call tasks sequentially and prevent deadlocks.")
 
 // A published library must resolve for Maven consumers too. Gradle module metadata can look
 // perfect while the POM is empty: `pom` packaging or a missing dependency makes the published
@@ -32,6 +33,11 @@ val verifyPublishedPom =
   tasks.register("verifyPublishedPom") {
     group = "verification"
     description = "Fails when a published POM is not a single jar-packaged module with its runtime deps"
+    // Execution-time values are captured as locals: a Gradle script object is not
+    // configuration-cache serializable, so the action must not read script-level values.
+    val expectedArtifactId = artifactId
+    val expectedGroupId = project.group.toString()
+    val expectedVersionId = project.version.toString()
     val publications = layout.buildDirectory.dir("publications")
     // The directory also holds the Gradle module metadata and (when signing is enabled on CI)
     // the .asc signatures; all producers are declared so the input carries no implicit task
@@ -52,6 +58,18 @@ val verifyPublishedPom =
       }
       val pom = poms.single()
       val text = pom.readText()
+      // Maven consumers resolve by these coordinates: a wrong id or version publishes a
+      // coordinate that still looks fine in module metadata but resolves to nothing for Maven
+      // consumers.
+      check(text.contains("<groupId>$expectedGroupId</groupId>")) {
+        "Published POM groupId must be $expectedGroupId: $pom"
+      }
+      check(text.contains("<artifactId>$expectedArtifactId</artifactId>")) {
+        "Published POM artifactId must be $expectedArtifactId: $pom"
+      }
+      check(text.contains("<version>$expectedVersionId</version>")) {
+        "Published POM version must be $expectedVersionId: $pom"
+      }
       // Gradle omits the Maven default (`jar`) packaging; an explicit non-jar packaging would
       // make Maven resolve no artifact at all.
       val packaging = Regex("<packaging>([^<]*)</packaging>").find(text)?.groupValues?.get(1)

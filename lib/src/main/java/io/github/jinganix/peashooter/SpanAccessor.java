@@ -65,8 +65,9 @@ public interface SpanAccessor {
    * failure propagates (with any restore failure suppressed).
    *
    * <p>The returned scope is single-use on the calling thread: close it exactly once via
-   * try-with-resources on the same thread; a second close is a no-op, and closing from another
-   * thread is unsupported.
+   * try-with-resources on the same thread. A second close is a no-op; closing from another thread
+   * throws {@link IllegalStateException} without consuming the scope, so the owning thread can
+   * still restore the previous span.
    *
    * <pre>{@code
    * try (var scope = tracer.scope(span)) {

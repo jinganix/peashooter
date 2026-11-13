@@ -77,8 +77,8 @@ class TaskQueueIdentityEqualityTest {
   }
 
   @Test
-  @DisplayName("removeTrigger must remove trigger instance, not first equal")
-  void removeTriggerKeepsFirstDuplicate() throws Exception {
+  @DisplayName("should keep the first duplicate when removeTrigger removes an instance")
+  void shouldKeepFirstDuplicateWhenRemoveTriggerRemovesInstance() throws Exception {
     ExposingQueue queue = new ExposingQueue();
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
@@ -120,7 +120,7 @@ class TaskQueueIdentityEqualityTest {
 
   @Test
   @DisplayName("should use identity equality for submitted tasks")
-  void taskUsesIdentityEquality() {
+  void shouldUseIdentityEqualityForSubmittedTasks() {
     Executor exec = cmd -> {};
     Runnable shared = () -> {};
     TaskQueue.Task a = new TaskQueue.Task(shared, exec);
@@ -131,8 +131,8 @@ class TaskQueueIdentityEqualityTest {
   }
 
   @Test
-  @DisplayName("rejectHandoffHead must not remove equal-but-not-identical front")
-  void rejectHeadRequiresIdentity() throws Exception {
+  @DisplayName("should not remove an equal front when the reject head identity differs")
+  void shouldNotRemoveEqualFrontWhenRejectHeadIdentityDiffers() throws Exception {
     ExposingQueue queue = new ExposingQueue();
     CountDownLatch started = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);

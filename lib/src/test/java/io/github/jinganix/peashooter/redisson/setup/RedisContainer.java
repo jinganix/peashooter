@@ -46,10 +46,11 @@ public final class RedisContainer extends GenericContainer<RedisContainer> {
   }
 
   private static boolean isArm64() {
-    // Some distributions report "arm64" instead of "aarch64" (and 32-bit ones "armv7l"):
-    // match the arm family instead of a single spelling, or x86 images get pulled on ARM.
+    // Some distributions report "arm64" instead of "aarch64": match both 64-bit spellings, or
+    // x86 images get pulled on ARM. 32-bit arm ("armv7l") keeps the multi-arch image, which
+    // selects its own platform; the arm64v8 prefix would force an image it cannot run.
     String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-    return arch.contains("aarch64") || arch.contains("arm");
+    return arch.contains("aarch64") || arch.contains("arm64");
   }
 
   /**

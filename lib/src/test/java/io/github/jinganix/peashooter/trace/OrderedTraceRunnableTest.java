@@ -42,6 +42,17 @@ class OrderedTraceRunnableTest {
   }
 
   @Test
+  @DisplayName("should reject invalid forced trace id at construction")
+  void shouldRejectInvalidForcedTraceIdWhenConstructing() {
+    DefaultTracer tracer = new DefaultTracer();
+
+    assertThatThrownBy(
+            () -> OrderedTraceRunnable.forTraceId(tracer, "not-hex", "key", true, () -> {}))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("traceId");
+  }
+
+  @Test
   @DisplayName("should force an explicit trace id even when parent is set")
   void shouldForceAnExplicitTraceIdEvenWhenParentIsSet() {
     // Given

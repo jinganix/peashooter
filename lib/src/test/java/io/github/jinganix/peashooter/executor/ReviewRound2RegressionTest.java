@@ -31,7 +31,7 @@ class ReviewRound2RegressionTest {
 
   @Test
   @DisplayName("should leave no ThreadLocal entry when DepthGuard overflows")
-  void depthGuardOverflowLeavesNoEntry() {
+  void shouldLeaveNoThreadLocalEntryWhenDepthGuardOverflows() {
     DepthGuard guard = new DepthGuard();
     for (int i = 0; i < 3; i++) {
       guard.enter(1, () -> new IllegalStateException("overflow"));
@@ -47,8 +47,8 @@ class ReviewRound2RegressionTest {
   }
 
   @Test
-  @DisplayName("multi-key rejects more than MAX_MULTI_KEYS distinct keys")
-  void multiKeyRejectsOversize() {
+  @DisplayName("should reject a multi-key call when distinct keys exceed the bound")
+  void shouldRejectMultiKeyWhenDistinctKeysExceedBound() {
     List<String> keys = new ArrayList<>();
     for (int i = 0; i < MultiKeyNesting.MAX_MULTI_KEYS + 1; i++) {
       keys.add("k-" + i);
@@ -59,8 +59,8 @@ class ReviewRound2RegressionTest {
   }
 
   @Test
-  @DisplayName("multi-key accepts duplicates collapsing to the bound")
-  void multiKeyAcceptsDuplicatesWithinBound() {
+  @DisplayName("should accept duplicate keys when the distinct count collapses within the bound")
+  void shouldAcceptDuplicateKeysWhenDistinctCollapseWithinBound() {
     List<String> keys = new ArrayList<>();
     for (int i = 0; i < MultiKeyNesting.MAX_MULTI_KEYS + 500; i++) {
       keys.add("same");
@@ -69,8 +69,8 @@ class ReviewRound2RegressionTest {
   }
 
   @Test
-  @DisplayName("oversized distinct multi-key fails fast without sorting the full input")
-  void multiKeyOversizeDistinctFailsFast() {
+  @DisplayName("should fail fast when an oversized distinct multi-key arrives")
+  void shouldFailFastWhenOversizedDistinctMultiKey() {
     List<String> keys = new ArrayList<>();
     for (int i = 0; i < MultiKeyNesting.MAX_MULTI_KEYS + 100; i++) {
       keys.add("k-" + i);

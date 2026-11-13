@@ -24,8 +24,21 @@ if ! printf '%s\n' "$HEADER" | grep -qE "$PATTERN"; then
   exit 1
 fi
 
-if [ "${#HEADER}" -gt 100 ]; then
-  echo "commit-msg: header exceeds 100 characters (${#HEADER})"
+# Count characters, not bytes: a shell like dash counts bytes for ${#var}, which would
+# reject a valid multi-byte subject well below 100 characters. Perl is present on the CI
+# images and macOS; when it is unavailable, fall back to ${#1}, which counts characters in
+# bash but bytes in dash.
+header_length() {
+  if command -v perl >/dev/null 2>&1; then
+    printf '%s' "$1" | perl -CS -e 'local $/; my $s = <STDIN>; print length($s);'
+  else
+    printf '%s' "${#1}"
+  fi
+}
+
+HEADER_LENGTH=$(header_length "$HEADER")
+if [ "$HEADER_LENGTH" -gt 100 ]; then
+  echo "commit-msg: header exceeds 100 characters (${HEADER_LENGTH})"
   exit 1
 fi
 

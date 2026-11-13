@@ -46,8 +46,8 @@ class TaskQueueEnqueueHookFailureTest {
   }
 
   @Test
-  @DisplayName("throwing onEnqueueLocked removes trigger, reconciles, and stays idle")
-  void reconcilesOnHookFailure() {
+  @DisplayName("should reconcile and stay idle when the enqueue hook throws")
+  void shouldReconcileAndStayIdleWhenEnqueueHookThrows() {
     FailingHookQueue queue = new FailingHookQueue();
     assertThatThrownBy(() -> queue.execute(DirectExecutor.INSTANCE, () -> {}))
         .isInstanceOf(IllegalStateException.class)
@@ -72,8 +72,8 @@ class TaskQueueEnqueueHookFailureTest {
   }
 
   @Test
-  @DisplayName("error in onEnqueueLocked still reconciles instead of leaking")
-  void reconcilesOnHookError() {
+  @DisplayName("should reconcile when the enqueue hook throws an error")
+  void shouldReconcileWhenEnqueueHookThrowsError() {
     FailingErrorHookQueue queue = new FailingErrorHookQueue();
     assertThatThrownBy(() -> queue.execute(DirectExecutor.INSTANCE, () -> {}))
         .isInstanceOf(AssertionError.class)
@@ -97,8 +97,8 @@ class TaskQueueEnqueueHookFailureTest {
   }
 
   @Test
-  @DisplayName("reconciles the runner exactly once when scheduling fails with an error")
-  void reconcilesRunnerExactlyOnceWhenSchedulingFailsWithError() {
+  @DisplayName("should reconcile the runner once when scheduling fails with an error")
+  void shouldReconcileRunnerOnceWhenSchedulingFailsWithError() {
     // Given a queue whose selected executor throws an Error while scheduling the runner
     CountingRunnerFinishedQueue queue = new CountingRunnerFinishedQueue();
     Executor failing =

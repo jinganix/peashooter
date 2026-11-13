@@ -17,7 +17,7 @@
  */
 
 /**
- * Peashooter call-tasksequencing library.
+ * Peashooter ordered task-execution library.
  *
  * <p>Exports the public API packages only. The {@code internal} package is intentionally not
  * exported or opened: it stays {@code public} solely for sharing inside this jar, and modular

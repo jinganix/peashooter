@@ -499,10 +499,20 @@ public class TaskQueue {
           // recursing one frame per executor switch. Async runners run on another thread.
           // Schedule the next runner without holding the queue monitor: Executor.execute()
           // is arbitrary third-party code and must not run under our lock.
-          if (tryInlineHandoff(handoff, handoffHead)) {
+          try {
+            if (tryInlineHandoff(handoff, handoffHead)) {
+              continue;
+            }
+            return;
+          } catch (Throwable schedulingFailure) {
+            if (schedulingFailure instanceof Error fatal) {
+              throw fatal;
+            }
+            // A throwing executor that ran the handoff command inline: the head never ran, so
+            // reject only it and keep draining the preserved backlog in this frame.
+            rejectHandoffHead(handoffHead, schedulingFailure);
             continue;
           }
-          return;
         }
         case PollOutcome.Ready(var task) -> {
           try {
@@ -567,7 +577,9 @@ public class TaskQueue {
    *
    * <p>On scheduling failure only the handoff head ({@code failedHead}, already requeued at the
    * front by the caller) is rejected and removed; the remaining backlog is preserved in order and
-   * the caller loops to continue draining it in this frame.
+   * the caller loops to continue draining it in this frame. Those remaining tasks therefore run on
+   * the current runner thread rather than on the rejected head's executor: the claim is repointed
+   * at the new head, but no second scheduling attempt is made for the failed executor.
    *
    * @param handoff executor to schedule the runner
    * @param failedHead head task to reject when scheduling fails; must be at the deque front

@@ -45,6 +45,15 @@ import java.util.function.Supplier;
  * <p>Same-key tasks run one at a time; different keys may run concurrently. See {@link Builder} for
  * construction; behavior contracts live with the delegates ({@link TimeoutPolicy}, {@link
  * ReentrancyGate}, {@link MultiKeyGuard}, {@link SubmissionRouter}).
+ *
+ * <p><b>Cross-key nesting order:</b> a nested single-key sync call ({@code executeSync}/{@code
+ * supply}) holds the outer key and one pool thread while it waits for the inner key, so nested
+ * single-key calls acquire keys in <em>call</em> order, not sorted order. Two concurrent chains
+ * nesting in opposite orders ({@code a -> b} and {@code b -> a}) can deadlock each other until the
+ * sync timeout fires. The multi-key overloads are immune because they sort and de-duplicate every
+ * key they hold (see {@link MultiKeyNesting}). Route cross-key work through the multi-key
+ * overloads, or acquire nested cross-key syncs in one global order (for example ascending) on every
+ * thread, and size the backing pool for at least one thread per concurrently blocked nesting level.
  */
 public class OrderedTraceExecutor {
 
@@ -365,6 +374,9 @@ public class OrderedTraceExecutor {
    *
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param task work to run; must not be {@code null}
+   * @throws RuntimeException (or whatever the selector or backing executor throws) when the task
+   *     cannot be scheduled; the failure propagates to this caller
+   * @throws Error when selection or scheduling fails with one
    */
   public void executeAsync(String key, Runnable task) {
     Keys.requireKey(key);
@@ -378,6 +390,10 @@ public class OrderedTraceExecutor {
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param task work to run; must not be {@code null}
    * @return future completed after the task runs, exceptionally on failure
+   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
+   *     submission without running it; the returned future is also completed exceptionally with the
+   *     same failure
+   * @throws Error when the selector or queue fails with one (the future is completed as well)
    */
   public CompletableFuture<Void> submitAsync(String key, Runnable task) {
     Keys.requireKey(key);
@@ -396,6 +412,10 @@ public class OrderedTraceExecutor {
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @return future completed with the supplier result, exceptionally on failure
+   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
+   *     submission without running it; the returned future is also completed exceptionally with the
+   *     same failure
+   * @throws Error when the selector or queue fails with one (the future is completed as well)
    */
   public <R> CompletableFuture<R> supplyAsync(String key, Supplier<R> supplier) {
     Keys.requireKey(key);
@@ -418,6 +438,10 @@ public class OrderedTraceExecutor {
    * @param <R> result type
    * @param <E> checked failure type (carried by the future, never thrown)
    * @return future completed with the supplier result, exceptionally on failure
+   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
+   *     submission without running it; the returned future is also completed exceptionally with the
+   *     same failure
+   * @throws Error when the selector or queue fails with one (the future is completed as well)
    */
   public <R, E extends Throwable> CompletableFuture<R> supplyCheckedAsync(
       String key, ThrowingSupplier<R, E> supplier) {
@@ -464,6 +488,9 @@ public class OrderedTraceExecutor {
    * @return future completed after the chain runs, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
+   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
+   *     submission without running it; the returned future is completed exceptionally as well
+   * @throws Error when a selector or queue fails with one
    */
   public CompletableFuture<Void> submitAsync(Collection<String> keys, Runnable task) {
     Objects.requireNonNull(task, "task");
@@ -491,6 +518,9 @@ public class OrderedTraceExecutor {
    * @return future completed with the supplier result, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
+   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
+   *     submission without running it; the returned future is completed exceptionally as well
+   * @throws Error when a selector or queue fails with one
    */
   public <R> CompletableFuture<R> supplyAsync(Collection<String> keys, Supplier<R> supplier) {
     Objects.requireNonNull(supplier, "supplier");
@@ -520,6 +550,9 @@ public class OrderedTraceExecutor {
    * @return future completed with the supplier result, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
+   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
+   *     submission without running it; the returned future is completed exceptionally as well
+   * @throws Error when a selector or queue fails with one
    */
   public <R, E extends Throwable> CompletableFuture<R> supplyCheckedAsync(
       Collection<String> keys, Class<E> type, ThrowingSupplier<R, E> supplier) {

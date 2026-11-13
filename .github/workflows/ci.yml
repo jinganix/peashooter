@@ -61,6 +61,7 @@ jobs:
   build:
     name: Build
     needs: [commit-msg]
+    timeout-minutes: 30
     if: ${{ needs.commit-msg.outputs.skip != 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:

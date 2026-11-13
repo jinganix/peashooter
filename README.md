@@ -6,7 +6,7 @@
 
 # peashooter
 
-Per-key ordered task execution for Java thread pools — sequential guarantees without global locking, plus safe nested synchronous calls that avoid deadlocks.
+Per-key ordered task execution for Java thread pools — sequential guarantees without global locking, plus nested synchronous calls that avoid self-deadlock (cross-key nesting must acquire keys in one global order).
 
 ## Features
 
@@ -14,7 +14,7 @@ Per-key ordered task execution for Java thread pools — sequential guarantees w
 - **Concurrent across keys** — different keys use the shared thread pool in parallel.
 - **Deadlock-safe nesting** — `supply` / `executeSync` detect re-entrant calls on the same key and run inline instead of blocking (fail fast when same-key peers are already queued).
 - **Distributed tracing** — built-in trace IDs and parent/child spans for ordered call chains.
-- **Low overhead** — lock-free hot path during task execution; per-key queues use Caffeine with access-based expiry.
+- **Low overhead** — lock-free hot path during task execution; per-key queues use Caffeine with idle expiration.
 
 ## Requirements
 
@@ -80,21 +80,23 @@ Execution for key `"foo"` follows enqueue order — **task1 → task2 → task3*
 
 Different keys are independent — `"foo"` and `"bar"` can run at the same time on the pool.
 
-### Deadlock-free synchronous calls
+### Nested synchronous calls
 
-Nested synchronous calls on different keys are scheduled through the same mechanism. The inner `supply` runs on the correct queue without holding locks across keys:
+Nested synchronous calls on different keys are scheduled through the same mechanism. The inner `supply` runs on the correct queue, and the queue monitor is never held across the nested call — but the outer key's runner (and the thread waiting for the inner call) stay busy until it completes:
 
 ```java
 int value =
     executor.supply(
-        "foo",
+        "bar",
         () ->
             executor.supply(
-                "bar", () -> executor.supply("foo", () -> 1)));
+                "foo", () -> executor.supply("bar", () -> 1)));
 // value == 1
 ```
 
 Re-entrant synchronous calls on the **same** key are detected via the current trace span and execute inline when no peer tasks are queued for that key, so they cannot deadlock waiting on themselves. If same-key peers are already queued, such a nested call fails fast with `IllegalStateException` instead of overtaking them (submission order is never silently broken): restructure the call so the nested same-key work runs before peers are waiting. Multi-key overloads (`executeSync(keys, …)`, `supply(keys, …)`) that de-duplicate to two or more distinct keys always enqueue each level, because their global sorted acquisition order must hold; a collection that de-duplicates to one key takes the single-key path above.
+
+**Cross-key nesting order matters.** A nested `executeSync` / `supply` holds the outer key and one pool thread while it waits for the inner key, so nested single-key calls acquire keys in *call* order, not sorted order. Two concurrent chains that nest in opposite orders (`a → b` and `b → a`) can deadlock each other until the sync timeout fires. The multi-key overloads are immune because they sort and de-duplicate every key they hold. Route cross-key work through the multi-key overloads, or acquire nested cross-key syncs in one global order (for example ascending) on every thread, and size the pool for at least one thread per concurrently blocked nesting level.
 
 ## API
 
@@ -102,7 +104,7 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 |--------|-------------|
 | `executeAsync(key, task)` | Enqueue `task` for `key`; returns immediately. |
 | `submitAsync(key, task)` / `supplyAsync(key, supplier)` | Enqueue for `key`; return a future completed after the task runs. |
-| `supplyCheckedAsync(key, type, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | Async variants propagating the declared checked failure via the future. |
+| `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | Async variants propagating the declared checked failure via the future. |
 | `executeSync(key, task)` | Run `task` on the queue for `key` and block until it completes (default timeout 10 seconds). |
 | `executeSync(keys, task)` | Sort `keys` in natural `String` order, de-duplicate, then acquire outermost-first and run `task`. |
 | `supply(key, supplier)` | Like `executeSync`, but returns the supplier result. |
@@ -115,13 +117,16 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 | `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits. |
 | `getTracer()` | Access the tracer for custom span integration. |
 
+Async submissions are fail-fast for the outermost submission: when its queue rejects the work before it runs, the returned future is completed exceptionally with that failure **and** the scheduling failure propagates to the calling thread (`executeAsync` propagates without a future). Rejections at inner multi-key levels surface only through the future; pass a `RejectionAware` task to observe rejections directly.
+
 Advanced wiring is available via constructors that accept a custom [`TaskQueueProvider`](lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java), [`ExecutorSelector`](lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java), and [`Tracer`](lib/src/main/java/io/github/jinganix/peashooter/Tracer.java).
 
 ## Benchmarks
 
 > ⚠️ The tables below are single-run illustrations (n=1) on Apple M1 Pro (10 cores, 16 GB RAM,
-> JDK 21 G1; expect ±10–20% run-to-run variance under load). Do not quote them as guarantees —
-> please re-run locally for your hardware with:
+> JDK 21 G1). They are allocation- and GC-sensitive: samples taken in one run have differed by
+> ~2x on the same host. Do not quote them as guarantees — please re-run locally for your hardware
+> with:
 
 ```bash
 ./gradlew :lib:test --tests "*Benchmark*"
@@ -137,6 +142,12 @@ P95; see test). Single-run illustration only (n=1, M1 Pro) — please re-run loc
 | `TaskQueue` | ~620 ms |
 | `synchronized` | ~2336 ms |
 | `ReentrantLock` | ~2412 ms |
+
+The baselines push every increment through the same 8-thread pool and serialize only the counter
+body on the lock, while `TaskQueue` drains one key on a single runner: both execute the 5,000,000
+increments, but strict per-key ordering forfeits the pool's parallelism. The table therefore shows
+end-to-end drain latency under the ordering guarantee, not per-operation overhead — expect
+`TaskQueue` and the baselines to land within the same order of magnitude.
 
 The benchmark reports P95 over 3 timed runs against both baselines and logs a `WARN` when P95
 reaches `>= 2x` of either one. Throughput is a triage signal, not a hard wall-clock gate: a strict

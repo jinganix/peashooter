@@ -6,6 +6,11 @@ on:
     branches:
       - master
 
+# One run per PR: a new push cancels the superseded run instead of queueing a duplicate build.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   commit-msg:
     name: Check Commit Message
@@ -40,6 +45,7 @@ jobs:
   build:
     name: Build
     needs: [commit-msg]
+    timeout-minutes: 30
     if: always() && (needs.commit-msg.result == 'success' || needs.commit-msg.result == 'skipped')
     runs-on: ${{ matrix.os }}
     strategy:

@@ -21,7 +21,9 @@ package io.github.jinganix.peashooter.queue;
 import static io.github.jinganix.peashooter.utils.TestUtils.awaitCountDown;
 import static io.github.jinganix.peashooter.utils.TestUtils.uncheckedRun;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -155,11 +157,7 @@ class HandoffAllocationTest {
               identities.size())
           .hasSize(1);
       // idle may need unlock drain; poll briefly
-      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
-      while (!queue.isIdle() && System.nanoTime() < deadline) {
-        Thread.sleep(10);
-      }
-      assertThat(queue.isIdle()).isTrue();
+      await().atMost(Duration.ofSeconds(5)).until(queue::isIdle);
     } finally {
       scheduler.shutdownNow();
     }
@@ -212,10 +210,7 @@ class HandoffAllocationTest {
         CountDownLatch done = new CountDownLatch(1);
         queue.execute(capturing, done::countDown);
         awaitCountDown(done);
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
-        while (!queue.isIdle() && System.nanoTime() < deadline) {
-          Thread.sleep(10);
-        }
+        await().atMost(Duration.ofSeconds(5)).until(queue::isIdle);
       }
 
       // Then async runner starts hand the box to the runner thread: no sync reuse across

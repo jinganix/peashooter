@@ -126,7 +126,7 @@ public class OrderedTraceRunnable extends TraceRunnable {
    * link is preserved.
    *
    * @param tracer {@link Tracer}, also used for the new span id
-   * @param traceId forced trace id, kept as-is
+   * @param traceId forced trace id, validated as W3C-compatible (not passed through as-is)
    * @param key per-key ordering identifier
    * @param sync {@code true} for {@link
    *     io.github.jinganix.peashooter.executor.OrderedTraceExecutor} sync paths; {@code false} for
@@ -136,7 +136,9 @@ public class OrderedTraceRunnable extends TraceRunnable {
   private OrderedTraceRunnable(
       Tracer tracer, String traceId, String key, boolean sync, Runnable delegate) {
     super(tracer, delegate);
-    this.traceId = Objects.requireNonNull(traceId, "traceId");
+    // Validate the forced id at construction like the strict Span factories: no id generation
+    // happens, and a malformed id fails here instead of on first run.
+    this.traceId = Span.requireValidTraceId(traceId);
     this.key = Keys.requireKey(key);
     this.sync = sync;
   }

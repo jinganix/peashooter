@@ -30,8 +30,8 @@ import org.junit.jupiter.api.Test;
 class InterruptionsTest {
 
   @Test
-  @DisplayName("detects direct, wrapped, and self-cyclic failures")
-  void detectsChains() {
+  @DisplayName("should detect an interrupt when the cause chain is direct, wrapped, or self-cyclic")
+  void shouldDetectInterruptWhenCauseIsDirectWrappedOrSelfCyclic() {
     assertThat(Interruptions.carriesInterrupt(new InterruptedException())).isTrue();
     assertThat(Interruptions.carriesInterrupt(new CompletionException(new InterruptedException())))
         .isTrue();
@@ -48,8 +48,8 @@ class InterruptionsTest {
   }
 
   @Test
-  @DisplayName("returns promptly on a two-node cause cycle instead of hanging")
-  void returnsOnTwoNodeCycle() {
+  @DisplayName("should return false promptly when the cause chain has a two-node cycle")
+  void shouldReturnFalsePromptlyWhenCauseChainHasTwoNodeCycle() {
     // A <-> B cycles are constructible with plain initCause (only self-causation is
     // rejected), and the self-loop guard cannot see them: the walk must still terminate.
     Throwable first = new IllegalStateException("first");
@@ -63,8 +63,8 @@ class InterruptionsTest {
   }
 
   @Test
-  @DisplayName("still detects an interruption buried in a cyclic chain")
-  void detectsInterruptInCyclicChain() {
+  @DisplayName("should detect an interrupt when the cause chain is cyclic")
+  void shouldDetectInterruptWhenCauseChainIsCyclic() {
     Throwable first = new IllegalStateException("first");
     InterruptedException interrupt = new InterruptedException("interrupt");
     first.initCause(interrupt);

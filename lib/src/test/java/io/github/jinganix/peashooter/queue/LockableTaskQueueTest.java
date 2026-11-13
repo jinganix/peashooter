@@ -813,6 +813,63 @@ class LockableTaskQueueTest {
   }
 
   @Test
+  @Timeout(10)
+  @DisplayName(
+      "should reject only the handoff head when the executor runs it inline and then throws")
+  void shouldRejectHandoffHeadWhenExecutorRunsInlineThenThrows() throws InterruptedException {
+    // Given a queue whose first runner blocks, then a plain inline handoff and an executor that
+    // runs the handoff command inline and throws before the head can run
+    LockableTaskQueue taskQueue = mockWithSharedScheduler();
+    when(taskQueue.tryLock(any())).thenReturn(true);
+    when(taskQueue.shouldYield(any())).thenReturn(false);
+    CountDownLatch runnerStarted = new CountDownLatch(1);
+    CountDownLatch releaseRunner = new CountDownLatch(1);
+    Executor blocking =
+        command -> {
+          runnerStarted.countDown();
+          uncheckedRun(releaseRunner::await);
+          command.run();
+        };
+    AtomicReference<Throwable> rejection = new AtomicReference<>();
+    AtomicInteger poisonRuns = new AtomicInteger();
+    class Poison implements Runnable, RejectionAware {
+      @Override
+      public void run() {
+        poisonRuns.incrementAndGet();
+      }
+
+      @Override
+      public void rejected(Throwable cause) {
+        rejection.set(cause);
+      }
+    }
+    Executor inlineThenThrows =
+        command -> {
+          command.run();
+          throw new RuntimeException("executor threw after inline start");
+        };
+
+    Thread runner = new Thread(() -> taskQueue.execute(blocking, () -> {}));
+    runner.setDaemon(true);
+    runner.start();
+    assertThat(runnerStarted.await(5, TimeUnit.SECONDS)).isTrue();
+
+    // When a plain inline handoff is followed by an executor that runs the handoff inline and
+    // throws before the head can run
+    taskQueue.execute(Runnable::run, () -> {});
+    taskQueue.execute(inlineThenThrows, new Poison());
+    releaseRunner.countDown();
+
+    // Then only that executor's head is rejected and the queue releases its lock and claim
+    await().atMost(Duration.ofSeconds(5)).until(taskQueue::isIdle);
+    assertThat(poisonRuns).hasValue(0);
+    assertThat(rejection.get()).hasMessageContaining("after inline start");
+    assertThat(taskQueue.hasPending()).isFalse();
+    runner.join(TimeUnit.SECONDS.toMillis(5));
+    assertThat(runner.isAlive()).isFalse();
+  }
+
+  @Test
   @DisplayName("should preserve backlog when rescheduler fails sneakily")
   void shouldDiscardBacklogWhenReschedulerFailsSneakily() {
     // Given a lock that never grants and a sneakily-failing rescheduler

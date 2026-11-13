@@ -36,8 +36,8 @@ class ErrorPolicyInterruptChainTest {
   }
 
   @Test
-  @DisplayName("rethrowUnchecked restores interrupt when wrapped in CompletionException")
-  void restoresInterruptWhenWrapped() {
+  @DisplayName("should restore the interrupt when the failure is wrapped in a completion exception")
+  void shouldRestoreInterruptWhenFailureWrappedInCompletionException() {
     Thread.interrupted();
     CompletionException wrapped = new CompletionException(new InterruptedException("stop"));
     assertThatThrownBy(() -> ErrorPolicy.UNCHECKED.rethrowUnchecked(wrapped)).isSameAs(wrapped);
@@ -45,8 +45,9 @@ class ErrorPolicyInterruptChainTest {
   }
 
   @Test
-  @DisplayName("rethrowDelegate restores interrupt when wrapped in ExecutionException")
-  void delegateRestoresInterruptWhenWrapped() throws Exception {
+  @DisplayName(
+      "should restore the interrupt when the delegate failure is wrapped in an execution exception")
+  void shouldRestoreInterruptWhenDelegateFailureWrappedInExecutionException() throws Exception {
     Thread.interrupted();
     ExecutionException wrapped = new ExecutionException(new InterruptedException("stop"));
     try {
@@ -58,8 +59,8 @@ class ErrorPolicyInterruptChainTest {
   }
 
   @Test
-  @DisplayName("no interrupt restored for ordinary failures")
-  void noInterruptForOrdinaryFailures() {
+  @DisplayName("should not restore an interrupt when the failure is ordinary")
+  void shouldNotRestoreInterruptWhenFailureIsOrdinary() {
     Thread.interrupted();
     IllegalStateException failure = new IllegalStateException("boom");
     assertThatThrownBy(() -> ErrorPolicy.UNCHECKED.rethrowUnchecked(failure)).isSameAs(failure);

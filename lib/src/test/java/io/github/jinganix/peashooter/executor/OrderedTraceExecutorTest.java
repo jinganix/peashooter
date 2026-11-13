@@ -66,6 +66,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -2133,6 +2134,72 @@ class OrderedTraceExecutorTest {
                     return 0L;
                   }))
           .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    @Timeout(10)
+    @DisplayName(
+        "should complete concurrent nested sync chains when every chain acquires keys ascending")
+    void shouldCompleteConcurrentNestedSyncChainsWhenEveryChainAcquiresKeysAscending()
+        throws InterruptedException {
+      // Given two chains whose nested single-key sync acquires the next key in ascending order
+      ExecutorService pool = Executors.newFixedThreadPool(4);
+      OrderedTraceExecutor executor = createExecutor(pool, new CaffeineTaskQueueProvider());
+      CountDownLatch outersRunning = new CountDownLatch(2);
+      AtomicReference<Throwable> failure = new AtomicReference<>();
+      AtomicReference<Integer> firstResult = new AtomicReference<>();
+      AtomicReference<Integer> secondResult = new AtomicReference<>();
+      Runnable first =
+          () -> {
+            try {
+              firstResult.set(
+                  executor.supply(
+                      "a",
+                      () -> {
+                        outersRunning.countDown();
+                        awaitCountDown(outersRunning);
+                        return executor.supply("b", () -> 1);
+                      }));
+            } catch (Throwable e) {
+              failure.set(e);
+            }
+          };
+      Runnable second =
+          () -> {
+            try {
+              secondResult.set(
+                  executor.supply(
+                      "b",
+                      () -> {
+                        outersRunning.countDown();
+                        awaitCountDown(outersRunning);
+                        return executor.supply("c", () -> 2);
+                      }));
+            } catch (Throwable e) {
+              failure.set(e);
+            }
+          };
+      Thread firstThread = new Thread(first);
+      Thread secondThread = new Thread(second);
+      firstThread.setDaemon(true);
+      secondThread.setDaemon(true);
+
+      try {
+        // When both chains hold their outer key (a and b) and nest onto the next key
+        firstThread.start();
+        secondThread.start();
+        firstThread.join(TimeUnit.SECONDS.toMillis(5));
+        secondThread.join(TimeUnit.SECONDS.toMillis(5));
+      } finally {
+        pool.shutdownNow();
+      }
+
+      // Then neither chain deadlocks despite the shared middle key
+      assertThat(failure.get()).isNull();
+      assertThat(firstThread.isAlive()).isFalse();
+      assertThat(secondThread.isAlive()).isFalse();
+      assertThat(firstResult.get()).isEqualTo(1);
+      assertThat(secondResult.get()).isEqualTo(2);
     }
 
     private void executeSyncOnAnotherThread(Runnable runnable) {

@@ -73,9 +73,9 @@ class LockableRetryDiscardCapTest {
   }
 
   @Test
-  @DisplayName("single timer tick discards at most the cap and schedules a follow-up")
+  @DisplayName("should cap discards and schedule a follow-up when a single timer tick runs")
   @SuppressWarnings({"unchecked", "rawtypes"})
-  void capsDiscardsPerTick() {
+  void shouldCapDiscardsAndScheduleFollowUpWhenSingleTimerTickRuns() {
     List<Runnable> retries = new ArrayList<>();
     ScheduledExecutorService rescheduler = mock(ScheduledExecutorService.class);
     when(rescheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
