@@ -101,7 +101,7 @@ int value =
 
 | 方法 | 说明 |
 |------|------|
-| `executeAsync(key, task)` | 将 `task` 入队到 `key` 对应队列；立即返回。 |
+| `executeAsync(key, task)` | 将 `task` 入队到 `key` 对应队列；线程池执行器下立即返回。使用 `DirectExecutor` 等同步执行器时，若抢占到空闲队列会内联执行并阻塞；若该 key 已有运行中的 runner，则排队其后并返回。 |
 | `submitAsync(key, task)` / `supplyAsync(key, supplier)` | 入队到 `key`；返回任务运行后完成的 future。 |
 | `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | 异步版本，声明的 checked 异常经由 future 传播。 |
 | `executeSync(key, task)` | 在 `key` 的队列上运行 `task` 并阻塞至完成（默认超时 10 秒）。 |
@@ -116,7 +116,7 @@ int value =
 | `setTimeout(Duration)` / `getTimeout()` | 配置 / 读取同步等待的超时时间。 |
 | `getTracer()` | 获取 tracer，用于自定义 span 集成。 |
 
-异步提交对外层提交为快速失败：其队列在任务运行前拒绝时，返回的 future 会以该失败完成，**同时**调度失败会向调用线程传播（`executeAsync` 无 future，直接传播）。多 key 内层的拒绝只经由 future 体现；需要感知拒绝本身时，请传入 `RejectionAware` 任务。
+异步提交对外层提交为快速失败：队列的执行器在任务运行前拒绝时，失败会向调用线程传播，因此 `executeAsync` 会抛出，`submitAsync` / `supplyAsync` / `supplyCheckedAsync` 也会抛出而不返回 future（重试请按 key 去重）。带 future 的方法会容纳最外层的 selector `Exception`：其提交 future 以异常完成并被返回。多 key 内层的拒绝不会到达提交线程：它们完成返回的 future，并直接转发给 `RejectionAware` 任务。
 
 可通过接受自定义 [`TaskQueueProvider`](lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java)、[`ExecutorSelector`](lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java) 和 [`Tracer`](lib/src/main/java/io/github/jinganix/peashooter/Tracer.java) 的构造函数进行高级配置。
 

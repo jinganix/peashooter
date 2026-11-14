@@ -21,26 +21,17 @@ package io.github.jinganix.peashooter.executor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.jinganix.peashooter.SpanAccessor;
 import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
+import io.github.jinganix.peashooter.trace.Span;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("Reentrant inline count")
 class ReentrantInlineCountTest {
-
-  private static Path mainSource(String relative) {
-    Path base = Path.of(System.getProperty("user.dir"));
-    Path direct = base.resolve("src/main/java/" + relative);
-    if (Files.exists(direct)) {
-      return direct;
-    }
-    return base.resolve("lib/src/main/java/" + relative);
-  }
 
   private static OrderedTraceExecutor newExecutor() {
     DefaultTracer tracer = new DefaultTracer();
@@ -117,11 +108,26 @@ class ReentrantInlineCountTest {
   }
 
   @Test
-  @DisplayName("should log and not count when the idle inline hint hits")
-  void shouldLogAndNotCountWhenIdleHintHits() throws IOException {
-    Path path = mainSource("io/github/jinganix/peashooter/executor/DefaultExecutorSelector.java");
-    String src = Files.readString(path);
-    assertThat(src).contains("debug");
-    assertThat(src).doesNotContain("getInlineHintCount");
+  @DisplayName("should not count an idle-hint inline run but still count a reentrant inline run")
+  void shouldNotCountIdleHintInlineRunButStillCountReentrantInlineRun() {
+    // Given an executor whose idle hint is enabled and a span on this thread
+    DefaultTracer tracer = new DefaultTracer();
+    TraceExecutor traceExecutor = new TraceExecutor(DirectExecutor.INSTANCE, tracer);
+    DefaultExecutorSelector selector = new DefaultExecutorSelector(traceExecutor, true);
+    OrderedTraceExecutor executor =
+        new OrderedTraceExecutor(new CaffeineTaskQueueProvider(), selector, tracer);
+
+    // When the idle hint runs the sync work inline, then the same key nests reentrantly
+    try (SpanAccessor.Scope ignored = tracer.scope(Span.child(tracer, null))) {
+      executor.executeSync(
+          "hint-key",
+          () -> {
+            assertThat(executor.getReentrantInlineCount()).isZero();
+            executor.executeSync("hint-key", () -> {});
+          });
+    }
+
+    // Then only the peer-free reentrant inline run is counted, never the idle-hint run
+    assertThat(executor.getReentrantInlineCount()).isEqualTo(1);
   }
 }

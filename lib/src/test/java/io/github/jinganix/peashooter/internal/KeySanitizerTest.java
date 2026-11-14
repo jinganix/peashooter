@@ -42,6 +42,9 @@ class KeySanitizerTest {
     assertThat(KeySanitizer.sanitize("a\u001Bb")).isEqualTo("a_b");
     assertThat(KeySanitizer.sanitize("a\u202Eb")).isEqualTo("a_b");
     assertThat(KeySanitizer.sanitize("a\uFEFFb")).isEqualTo("a_b");
+    assertThat(KeySanitizer.sanitize("a\u00ADb")).isEqualTo("a_b");
+    assertThat(KeySanitizer.sanitize("a\u034Fb")).isEqualTo("a_b");
+    assertThat(KeySanitizer.sanitize("a\uFE00b")).isEqualTo("a_b");
   }
 
   @Test

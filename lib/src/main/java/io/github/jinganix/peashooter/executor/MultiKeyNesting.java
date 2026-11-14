@@ -20,6 +20,7 @@ package io.github.jinganix.peashooter.executor;
 
 import io.github.jinganix.peashooter.ThrowingSupplier;
 import io.github.jinganix.peashooter.internal.Keys;
+import io.github.jinganix.peashooter.queue.RejectionAware;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -190,7 +191,7 @@ final class MultiKeyNesting {
     for (int i = ordered.size() - 1; i >= 0; i--) {
       String key = ordered.get(i);
       Runnable inner = task;
-      task = () -> single.accept(key, inner);
+      task = new NestedRunnable(key, single, inner);
     }
     return task;
   }
@@ -210,7 +211,7 @@ final class MultiKeyNesting {
     for (int i = ordered.size() - 1; i >= 0; i--) {
       String key = ordered.get(i);
       Supplier<R> inner = supplier;
-      supplier = () -> single.apply(key, inner);
+      supplier = new NestedSupplier<>(key, single, inner);
     }
     return supplier;
   }
@@ -231,8 +232,56 @@ final class MultiKeyNesting {
     for (int i = ordered.size() - 1; i >= 0; i--) {
       String key = ordered.get(i);
       ThrowingSupplier<R, E> inner = supplier;
-      supplier = () -> single.apply(key, inner);
+      supplier = new NestedChecked<>(key, single, inner);
     }
     return supplier;
+  }
+
+  /**
+   * One nesting level for a runnable chain: enqueues {@code inner} under {@code key} and forwards a
+   * queue rejection down the chain, so the innermost task receives the rejection notification
+   * whichever level failed.
+   */
+  private record NestedRunnable(String key, BiConsumer<String, Runnable> single, Runnable inner)
+      implements Runnable, RejectionAware {
+    @Override
+    public void run() {
+      single.accept(key, inner);
+    }
+
+    @Override
+    public void rejected(Throwable cause) {
+      RejectionAware.dispatch(inner, cause);
+    }
+  }
+
+  /** Supplier nesting level; see {@link NestedRunnable}. */
+  private record NestedSupplier<R>(
+      String key, BiFunction<String, Supplier<R>, R> single, Supplier<R> inner)
+      implements Supplier<R>, RejectionAware {
+    @Override
+    public R get() {
+      return single.apply(key, inner);
+    }
+
+    @Override
+    public void rejected(Throwable cause) {
+      RejectionAware.dispatch(inner, cause);
+    }
+  }
+
+  /** Checked-supplier nesting level; see {@link NestedRunnable}. */
+  private record NestedChecked<R, E extends Throwable>(
+      String key, CheckedSingle<R, E> single, ThrowingSupplier<R, E> inner)
+      implements ThrowingSupplier<R, E>, RejectionAware {
+    @Override
+    public R get() throws E {
+      return single.apply(key, inner);
+    }
+
+    @Override
+    public void rejected(Throwable cause) {
+      RejectionAware.dispatch(inner, cause);
+    }
   }
 }

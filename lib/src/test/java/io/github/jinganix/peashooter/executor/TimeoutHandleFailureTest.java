@@ -102,7 +102,9 @@ class TimeoutHandleFailureTest {
           .satisfies(e -> captured.set((TraceInterruptedException) e));
       TraceInterruptedException interrupted = captured.get();
       assertThat(interrupted.getKey()).isEqualTo("k");
+      // The interrupted wait cancels its in-flight future, dropping the late result.
       assertThat(interrupted.getFuture()).isNotNull();
+      assertThat(interrupted.getFuture().isCancelled()).isTrue();
     } finally {
       Thread.interrupted();
       release.countDown();
