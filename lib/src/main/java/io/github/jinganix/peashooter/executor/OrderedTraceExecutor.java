@@ -137,7 +137,14 @@ public class OrderedTraceExecutor {
       resolvedTracer = builder.tracer != null ? builder.tracer : defaultTracerOf(selector);
     } else if (executor instanceof TraceExecutor traceExecutor) {
       resolvedTracer = builder.tracer != null ? builder.tracer : traceExecutor.getTracer();
-      selector = new DefaultExecutorSelector(traceExecutor, true);
+      // Reuse the backing TraceExecutor only while it owns the resolved tracer. An overridden
+      // tracer must also trace the queue runner (the handoff command is wrapped by the
+      // selector's executor), otherwise spans split across two unrelated tracers. Delegating
+      // through a new TraceExecutor keeps the delegate's scheduling and passes the already
+      // traced runnable through without a second wrap.
+      TraceExecutor scheduling =
+          builder.tracer != null ? new TraceExecutor(traceExecutor, resolvedTracer) : traceExecutor;
+      selector = new DefaultExecutorSelector(scheduling, true);
     } else {
       resolvedTracer = builder.tracer != null ? builder.tracer : new DefaultTracer();
       selector = new DefaultExecutorSelector(new TraceExecutor(executor, resolvedTracer), true);
@@ -372,6 +379,9 @@ public class OrderedTraceExecutor {
   /**
    * Enqueues a task for ordered async execution. See {@link SubmissionRouter} for failure contract.
    *
+   * <p>Submission is asynchronous for a pool-backed executor; a synchronous backing executor (for
+   * example {@link DirectExecutor}) may run the task inline before this method returns.
+   *
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param task work to run; must not be {@code null}
    * @throws RuntimeException (or whatever the selector or backing executor throws) when the task
@@ -390,10 +400,12 @@ public class OrderedTraceExecutor {
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param task work to run; must not be {@code null}
    * @return future completed after the task runs, exceptionally on failure
-   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
-   *     submission without running it; the returned future is also completed exceptionally with the
-   *     same failure
-   * @throws Error when the selector or queue fails with one (the future is completed as well)
+   * @throws RuntimeException (or whatever the selected executor throws) when the submission is
+   *     rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). A selector {@link Exception} is contained
+   *     instead: the submission future is completed exceptionally and returned
+   * @throws Error when the selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public CompletableFuture<Void> submitAsync(String key, Runnable task) {
     Keys.requireKey(key);
@@ -412,10 +424,12 @@ public class OrderedTraceExecutor {
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @return future completed with the supplier result, exceptionally on failure
-   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
-   *     submission without running it; the returned future is also completed exceptionally with the
-   *     same failure
-   * @throws Error when the selector or queue fails with one (the future is completed as well)
+   * @throws RuntimeException (or whatever the selected executor throws) when the submission is
+   *     rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). A selector {@link Exception} is contained
+   *     instead: the submission future is completed exceptionally and returned
+   * @throws Error when the selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public <R> CompletableFuture<R> supplyAsync(String key, Supplier<R> supplier) {
     Keys.requireKey(key);
@@ -438,10 +452,12 @@ public class OrderedTraceExecutor {
    * @param <R> result type
    * @param <E> checked failure type (carried by the future, never thrown)
    * @return future completed with the supplier result, exceptionally on failure
-   * @throws RuntimeException (or whatever the selected executor throws) when the queue rejects the
-   *     submission without running it; the returned future is also completed exceptionally with the
-   *     same failure
-   * @throws Error when the selector or queue fails with one (the future is completed as well)
+   * @throws RuntimeException (or whatever the selected executor throws) when the submission is
+   *     rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). A selector {@link Exception} is contained
+   *     instead: the submission future is completed exceptionally and returned
+   * @throws Error when the selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public <R, E extends Throwable> CompletableFuture<R> supplyCheckedAsync(
       String key, ThrowingSupplier<R, E> supplier) {
@@ -488,9 +504,14 @@ public class OrderedTraceExecutor {
    * @return future completed after the chain runs, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
-   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
-   *     submission without running it; the returned future is completed exceptionally as well
-   * @throws Error when a selector or queue fails with one
+   * @throws RuntimeException (or whatever a selected executor throws) when the outermost submission
+   *     is rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). An outermost selector {@link Exception} is
+   *     contained instead: the submission future is completed exceptionally and returned.
+   *     Inner-level rejections run after this method returned: they complete the returned future
+   *     and are forwarded to a {@link io.github.jinganix.peashooter.queue.RejectionAware} task
+   * @throws Error when a selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public CompletableFuture<Void> submitAsync(Collection<String> keys, Runnable task) {
     Objects.requireNonNull(task, "task");
@@ -518,9 +539,14 @@ public class OrderedTraceExecutor {
    * @return future completed with the supplier result, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
-   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
-   *     submission without running it; the returned future is completed exceptionally as well
-   * @throws Error when a selector or queue fails with one
+   * @throws RuntimeException (or whatever a selected executor throws) when the outermost submission
+   *     is rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). An outermost selector {@link Exception} is
+   *     contained instead: the submission future is completed exceptionally and returned.
+   *     Inner-level rejections run after this method returned: they complete the returned future
+   *     and are forwarded to a {@link io.github.jinganix.peashooter.queue.RejectionAware} task
+   * @throws Error when a selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public <R> CompletableFuture<R> supplyAsync(Collection<String> keys, Supplier<R> supplier) {
     Objects.requireNonNull(supplier, "supplier");
@@ -550,9 +576,14 @@ public class OrderedTraceExecutor {
    * @return future completed with the supplier result, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
-   * @throws RuntimeException (or whatever a selected executor throws) when a level rejects its
-   *     submission without running it; the returned future is completed exceptionally as well
-   * @throws Error when a selector or queue fails with one
+   * @throws RuntimeException (or whatever a selected executor throws) when the outermost submission
+   *     is rejected without running it; the failure propagates to this caller, which then gets no
+   *     future (deduplicate retries via the key). An outermost selector {@link Exception} is
+   *     contained instead: the submission future is completed exceptionally and returned.
+   *     Inner-level rejections run after this method returned: they complete the returned future
+   *     and are forwarded to a {@link io.github.jinganix.peashooter.queue.RejectionAware} task
+   * @throws Error when a selector or queue fails with one (the submission future is completed as
+   *     well, but no handle is returned on this throwing path)
    */
   public <R, E extends Throwable> CompletableFuture<R> supplyCheckedAsync(
       Collection<String> keys, Class<E> type, ThrowingSupplier<R, E> supplier) {

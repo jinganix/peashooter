@@ -102,7 +102,7 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 
 | Method | Description |
 |--------|-------------|
-| `executeAsync(key, task)` | Enqueue `task` for `key`; returns immediately. |
+| `executeAsync(key, task)` | Enqueue `task` for `key`; returns without waiting with a pool-backed executor. With a synchronous executor such as `DirectExecutor` it may run the task inline and block when it claims an idle queue; if another runner is active for the key it enqueues behind it and returns. |
 | `submitAsync(key, task)` / `supplyAsync(key, supplier)` | Enqueue for `key`; return a future completed after the task runs. |
 | `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | Async variants propagating the declared checked failure via the future. |
 | `executeSync(key, task)` | Run `task` on the queue for `key` and block until it completes (default timeout 10 seconds). |
@@ -117,7 +117,7 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 | `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits. |
 | `getTracer()` | Access the tracer for custom span integration. |
 
-Async submissions are fail-fast for the outermost submission: when its queue rejects the work before it runs, the returned future is completed exceptionally with that failure **and** the scheduling failure propagates to the calling thread (`executeAsync` propagates without a future). Rejections at inner multi-key levels surface only through the future; pass a `RejectionAware` task to observe rejections directly.
+Async submissions are fail-fast for the outermost submission: when the queue's executor rejects the work before it runs, the failure propagates to the calling thread, so `executeAsync` throws and `submitAsync` / `supplyAsync` / `supplyCheckedAsync` throw instead of returning their future (deduplicate retries via the key). The future-returning methods contain an outermost selector `Exception` instead: their submission future is completed exceptionally and returned. Rejections at inner multi-key levels never reach the submitting thread: they complete the returned future and are forwarded directly to a `RejectionAware` task.
 
 Advanced wiring is available via constructors that accept a custom [`TaskQueueProvider`](lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java), [`ExecutorSelector`](lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java), and [`Tracer`](lib/src/main/java/io/github/jinganix/peashooter/Tracer.java).
 

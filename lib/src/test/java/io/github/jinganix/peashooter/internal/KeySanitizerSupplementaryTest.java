@@ -47,4 +47,18 @@ class KeySanitizerSupplementaryTest {
 
     assertThat(KeySanitizer.sanitize(clean)).isSameAs(clean);
   }
+
+  @Test
+  @DisplayName("should keep supplementary private-use characters as is")
+  void shouldKeepSupplementaryPrivateUseAsIs() {
+    // U+F0000 (Plane 15 Private Use) and U+10FFFD (Plane 16 Private Use) are ordinary key data,
+    // not default-ignorable format controls, so distinct keys must keep their display form.
+    String puaA = new String(Character.toChars(0xF0000));
+    String puaB = new String(Character.toChars(0x10FFFD));
+    String keyA = "id-" + puaA;
+    String keyB = "id-" + puaB;
+
+    assertThat(KeySanitizer.sanitize(keyA)).isSameAs(keyA);
+    assertThat(KeySanitizer.sanitize(keyB)).isSameAs(keyB);
+  }
 }

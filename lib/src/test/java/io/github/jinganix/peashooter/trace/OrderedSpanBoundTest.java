@@ -41,4 +41,18 @@ class OrderedSpanBoundTest {
     // Shallow match still resolves normally.
     assertThat(OrderedSpan.invokedBy(chain, "k-" + (depth - 1))).isTrue();
   }
+
+  @Test
+  @DisplayName("should not count plain spans toward the walk bound")
+  void shouldNotCountPlainSpansTowardWalkBound() {
+    TraceIdGenerator gen = new DefaultTracer();
+    Span chain = null;
+    int depth = OrderedSpan.MAX_INVOKED_BY_WALK + 100;
+    for (int i = 0; i < depth; i++) {
+      chain = Span.child(gen, chain);
+    }
+    // Plain spans never match a key: a long but innocent plain prefix must walk to the
+    // root and return false instead of failing closed like an overlong ordered chain.
+    assertThat(OrderedSpan.invokedBy(chain, "absent")).isFalse();
+  }
 }

@@ -35,8 +35,10 @@ import java.util.concurrent.CompletableFuture;
  * (the future is transient); propagate {@link #getKey()} across process boundaries instead.
  *
  * <p><b>Timeout/interruption means submitted:</b> the wait only unblocked the caller — the work
- * stays submitted and may still complete late. Use {@link #getKey} as the idempotency key and
- * {@link #getFuture} to observe or cancel the original submission.
+ * stays submitted and may still complete late, although the dropped result is not delivered to the
+ * waiter. Use {@link #getKey} as the idempotency key and {@link #getFuture} to deduplicate or
+ * cancel the original submission. The wait itself cancels the future (without interrupting the
+ * runner) before throwing, so the late result is dropped unless the future had already completed.
  *
  * <p><b>Java serialization is not supported:</b> the submission {@link CompletableFuture} is not
  * serializable, so serializing this failure would silently drop it and break the non-null {@link

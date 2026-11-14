@@ -48,7 +48,9 @@ class ReentrantDepthFailFastTest {
             }
           };
       assertThatThrownBy(() -> executor.supply("k", recursive))
-          .isNotInstanceOf(StackOverflowError.class);
+          .isNotInstanceOf(StackOverflowError.class)
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("max " + ReentrancyGate.MAX_REENTRANT_DEPTH);
     } finally {
       pool.shutdownNow();
     }

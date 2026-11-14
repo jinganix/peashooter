@@ -33,10 +33,11 @@ class NestedInlineDepthLimitTest {
 
   @Test
   @DisplayName(
-      "should fail fast when inline nesting exceeds the unified budget instead of overflowing the"
-          + " stack")
-  void shouldFailFastWhenInlineNestingExceedsUnifiedBudgetInsteadOfStackOverflow() {
+      "should fail fast at the channel-1 inline depth limit instead of overflowing the stack")
+  void shouldFailFastAtChannelOneInlineDepthLimitInsteadOfStackOverflow() {
     // Worst case is the sum on one thread: inline 32 + reentrant 256 = 288 logical levels.
+    // This test drives Channel 1 only; the Channel 2 bound is asserted by
+    // ReentrantDepthFailFastTest.
     assertThat(DirectExecutor.MAX_INLINE_DEPTH + ReentrancyGate.MAX_REENTRANT_DEPTH).isEqualTo(288);
 
     AtomicInteger maxObserved = new AtomicInteger(0);

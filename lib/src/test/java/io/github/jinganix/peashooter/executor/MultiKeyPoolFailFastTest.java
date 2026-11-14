@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -159,6 +160,25 @@ class MultiKeyPoolFailFastTest {
       executor.setTimeout(Duration.ofSeconds(10));
       assertThatCode(() -> executor.executeSync(List.of("multi-cva", "multi-cvb"), () -> {}))
           .doesNotThrowAnyException();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should fail fast when a parallelism-1 fork-join pool runs a two-key sync")
+  void shouldFailFastWhenParallelismOneForkJoinPoolRunsTwoKeySync() {
+    // Given a fork-join pool whose known parallelism (1) is below the distinct key count
+    ForkJoinPool pool = new ForkJoinPool(1);
+    try {
+      OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
+      executor.setTimeout(Duration.ofSeconds(2));
+
+      // When / Then the sizing guard rejects the chain before any level is enqueued
+      assertThatThrownBy(() -> executor.executeSync(List.of("fj-a", "fj-b"), () -> {}))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("2")
+          .hasMessageContaining("1");
     } finally {
       pool.shutdownNow();
     }

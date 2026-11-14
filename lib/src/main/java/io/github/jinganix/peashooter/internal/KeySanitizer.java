@@ -41,10 +41,11 @@ public final class KeySanitizer {
    * <p>Replaces all C0 controls (including TAB and ESC for ANSI sequences, NUL/BEL), DEL, the
    * Unicode line/paragraph breaks NEL/LS/PS, the bidi overrides/embeds/isolates U+202A-U+202E and
    * U+2066-U+2069, the directional marks U+200E/U+200F, the zero-width joiners/spaces U+200B-U+200D
-   * and U+2060/U+FEFF, the Mongolian vowel separator U+180E, and the Arabic letter mark U+061C with
-   * {@code '_'}. Returns the same instance when clean (common case); copies only when dirty. Use
-   * for every message or log label embedding a key; never for map lookups or queue routing, which
-   * must keep the exact key.
+   * and U+2060/U+FEFF, the Mongolian vowel separator U+180E, the Arabic letter mark U+061C, any
+   * other BMP format control (e.g. SOFT HYPHEN U+00AD), U+034F, and variation selectors
+   * U+FE00-U+FE0F with {@code '_'}. Returns the same instance when clean (common case); copies only
+   * when dirty. Use for every message or log label embedding a key; never for map lookups or queue
+   * routing, which must keep the exact key.
    *
    * @param key ordering key, must not be {@code null}
    * @return sanitized key for display only
@@ -93,16 +94,21 @@ public final class KeySanitizer {
       return true;
     }
     if (codePoint <= 0xFFFF) {
-      return false;
+      // BMP remainder not in the explicit list above: any other Cf (e.g. SOFT HYPHEN
+      // U+00AD) is invisible display-forging surface, as are the invisible combiners
+      // U+034F and variation selectors U+FE00-U+FE0F; none has a visible role in a key label
+      // (display only, never routing, so over-matching just shows '_' in logs).
+      if (codePoint == 0x034F || (codePoint >= 0xFE00 && codePoint <= 0xFE0F)) {
+        return true;
+      }
+      return Character.getType(codePoint) == Character.FORMAT;
     }
     // Supplementary planes: musical formatting, tags, and other default-ignorable
     // format controls have no BMP surrogate-level signal; char-level iteration misses
     // them entirely. Sanitize format/control kinds plus the known supplementary
     // default-ignorables so display forging cannot hide above U+FFFF.
     if ((codePoint >= 0x1D173 && codePoint <= 0x1D17A)
-        || (codePoint >= 0xE0000 && codePoint <= 0xE0FFF)
-        || (codePoint >= 0xF0000 && codePoint <= 0xFFFFD)
-        || (codePoint >= 0x100000 && codePoint <= 0x10FFFD)) {
+        || (codePoint >= 0xE0000 && codePoint <= 0xE0FFF)) {
       return true;
     }
     int type = Character.getType(codePoint);

@@ -19,18 +19,52 @@
 package io.github.jinganix.peashooter.executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.jinganix.peashooter.SpanAccessor;
+import io.github.jinganix.peashooter.Tracer;
+import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
+import io.github.jinganix.peashooter.trace.OrderedSpan;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("Reentrant overtake fail-fast")
 class ReentrantOvertakeFailFastTest {
+
+  @Test
+  @DisplayName("should fail closed and not run inline when the peer probe throws")
+  void shouldFailClosedWhenPeerProbeThrows() {
+    // Given a provider whose peer probe fails and a thread holding the key's span already
+    CaffeineTaskQueueProvider provider =
+        new CaffeineTaskQueueProvider() {
+          @Override
+          public boolean hasPending(String key) {
+            throw new IllegalStateException("probe boom");
+          }
+        };
+    OrderedTraceExecutor executor =
+        OrderedTraceExecutor.builder(DirectExecutor.INSTANCE).queues(provider).build();
+    Tracer tracer = executor.getTracer();
+    AtomicBoolean ran = new AtomicBoolean();
+
+    // When a nested same-key sync asks for peers and the probe throws
+    // Then it fails closed (peers assumed) instead of overtaking and running inline
+    try (SpanAccessor.Scope ignored = tracer.scope(OrderedSpan.child(tracer, null, "k", true))) {
+      assertThatThrownBy(() -> executor.executeSync("k", () -> ran.set(true)))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("would overtake queued peers");
+    }
+
+    // And the nested task never ran
+    assertThat(ran).isFalse();
+  }
 
   @Test
   @DisplayName("should fail fast when nested sync would overtake queued peer on the same key")

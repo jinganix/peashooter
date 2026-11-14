@@ -24,14 +24,28 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.trace.DefaultTracer;
+import io.github.jinganix.peashooter.trace.Span;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 @DisplayName("OrderedTraceExecutor wiring")
 class OrderedTraceExecutorWiringTest {
+
+  /** Tracer that counts beforeCall invocations. */
+  static final class CountingTracer extends DefaultTracer {
+    final AtomicInteger beforeCalls = new AtomicInteger();
+
+    @Override
+    public void beforeCall(Span span) {
+      beforeCalls.incrementAndGet();
+    }
+  }
 
   @Test
   @DisplayName("should expose the tracer set through the builder")
@@ -140,5 +154,29 @@ class OrderedTraceExecutorWiringTest {
     // When / Then
     assertThatThrownBy(() -> executor.executeSync(List.of("wire-a", "wire-b"), () -> {}))
         .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  @DisplayName("should trace the queue runner with the builder tracer, not the backing tracer")
+  void shouldTraceQueueRunnerWithBuilderTracerNotBackingTracer() {
+    // Given a TraceExecutor whose own tracer differs from the builder's tracer
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      CountingTracer backingTracer = new CountingTracer();
+      CountingTracer builderTracer = new CountingTracer();
+      OrderedTraceExecutor executor =
+          OrderedTraceExecutor.builder(new TraceExecutor(pool, backingTracer))
+              .tracer(builderTracer)
+              .build();
+
+      // When one ordered task runs
+      executor.executeSync("wire-tracer-key", () -> {});
+
+      // Then the queue runner and the task are traced by the builder tracer only
+      assertThat(builderTracer.beforeCalls.get()).isPositive();
+      assertThat(backingTracer.beforeCalls.get()).isZero();
+    } finally {
+      pool.shutdownNow();
+    }
   }
 }

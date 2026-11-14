@@ -161,10 +161,12 @@ public final class OrderedSpan extends Span {
   }
 
   /**
-   * Maximum chain links walked by {@link #invokedBy}. Span depth is bounded by Java stack depth in
-   * practice, but an adversarial or leaked chain must not pin the submit thread in an unbounded
-   * walk: past this bound the probe fails closed (reports reentrant) so FIFO is preserved at the
-   * cost of forfeiting one peer-free inline fast path.
+   * Maximum ordered spans walked by {@link #invokedBy}. Plain {@link Span} links are skipped
+   * without counting: the parent link is final and set once at construction, so a chain is acyclic
+   * by construction and the walk always terminates. Past this bound the probe assumes reentrant
+   * (liveness over FIFO, so a caller that really holds the key is never left deadlocked behind
+   * itself). A chain deeper than this can therefore report reentrant without holding the key, and
+   * the nested call may run inline.
    */
   static final int MAX_INVOKED_BY_WALK = 4096;
 
@@ -188,6 +190,14 @@ public final class OrderedSpan extends Span {
    * FIFO holds; peer-free it runs inline to avoid self-deadlock without overtaking anyone.
    * Restructure code to avoid nested same-key sync while peers are waiting.
    *
+   * <p><b>Thread ownership:</b> the walk follows captured parents, so a span chain handed to
+   * another thread (for example via {@link TraceRunnable} or {@link TraceCallable}) is treated as
+   * logical nesting even though that thread holds no key. A cross-thread child of a same-key task
+   * still in flight therefore runs inline (peer-free) or fails fast (peers queued); when the parent
+   * thread does not block on that child, the child executes concurrently with the parent's same-key
+   * work. Do not rely on reentrancy detection for same-key submissions from a thread that merely
+   * inherited a span.
+   *
    * @param span current {@link Span}, or {@code null}
    * @param key ordered trace key, already validated by the caller (executor entry points validate
    *     once at construction; no validation here so the reentrancy probe stays cheap)
@@ -199,11 +209,13 @@ public final class OrderedSpan extends Span {
     // Keys are non-null (enforced in factories), so direct equals avoids Objects overhead.
     int walked = 0;
     for (Span current = span; current != null; current = current.getParent()) {
-      if (++walked > MAX_INVOKED_BY_WALK) {
-        // Fail closed: assume reentrant rather than silently overtaking after an unbounded scan.
-        return true;
-      }
       if (current instanceof OrderedSpan orderedSpan) {
+        // Only ordered spans count toward the bound: plain spans never match a key, and
+        // counting them turns a long but innocent plain-span prefix into a false reentrant.
+        if (++walked > MAX_INVOKED_BY_WALK) {
+          // Fail closed: assume reentrant rather than silently overtaking after an unbounded scan.
+          return true;
+        }
         boolean match = orderedSpan.key.equals(key);
         if (!orderedSpan.sync && !match) {
           return false;
