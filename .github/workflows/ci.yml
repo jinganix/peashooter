@@ -84,11 +84,11 @@ jobs:
           brew services start redis
           until redis-cli ping 2>/dev/null | grep -q PONG; do sleep 1; done
 
-      - name: Setup JDK 25
+      - name: Setup JDK 26
         uses: actions/setup-java@v6
         with:
           distribution: zulu
-          java-version: 25
+          java-version: 26
 
       # Linux runs the aggregated coverage report in the same Gradle invocation as `build`,
       # so tests execute once. macOS stays a plain build.
