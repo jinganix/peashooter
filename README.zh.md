@@ -28,20 +28,20 @@
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.13</version>
+  <version>0.0.14</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.13'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.14'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.13")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.14")
 ```
 
 ## 快速开始
