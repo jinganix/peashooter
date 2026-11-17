@@ -73,8 +73,8 @@ final class MultiKeyGuard {
 
   /**
    * Resolves the injected maximum. The supplier is composed at construction time by the caller
-   * ({@link OrderedTraceExecutor#composeMaxThreads}) and is total: it never throws and never
-   * returns a negative value except as the unknown sentinel, so this guard performs no second
+   * ({@link OrderedTraceExecutor#composeMaxThreads}): a negative value means unknown, and a
+   * throwing supplier surfaces its failure at submit time, so this guard performs no second
    * normalization.
    */
   private int resolveMaxPoolThreads() {

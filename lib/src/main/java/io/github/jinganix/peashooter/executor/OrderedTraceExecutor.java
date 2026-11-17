@@ -267,14 +267,10 @@ public class OrderedTraceExecutor {
       IntSupplier explicit, Executor backingExecutor, ExecutorSelector selector) {
     return () -> {
       if (explicit != null) {
-        int supplied;
-        try {
-          supplied = explicit.getAsInt();
-        } catch (Error fatal) {
-          throw fatal;
-        } catch (Exception expected) {
-          return MultiKeyGuard.UNKNOWN_MAX_THREADS;
-        }
+        // A throwing supplier is a config bug: surface it at submit time instead of
+        // silently disabling the multi-key fail-fast guard (which would turn a fast
+        // IllegalStateException into a timeout or hang).
+        int supplied = explicit.getAsInt();
         return supplied >= 0 ? supplied : MultiKeyGuard.UNKNOWN_MAX_THREADS;
       }
       if (backingExecutor != null) {

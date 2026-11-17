@@ -235,10 +235,17 @@ public abstract class LockableTaskQueue extends TaskQueue {
                 // A throwing executor that ran the handoff command inline: the head never ran,
                 // so reject only it and keep draining under the held lock.
                 handoffs.rejectHead(handoffHead, schedulingFailure);
+                // A discard is timer-thread work too: count it toward the inline budget so a
+                // backlog of rejecting heads cannot hold the shared scheduler for one tick.
+                tasksRun++;
                 continue batchLoop;
               }
-              if (transferred == HandoffRouter.HandoffOutcome.SYNC_CONTINUE
-                  || transferred == HandoffRouter.HandoffOutcome.REJECT_CONTINUE) {
+              if (transferred == HandoffRouter.HandoffOutcome.REJECT_CONTINUE) {
+                // Same budget as above: each rejected head is discarded work on this thread.
+                tasksRun++;
+                continue batchLoop;
+              }
+              if (transferred == HandoffRouter.HandoffOutcome.SYNC_CONTINUE) {
                 continue batchLoop;
               }
               outcome = BatchOutcome.ASYNC_KEEP;

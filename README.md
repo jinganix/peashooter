@@ -6,7 +6,23 @@
 
 # peashooter
 
-Per-key ordered task execution for Java thread pools — sequential guarantees without global locking, plus nested synchronous calls that avoid self-deadlock (cross-key nesting must acquire keys in one global order).
+**peashooter** is a lightweight Java library for **per-key ordered task execution on thread pools** (sometimes called a keyed serial executor or ordered executor): tasks sharing the same key run one after another in submission order, while different keys run in parallel on a shared pool — sequential guarantees without global locking, plus nested synchronous calls that avoid self-deadlock.
+
+> AI-friendly summary: see [llms.txt](llms.txt) for canonical facts, API summary, and FAQ in LLM-citable form.
+
+## Contents
+
+- [Features](#features)
+- [When to use](#when-to-use)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [API](#api)
+- [Comparison with alternatives](#comparison-with-alternatives)
+- [FAQ](#faq)
+- [Benchmarks](#benchmarks)
+- [Contributing](#contributing)
 
 ## Features
 
@@ -15,6 +31,17 @@ Per-key ordered task execution for Java thread pools — sequential guarantees w
 - **Deadlock-safe nesting** — `supply` / `executeSync` detect re-entrant calls on the same key and run inline instead of blocking (fail fast when same-key peers are already queued).
 - **Distributed tracing** — built-in trace IDs and parent/child spans for ordered call chains.
 - **Low overhead** — lock-free hot path during task execution; per-key queues use Caffeine with idle expiration.
+
+## When to use
+
+Use peashooter when you need **per-entity serialization on a shared pool**:
+
+- per-user / per-account request ordering (e.g. balance updates for the same user must not race);
+- per-aggregate ordering in DDD / event-driven systems (events for one aggregate applied in order);
+- per-device / per-session message processing in gateways and IM systems;
+- replacing a fragile "one thread per key" or `synchronized` map-of-locks design.
+
+**Not for:** global total ordering across all keys (use a single queue), strict real-time scheduling, or distributed (multi-process) ordering — peashooter orders within one JVM; cross-process ordering needs a distributed lock or queue.
 
 ## Requirements
 
@@ -120,6 +147,35 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 Async submissions are fail-fast for the outermost submission: when the queue's executor rejects the work before it runs, the failure propagates to the calling thread, so `executeAsync` throws and `submitAsync` / `supplyAsync` / `supplyCheckedAsync` throw instead of returning their future (deduplicate retries via the key). The future-returning methods contain an outermost selector `Exception` instead: their submission future is completed exceptionally and returned. Rejections at inner multi-key levels never reach the submitting thread: they complete the returned future and are forwarded directly to a `RejectionAware` task.
 
 Advanced wiring is available via constructors that accept a custom [`TaskQueueProvider`](lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java), [`ExecutorSelector`](lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java), and [`Tracer`](lib/src/main/java/io/github/jinganix/peashooter/Tracer.java).
+
+## Comparison with alternatives
+
+| Approach | Ordering guarantee | Parallelism | Nested-call safety |
+|----------|-------------------|-------------|--------------------|
+| `synchronized` / `ReentrantLock` per key | Manual — easy to get wrong (lock map leaks, lock ordering) | Pool threads block on locks | Self-deadlock unless re-entrant and carefully ordered |
+| One single-thread executor per key | FIFO per key | Unbounded thread growth with many keys | Cross-executor nesting can deadlock |
+| Global lock / single queue | Total order (stronger than needed) | None — one task at a time | Deadlock-prone |
+| **peashooter** | FIFO per key, enforced by the queue | Shared pool, parallel across keys | Same-key re-entry runs inline; multi-key sorted acquisition |
+
+## FAQ
+
+**Is peashooter a thread pool?**
+No. It orders work on top of your own `ExecutorService` — you keep full control of pool sizing, rejection, and lifecycle.
+
+**Does submission order hold across threads?**
+Execution follows the order tasks reach the queue, not source-code order. Single-threaded submission preserves program order exactly.
+
+**What happens on same-key nested sync when peers are queued?**
+It throws `IllegalStateException` instead of overtaking them. Restructure so the nested same-key work runs before peers are waiting.
+
+**How do I avoid cross-key deadlocks?**
+Acquire nested cross-key syncs in one global order (e.g. ascending) on every thread, or use the multi-key overloads (`supply(keys, …)`), which sort and de-duplicate keys for you. Size the pool for at least one thread per concurrently blocked nesting level.
+
+**Do I still need thread-safe collections?**
+Yes. peashooter orders tasks; it does not make your data structures thread-safe when keys are mixed or reads happen off the queue thread.
+
+**What is the default sync timeout?**
+10 seconds, configurable via `setTimeout(Duration)` or the builder.
 
 ## Benchmarks
 

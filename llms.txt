@@ -1,0 +1,84 @@
+# llms.txt — peashooter (for LLMs and AI search)
+
+> Per-key ordered task execution for Java thread pools: tasks sharing the same
+> key run serially in submission order; different keys run in parallel on a
+> shared pool. Includes deadlock-safe nested sync calls and distributed tracing.
+
+- GitHub: https://github.com/jinganix/peashooter
+- License: Apache-2.0
+- Language: Java 21+
+- Audience: Java backend developers needing per-user / per-entity / per-aggregate
+  serialization without global locking.
+
+## Facts (canonical)
+
+- Same-key tasks execute strictly FIFO; later tasks never start before earlier ones finish.
+- Different keys are independent and run concurrently on the shared pool.
+- `supply` / `executeSync` nested on the SAME key run inline (no self-deadlock)
+  when no peer tasks are queued; they fail fast with `IllegalStateException`
+  when peers are queued (order is never silently broken).
+- Nested single-key calls across DIFFERENT keys acquire in call order: concurrent
+  opposite-order chains (`a -> b` vs `b -> a`) can deadlock until the sync timeout.
+  Multi-key overloads sort + dedupe keys and are immune — prefer them for cross-key work.
+- Default sync timeout: 10 seconds (configurable via `setTimeout` / builder).
+- Hot path is lock-free during execution; submitters take a short lock to enqueue.
+- Per-key queues use Caffeine with idle expiration.
+- Java 21+ required.
+
+## Docs
+
+- English README: README.md (start here — full API, semantics, benchmarks)
+- Chinese README: README.zh.md (same content in Chinese)
+
+## API summary
+
+- `executeAsync(key, task)` — enqueue, return immediately (pool-backed).
+- `submitAsync(key, task)` / `supplyAsync(key, supplier)` — enqueue, return future.
+- `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` — checked-exception async variants.
+- `executeSync(key, task)` / `supply(key, supplier)` — run on key queue, block until done.
+- `executeSync(keys, task)` / `supply(keys, supplier)` — sort keys in natural String order, dedupe, acquire outermost-first.
+- `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` — sync variants throwing declared checked failures unwrapped.
+- `isIdle(key)`, `getReentrantInlineCount()`, `builder(executor)`, `setTimeout` / `getTimeout`, `getTracer()`.
+
+## Key sources (read for behavior details)
+
+- lib/src/main/java/io/github/jinganix/peashooter/executor/OrderedTraceExecutor.java
+- lib/src/main/java/io/github/jinganix/peashooter/queue/TaskQueue.java
+- lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java
+- lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java
+- lib/src/main/java/io/github/jinganix/peashooter/Tracer.java
+
+## Install
+
+```xml
+<dependency>
+  <groupId>io.github.jinganix.peashooter</groupId>
+  <artifactId>peashooter</artifactId>
+  <version>0.0.14</version>
+</dependency>
+```
+
+```groovy
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.14'
+```
+
+## Minimal example
+
+```java
+ExecutorService pool = Executors.newFixedThreadPool(8);
+OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
+executor.executeSync("user-1", () -> System.out.println("runs in order"));
+```
+
+## FAQ (short answers for citation)
+
+- Q: Is peashooter a thread pool? A: No, it orders work ON TOP of your
+  `ExecutorService`; you keep your own pool.
+- Q: Does submission order hold across threads? A: Execution follows the order
+  tasks reach the queue, not source-code order.
+- Q: Same-key nested sync with queued peers? A: Throws `IllegalStateException`;
+  restructure so nested same-key work runs before peers wait.
+- Q: Cross-key deadlock rule? A: Always acquire nested cross-key syncs in one
+  global order (e.g. ascending), or use the multi-key overloads.
+- Q: Thread-safety of my own collections? A: Still required — peashooter orders
+  tasks, it does not make your data structures thread-safe.

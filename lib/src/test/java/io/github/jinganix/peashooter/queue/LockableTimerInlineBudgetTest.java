@@ -30,6 +30,7 @@ import io.github.jinganix.peashooter.executor.DirectExecutor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -123,6 +124,54 @@ class LockableTimerInlineBudgetTest {
     assertThat(executed.get()).isEqualTo(LockableTaskQueue.MAX_TASKS_PER_TIMER_RETRY);
     assertThat(queue.hasPending()).isTrue();
     assertThat(retries).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("should cap head discards and reschedule the remainder when a timer tick runs")
+  void shouldCapHeadDiscardsAndRescheduleRemainderWhenTimerTickRuns() {
+    List<Runnable> retries = new ArrayList<>();
+    ScheduledExecutorService rescheduler = capturingRescheduler(retries);
+    AtomicBoolean lockOpen = new AtomicBoolean(false);
+    FlakyLockQueue queue = new FlakyLockQueue(new ExecutionCountStats(), rescheduler, lockOpen);
+    // First head runs on a pass-through executor so the runner starts; later heads alternate
+    // between two rejecting executors so every poll switches executor and rejects at handoff.
+    // (A single shared executor would continue Ready and run bodies directly after the first
+    // discard repoints the claim at it.)
+    Executor rejectingA =
+        cmd -> {
+          throw new RejectedExecutionException("saturated-a");
+        };
+    Executor rejectingB =
+        cmd -> {
+          throw new RejectedExecutionException("saturated-b");
+        };
+    AtomicInteger executed = new AtomicInteger();
+    queue.execute(DirectExecutor.INSTANCE, executed::incrementAndGet);
+    int rejects = LockableTaskQueue.MAX_TASKS_PER_TIMER_RETRY + 5;
+    for (int i = 0; i < rejects; i++) {
+      queue.execute(i % 2 == 0 ? rejectingA : rejectingB, () -> {});
+    }
+    assertThat(retries).hasSize(1);
+
+    // Open the lock so the timer tick drains; discards count toward the same budget as tasks.
+    lockOpen.set(true);
+    Runnable firstTick = retries.remove(0);
+    firstTick.run();
+
+    // The first tick runs the one task plus budget-1 discards, then preserves the remainder...
+    assertThat(executed.get()).isOne();
+    assertThat(queue.hasPending()).isTrue();
+    // ...scheduling a follow-up tick for it instead of discarding everything inline.
+    assertThat(retries).hasSize(1);
+
+    // Draining the follow-up ticks discards every rejecting head and goes idle.
+    int guard = 0;
+    while (!retries.isEmpty() && guard++ < 100) {
+      retries.remove(0).run();
+    }
+    assertThat(executed.get()).isOne();
+    assertThat(queue.hasPending()).isFalse();
+    assertThat(queue.isIdle()).isTrue();
   }
 
   @Test

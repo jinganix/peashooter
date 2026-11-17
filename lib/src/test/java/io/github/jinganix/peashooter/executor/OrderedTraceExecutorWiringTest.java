@@ -19,7 +19,6 @@
 package io.github.jinganix.peashooter.executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
@@ -125,8 +124,8 @@ class OrderedTraceExecutorWiringTest {
   }
 
   @Test
-  @DisplayName("should skip the sizing guard when a max threads supplier fails with an exception")
-  void shouldSkipSizingGuardWhenMaxThreadsSupplierFailsWithException() {
+  @DisplayName("should surface a max threads supplier failure instead of skipping the sizing guard")
+  void shouldSurfaceMaxThreadsSupplierFailureInsteadOfSkippingSizingGuard() {
     // Given a supplier that reports a bug instead of a maximum
     OrderedTraceExecutor executor =
         OrderedTraceExecutor.builder(DirectExecutor.INSTANCE)
@@ -135,9 +134,11 @@ class OrderedTraceExecutorWiringTest {
             })
             .build();
 
-    // When the maximum is unknown Then a two-key chain must not be rejected
-    assertThatCode(() -> executor.executeSync(List.of("wire-a", "wire-b"), () -> {}))
-        .doesNotThrowAnyException();
+    // When the maximum cannot be resolved Then the bug surfaces instead of silently
+    // disabling fail-fast (which would turn a fast rejection into a timeout or hang)
+    assertThatThrownBy(() -> executor.executeSync(List.of("wire-a", "wire-b"), () -> {}))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("sizing supplier boom");
   }
 
   @Test

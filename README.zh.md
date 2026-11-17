@@ -6,7 +6,23 @@
 
 # peashooter
 
-面向 Java 线程池的按 key 有序任务执行 —— 无需全局锁即可保证同一 key 上的顺序，并支持嵌套同步调用以避免自死锁（跨 key 嵌套必须按同一全局顺序获取 key）。
+**peashooter** 是一个轻量 Java 库，为**线程池提供按 key 有序的任务执行**（也常称为 keyed serial executor / ordered executor）：相同 key 的任务按提交顺序依次执行，不同 key 的任务在共享线程池中并行运行——无需全局锁即可保证顺序，并支持嵌套同步调用以避免自死锁。
+
+> 面向 AI 的摘要：[llms.txt](llms.txt) 提供可被 LLM 引用的标准事实、API 摘要与 FAQ。
+
+## 目录
+
+- [特性](#特性)
+- [适用场景](#适用场景)
+- [环境要求](#环境要求)
+- [安装](#安装)
+- [快速开始](#快速开始)
+- [工作原理](#工作原理)
+- [API](#api)
+- [方案对比](#方案对比)
+- [FAQ](#faq)
+- [基准测试](#基准测试)
+- [贡献](#贡献)
 
 ## 特性
 
@@ -15,6 +31,17 @@
 - **嵌套调用不死锁** —— `supply` / `executeSync` 会检测同一 key 上的重入调用并内联执行，避免阻塞（该 key 已有排队任务时快速失败）。
 - **分布式追踪** —— 内置 trace ID 与父子 span，便于追踪有序调用链。
 - **低开销** —— 任务执行热路径无锁；按 key 队列基于 Caffeine，按空闲时间过期。
+
+## 适用场景
+
+当你需要在共享线程池上实现**按实体串行化**时使用 peashooter：
+
+- 按用户 / 按账户的请求排序（同一用户的余额更新不能并发竞争）；
+- DDD / 事件驱动系统中的按聚合根排序（同一聚合的事件按序应用）；
+- 网关与 IM 系统中的按设备 / 按会话消息处理；
+- 替代脆弱的“每 key 一线程”或 `synchronized` 锁映射方案。
+
+**不适用：** 全局全序（用单个队列即可）、严格实时调度、跨进程（分布式）排序——peashooter 只保证单个 JVM 内的有序，跨进程排序需要分布式锁或队列。
 
 ## 环境要求
 
@@ -119,6 +146,35 @@ int value =
 异步提交对外层提交为快速失败：队列的执行器在任务运行前拒绝时，失败会向调用线程传播，因此 `executeAsync` 会抛出，`submitAsync` / `supplyAsync` / `supplyCheckedAsync` 也会抛出而不返回 future（重试请按 key 去重）。带 future 的方法会容纳最外层的 selector `Exception`：其提交 future 以异常完成并被返回。多 key 内层的拒绝不会到达提交线程：它们完成返回的 future，并直接转发给 `RejectionAware` 任务。
 
 可通过接受自定义 [`TaskQueueProvider`](lib/src/main/java/io/github/jinganix/peashooter/TaskQueueProvider.java)、[`ExecutorSelector`](lib/src/main/java/io/github/jinganix/peashooter/ExecutorSelector.java) 和 [`Tracer`](lib/src/main/java/io/github/jinganix/peashooter/Tracer.java) 的构造函数进行高级配置。
+
+## 方案对比
+
+| 方案 | 排序保证 | 并行度 | 嵌套调用安全 |
+|------|---------|--------|--------------|
+| `synchronized` / `ReentrantLock`（每 key 一锁） | 靠手写保证，易出错（锁映射泄漏、锁顺序） | 池线程阻塞在锁上 | 非可重入或顺序不对会自死锁 |
+| 每 key 一个单线程 executor | 每 key FIFO | key 多时线程爆炸 | 跨 executor 嵌套可死锁 |
+| 全局锁 / 单队列 | 全局全序（多数场景过强） | 无，一次只跑一个任务 | 易死锁 |
+| **peashooter** | 按 key FIFO，由队列强制保证 | 共享线程池，跨 key 并行 | 同 key 重入内联执行；多 key 排序获取 |
+
+## FAQ
+
+**peashooter 是线程池吗？**
+不是。它运行在你自己的 `ExecutorService` 之上，只负责排序——线程池的大小、拒绝策略与生命周期仍由你控制。
+
+**跨线程提交能保证提交顺序吗？**
+执行顺序以任务到达队列的先后为准，而非源码顺序。单线程提交时与程序顺序完全一致。
+
+**同 key 嵌套同步调用遇到排队任务会怎样？**
+抛出 `IllegalStateException`，而不会越过排队任务。请调整调用结构，让同 key 的嵌套工作在出现排队任务之前完成。
+
+**如何避免跨 key 死锁？**
+让所有线程上的嵌套跨 key 同步调用按同一个全局顺序（如升序）获取 key，或使用多 key 重载（`supply(keys, …)`，内部自动排序去重）。线程池请按“每个同时被阻塞的嵌套层一个线程”配置。
+
+**还需要线程安全集合吗？**
+需要。peashooter 只保证任务有序，不会让你的数据结构自动线程安全（混用多 key 或在队列线程之外读取时尤其如此）。
+
+**同步默认超时是多少？**
+10 秒，可通过 `setTimeout(Duration)` 或 builder 修改。
 
 ## 基准测试
 
