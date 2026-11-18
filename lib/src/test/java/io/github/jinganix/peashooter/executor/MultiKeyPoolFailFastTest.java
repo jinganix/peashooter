@@ -18,6 +18,7 @@
 
 package io.github.jinganix.peashooter.executor;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -30,6 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
@@ -159,6 +161,79 @@ class MultiKeyPoolFailFastTest {
               new DefaultTracer());
       executor.setTimeout(Duration.ofSeconds(10));
       assertThatCode(() -> executor.executeSync(List.of("multi-cva", "multi-cvb"), () -> {}))
+          .doesNotThrowAnyException();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should fail fast when an unbounded-queue pool cannot grow past its core size")
+  void shouldFailFastWhenUnboundedQueuePoolCannotGrowPastCoreSize() {
+    // Given a pool whose configured maximum (4) is unreachable: an unbounded queue absorbs every
+    // offer, so ThreadPoolExecutor never grows past corePoolSize (1)
+    ThreadPoolExecutor pool =
+        new ThreadPoolExecutor(1, 4, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    pool.setThreadFactory(runnable -> {
+      Thread thread = new Thread(runnable, "core-only-pool");
+      thread.setDaemon(true);
+      return thread;
+    });
+    try {
+      OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
+      executor.setTimeout(Duration.ofMillis(300));
+
+      // When a two-key chain needs a second thread that can never exist
+      long start = System.nanoTime();
+      assertThatThrownBy(() -> executor.executeSync(List.of("core-a", "core-b"), () -> {}))
+          // Then the guard sizes from the achievable parallelism (1) and fails fast
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("2")
+          .hasMessageContaining("1");
+      assertThatElapsedWellBelowTimeout(
+          System.nanoTime() - start, TimeUnit.MILLISECONDS.toNanos(300));
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should not cap the maximum for a direct-handoff pool that grows past core")
+  void shouldNotCapTheMaximumForDirectHandoffPoolThatGrowsPastCore() {
+    // Given corePoolSize 0 with a direct-handoff queue: every offer adds a worker, up to the
+    // maximum
+    ThreadPoolExecutor pool =
+        new ThreadPoolExecutor(0, 4, 60L, TimeUnit.SECONDS, new SynchronousQueue<>());
+    pool.setThreadFactory(runnable -> {
+      Thread thread = new Thread(runnable, "handoff-pool");
+      thread.setDaemon(true);
+      return thread;
+    });
+    try {
+      assertThat(MultiKeyGuard.maxThreadsOf(pool)).isEqualTo(4);
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should report one achievable thread for a core-free offer-queue pool")
+  void shouldReportOneAchievableThreadForCoreFreeOfferQueuePool() {
+    // Given corePoolSize 0: the first task still adds a worker, so one thread always runs
+    ThreadPoolExecutor pool =
+        new ThreadPoolExecutor(0, 4, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+    pool.setThreadFactory(runnable -> {
+      Thread thread = new Thread(runnable, "core-free-pool");
+      thread.setDaemon(true);
+      return thread;
+    });
+    try {
+      OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
+      executor.setTimeout(Duration.ofSeconds(10));
+
+      // Then one thread is reported, so a single-key collection call is not rejected
+      assertThat(MultiKeyGuard.maxThreadsOf(pool)).isEqualTo(1);
+      assertThatCode(() -> executor.executeSync(List.of("core-free-a"), () -> {}))
           .doesNotThrowAnyException();
     } finally {
       pool.shutdownNow();

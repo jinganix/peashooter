@@ -24,10 +24,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Blocking-wait helpers for single-key sync submissions.
+ * Blocking-wait helpers for sync submissions and the shared deadline of one nested async chain.
  *
  * <p>Owns deadline saturation, bounded waiting, timeout failure construction, and translation of
- * wait failures into sync exceptions. All state stays with the caller; this class holds no fields.
+ * wait failures into sync exceptions. This class holds no static or instance state of its own: all
+ * state stays with the caller, apart from the per-chain state inside {@link ChainDeadline}.
  */
 final class SyncWait {
 
@@ -107,6 +108,33 @@ final class SyncWait {
    */
   static long deadlineOf(long waitNanos) {
     return deadlineOf(System.nanoTime(), waitNanos);
+  }
+
+  /**
+   * Deadline shared by the levels of one nested async chain, started on first use. An async
+   * submission never waits, so the sync-wait budget must begin when the chain starts rather than
+   * when it was submitted: budgeting from submission time would spend the whole budget on the
+   * outermost key's own queue latency and fail the chain before any nested level ran. Levels never
+   * overlap (each is reached only after the previous level submitted and blocked on its wait), and
+   * the monitor on {@link #of} is what publishes the first-use write to the later levels' threads.
+   */
+  static final class ChainDeadline {
+    private long deadlineNanos;
+    private boolean started;
+
+    /**
+     * Returns the chain's shared deadline, starting the budget on the first call.
+     *
+     * @param waitNanos configured wait in nanos
+     * @return deadline in {@code nanoTime} units
+     */
+    synchronized long of(long waitNanos) {
+      if (!started) {
+        deadlineNanos = deadlineOf(waitNanos);
+        started = true;
+      }
+      return deadlineNanos;
+    }
   }
 
   /**

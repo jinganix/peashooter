@@ -24,6 +24,7 @@ import io.github.jinganix.peashooter.executor.DirectExecutor;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -101,6 +102,14 @@ class TaskQueueInterruptTest {
     // Then the marker never runs and the runner thread keeps its interrupt
     assertThat(markerRan.get()).isFalse();
     assertThat(runnerThread.get().isInterrupted()).isTrue();
+
+    // And the runner claim is released: a later submission drains the preserved backlog
+    assertThat(queue.isIdle()).isFalse();
+    CountDownLatch resumed = new CountDownLatch(1);
+    queue.execute(DirectExecutor.INSTANCE, resumed::countDown);
+    assertThat(resumed.await(5, TimeUnit.SECONDS)).isTrue();
+    assertThat(markerRan.get()).isTrue();
+    assertThat(queue.isIdle()).isTrue();
   }
 
   @Test

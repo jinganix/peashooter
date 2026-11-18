@@ -19,7 +19,6 @@
 package io.github.jinganix.peashooter.queue;
 
 import io.github.jinganix.peashooter.ExecutionStats;
-import io.github.jinganix.peashooter.internal.Interruptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,26 +114,10 @@ final class LockBatch {
     } catch (Error e) {
       throw e;
     } catch (Throwable t) {
-      if (Interruptions.carriesInterrupt(t)) {
-        // Never swallow interrupts: restore the flag and end this batch. The outer release
-        // unlocks and reschedules the preserved backlog; continuing would run the next task
-        // on an interrupted thread. See TaskQueue.drain for pooled-thread tolerance.
-        Thread.currentThread().interrupt();
-        if (log.isWarnEnabled()) {
-          log.warn(
-              "Interrupted task in {} from task {}; ending batch with interrupt restored",
-              queue.describeQueue(),
-              task.runnable().getClass().getName(),
-              t);
-        }
+      // Ending the batch (interrupt) leaves the outer release to unlock and reschedule the
+      // preserved backlog; continuing would run the next task on an interrupted thread.
+      if (TaskQueue.endsBatchOnTaskFailure(log, queue, task, t)) {
         return true;
-      }
-      if (log.isErrorEnabled()) {
-        log.error(
-            "Caught unexpected Throwable in {} from task {}",
-            queue.describeQueue(),
-            task.runnable().getClass().getName(),
-            t);
       }
     }
     try {

@@ -98,7 +98,9 @@ public enum ErrorPolicy {
   }
 
   /**
-   * Rethrows a finish-pending failure (afterCall/restore) per this policy.
+   * Rethrows a finish-pending failure (afterCall/restore) per this policy: the same mapping as
+   * {@link #rethrowDelegate}, kept as a named entry point so finish failures cannot silently drift
+   * to a different rule.
    *
    * @param pending pending failure, must not be {@code null}
    * @param type witness for {@link #TYPED}, or {@code null} otherwise

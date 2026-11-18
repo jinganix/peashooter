@@ -140,7 +140,7 @@ int value =
 | `isIdle(key)` | `key` 是否无排队任务且无运行中的 runner。 |
 | `getReentrantInlineCount()` | 累计的无 peer 嵌套同 key 同步内联执行次数。 |
 | `builder(executor)` | 构建器，用于自定义队列、selector、tracer、池大小与超时。 |
-| `setTimeout(Duration)` / `getTimeout()` | 配置 / 读取同步等待的超时时间。 |
+| `setTimeout(Duration)` / `getTimeout()` | 配置 / 读取同步等待的超时时间，以及多 key 异步链每一层的等待上限。 |
 | `getTracer()` | 获取 tracer，用于自定义 span 集成。 |
 
 异步提交对外层提交为快速失败：队列的执行器在任务运行前拒绝时，失败会向调用线程传播，因此 `executeAsync` 会抛出，`submitAsync` / `supplyAsync` / `supplyCheckedAsync` 也会抛出而不返回 future（重试请按 key 去重）。带 future 的方法会容纳最外层的 selector `Exception`：其提交 future 以异常完成并被返回。多 key 内层的拒绝不会到达提交线程：它们完成返回的 future，并直接转发给 `RejectionAware` 任务。

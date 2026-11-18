@@ -84,7 +84,7 @@ class OrderedTraceExecutorWiringTest {
     // When a two-key chain would need two threads Then it is rejected before waiting
     assertThatThrownBy(() -> executor.executeSync(List.of("wire-a", "wire-b"), () -> {}))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("max pool threads is 1");
+        .hasMessageContaining("only 1 can run concurrently");
   }
 
   @Test

@@ -35,10 +35,11 @@ import org.slf4j.LoggerFactory;
 /**
  * {@link TaskQueueProvider} implemented with {@link Caffeine}.
  *
- * <p>Each distinct key maps to its own {@link TaskQueue}. Entries expire after the configured
- * access idle period once the queue is fully idle (no pending tasks and no active runner); while
- * work is in flight the entry is pinned so a long-running task cannot be split across two queue
- * instances for the same key.
+ * <p>Each distinct key maps to its own {@link TaskQueue}. Entries expire after the configured idle
+ * period once the queue is fully idle (no pending tasks and no active runner); the deadline runs
+ * from the last write (an enqueue or a busy-to-idle transition) and read-only probes such as {@link
+ * #isIdle} do not extend it. While work is in flight the entry is pinned so a long-running task
+ * cannot be split across two queue instances for the same key.
  *
  * <p>Maintenance: idle expiry is driven automatically by Caffeine's system scheduler, so idle
  * entries are reclaimed even when callers never invoke {@link #cleanUp()}. The soft key-count bound
@@ -117,9 +118,10 @@ public class CaffeineTaskQueueProvider implements TaskQueueProvider {
   /**
    * Create a provider that expires idle queues after the given access duration.
    *
-   * <p>Expiration is based on last access to the queue entry while the queue is idle. Entries stay
-   * pinned while tasks are pending or a runner is active. Tune this value for the expected key
-   * cardinality and how long per-key ordering must be preserved across idle gaps.
+   * <p>Expiration is based on the last write to the queue entry while the queue is idle: reads
+   * (e.g. {@code isIdle} probes) never extend the deadline. Entries stay pinned while tasks are
+   * pending or a runner is active. Tune this value for the expected key cardinality and how long
+   * per-key ordering must be preserved across idle gaps.
    *
    * <p>The soft key-count bound defaults to {@link #DEFAULT_MAXIMUM_SIZE}: idle entries past the
    * bound are swept (never a busy queue, so the size may temporarily exceed the bound while many

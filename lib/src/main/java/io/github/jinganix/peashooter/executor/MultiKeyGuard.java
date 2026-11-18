@@ -21,6 +21,7 @@ package io.github.jinganix.peashooter.executor;
 import java.util.Objects;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.function.IntSupplier;
 
@@ -64,11 +65,12 @@ final class MultiKeyGuard {
             + distinctKeys
             + " pool threads for "
             + distinctKeys
-            + " distinct keys, but max pool threads is "
+            + " distinct keys, but only "
             + max
-            + "; size the backing pool >= "
+            + " can run concurrently; size the backing pool >= "
             + distinctKeys
-            + " (or construct with an explicit max-threads supplier)");
+            + " (raise corePoolSize: workers past it appear only while the handoff queue refuses"
+            + " offers) or construct with an explicit max-threads supplier");
   }
 
   /**
@@ -94,13 +96,22 @@ final class MultiKeyGuard {
    * <p>Only the innermost {@link ThreadPoolExecutor} / {@link ForkJoinPool} reports a maximum;
    * anything else is unknown. {@link ForkJoinPool#getParallelism} is the target parallelism
    * (approximate: work-stealing may briefly run more threads under blocking compensation), so it
-   * sizes fail-fast conservatively rather than exactly.
+   * sizes fail-fast conservatively rather than exactly. A {@link ThreadPoolExecutor} reports the
+   * parallelism it is <em>guaranteed</em> to reach, never the configured maximum: {@code execute()}
+   * offers to the work queue instead of adding a worker, so a queue that accepts the offer leaves
+   * the pool at {@code corePoolSize} (or 1 when core is 0, since the first task still adds a
+   * worker). Workers past core appear only while offers are being refused, which is transient (a
+   * bounded queue overflows) and cannot be relied on by a chain that holds every thread. Only a
+   * {@link SynchronousQueue} refuses every offer and always grows to {@code maximumPoolSize}.
+   * Over-reporting would hide exactly the self-deadlock this guard exists to reject.
    */
   static int maxThreadsOf(Executor executor) {
     Executor current = executor;
     for (int depth = 0; depth < 32 && current != null; depth++) {
       if (current instanceof ThreadPoolExecutor pool) {
-        return pool.getMaximumPoolSize();
+        return pool.getQueue() instanceof SynchronousQueue
+            ? pool.getMaximumPoolSize()
+            : Math.max(1, pool.getCorePoolSize());
       }
       if (current instanceof ForkJoinPool forkJoin) {
         return forkJoin.getParallelism();

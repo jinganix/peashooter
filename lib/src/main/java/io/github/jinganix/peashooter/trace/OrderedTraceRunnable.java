@@ -322,18 +322,9 @@ public class OrderedTraceRunnable extends TraceRunnable {
     // Build eagerly on the validated key: setup failures surface here (never masquerading as E),
     // so no invoked-flag allocation is needed to tell setup apart from delegate failures.
     final Span span = buildInlineSpan(tracer, parent, key);
-    try {
-      return TraceScope.callChecked(tracer, span, type, supplier);
-    } catch (RuntimeException rethrow) {
-      throw rethrow;
-    } catch (Error error) {
-      throw error;
-    } catch (Throwable delegateFailure) {
-      if (type.isInstance(delegateFailure)) {
-        throw type.cast(delegateFailure);
-      }
-      throw new CompletionException(delegateFailure);
-    }
+    // callChecked owns the whole failure mapping (Runtime/Error as-is, witnessed E unwrapped,
+    // everything else checked wrapped), so the declared `throws E` is all this needs.
+    return TraceScope.callChecked(tracer, span, type, supplier);
   }
 
   /**
@@ -358,15 +349,9 @@ public class OrderedTraceRunnable extends TraceRunnable {
     Objects.requireNonNull(supplier, "supplier");
     Span parent = acquireParent(tracer);
     final Span span = buildInlineSpan(tracer, parent, key);
-    try {
-      return TraceScope.callChecked(tracer, span, RuntimeException.class, supplier::get);
-    } catch (RuntimeException rethrow) {
-      throw rethrow;
-    } catch (Error error) {
-      throw error;
-    } catch (Throwable delegateFailure) {
-      throw new CompletionException(delegateFailure);
-    }
+    // RuntimeException witness: callChecked wraps any other checked Throwable (span setup or a
+    // smuggled foreign type) in a CompletionException instead of masquerading under Supplier.
+    return TraceScope.callChecked(tracer, span, RuntimeException.class, supplier::get);
   }
 
   @Override

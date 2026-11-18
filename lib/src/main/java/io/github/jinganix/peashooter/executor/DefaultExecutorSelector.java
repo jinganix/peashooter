@@ -80,12 +80,13 @@ public class DefaultExecutorSelector implements ExecutorSelector {
   }
 
   /**
-   * Maximum pool threads behind the configured {@link TraceExecutor}, or {@link
+   * Achievable pool parallelism behind the configured {@link TraceExecutor} (not the configured
+   * maximum: a queue that accepts offers caps a pool at its core size), or {@link
    * MultiKeyGuard#UNKNOWN_MAX_THREADS} when not introspectable. Single-layer introspection owned by
    * this selector so callers never disassemble {@code selector -> traceExecutor -> delegate}
    * themselves.
    *
-   * @return known maximum or unknown sentinel
+   * @return known achievable parallelism or unknown sentinel
    */
   int maxThreadsOrUnknown() {
     return MultiKeyGuard.maxThreadsOf(traceExecutor);

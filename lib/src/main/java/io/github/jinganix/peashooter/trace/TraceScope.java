@@ -49,17 +49,25 @@ final class TraceScope {
   private static final Logger log = LoggerFactory.getLogger(TraceScope.class);
 
   /**
-   * Lenient untraced fallbacks are counted per tracer ({@link
-   * AbstractTracer#getTracerFallbackCount}).
+   * Counts one lenient untraced fallback per tracer ({@link AbstractTracer#getTracerFallbackCount})
+   * and reports it. Every degraded run increments, but only the tracer's first fallback logs the
+   * full stack at {@code ERROR}: a sustained tracer bug would otherwise emit one stack trace per
+   * task at queue throughput and bury the counter that is the alerting signal. Later fallbacks log
+   * at {@code DEBUG} with the stack.
    *
-   * <p>Counted once per degraded run where an {@link Exception} from tracer storage, span factory,
-   * or install forces the delegate to run without tracing: without this, lenient fallback only logs
-   * and silently breaks the span chain, masking tracer bugs. {@link Error}s stay loud and never
-   * count.
+   * @param tracer tracer whose storage, span factory, or install failed
+   * @param message stable message for the log entry
+   * @param failure the fallback cause
    */
-  private static void recordFallback(Tracer tracer) {
+  private static void logFallback(Tracer tracer, String message, Throwable failure) {
+    boolean first = true;
     if (tracer instanceof AbstractTracer abstractTracer) {
-      abstractTracer.recordTracerFallback();
+      first = abstractTracer.recordTracerFallback();
+    }
+    if (first) {
+      log.error(message, failure);
+    } else {
+      log.debug("{} (repeat fallback; see the tracer fallback count)", message, failure);
     }
   }
 
@@ -117,7 +125,9 @@ final class TraceScope {
    *
    * <p>A throwing install propagates (fail fast): direct callers observe tracer bugs immediately
    * instead of silently running untraced. Queue runners must use {@link #runLenient}, where a dead
-   * install would strand every waiter behind the runner.
+   * install would strand every waiter behind the runner. Every shipped run is lenient, so this
+   * strict form is kept as the test entry point for the propagation and restore-suppression
+   * contract rather than as a production path.
    *
    * <p>Unchecked only: checked failures surface wrapped in {@link CompletionException}.
    */
@@ -273,7 +283,12 @@ final class TraceScope {
       if (!lenient) {
         throw ErrorPolicy.UNCHECKED.rethrowUnchecked(getFailure);
       }
-      log.error("Tracer.getSpan failed; running delegate without tracing", getFailure);
+      logFallback(
+          req.tracer(), "Tracer.getSpan failed; running delegate without tracing", getFailure);
+      // The previous span could not be read, so this restore resets to "no span" instead of
+      // guessing: the delegate's thread then ends exactly like a fresh pooled thread. An enclosing
+      // scope on this stack loses its span for the rest of its body (the tracer is already broken),
+      // but an unreadable span never leaks into the next task.
       return runUntraced(req.tracer(), null, req.call());
     }
     Span span;
@@ -288,7 +303,8 @@ final class TraceScope {
         if (!lenient) {
           throw ErrorPolicy.UNCHECKED.rethrowUnchecked(factoryFailure);
         }
-        log.error("Span factory failed; running delegate without tracing", factoryFailure);
+        logFallback(
+            req.tracer(), "Span factory failed; running delegate without tracing", factoryFailure);
         return runUntraced(req.tracer(), previous, req.call());
       }
     }
@@ -411,7 +427,6 @@ final class TraceScope {
 
   /** Unchecked untraced template: checked failures surface wrapped. */
   private static <V> V runUntraced(Tracer tracer, Span previous, ScopedCall<V> call) {
-    recordFallback(tracer);
     Throwable fallbackError = null;
     V fallbackResult = null;
     try {
@@ -544,7 +559,8 @@ final class TraceScope {
     } catch (Error fatal) {
       throw fatal;
     } catch (Throwable installFailure) {
-      log.error("Tracer.setSpan failed; running delegate without tracing", installFailure);
+      logFallback(
+          tracer, "Tracer.setSpan failed; running delegate without tracing", installFailure);
       return false;
     }
   }
