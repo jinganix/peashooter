@@ -71,6 +71,51 @@ class TraceFallbackCountTest {
   }
 
   @Test
+  @DisplayName("should log the full stack only for the first fallback of a tracer")
+  void shouldLogTheFullStackOnlyForTheFirstFallbackOfATracer() {
+    // Given a logger capture on TraceScope and a tracer whose install always fails
+    ch.qos.logback.classic.Logger scopeLogger =
+        (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TraceScope.class);
+    ch.qos.logback.classic.Level savedLevel = scopeLogger.getLevel();
+    scopeLogger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+    ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+        new ch.qos.logback.core.read.ListAppender<>();
+    appender.setContext(scopeLogger.getLoggerContext());
+    appender.start();
+    scopeLogger.addAppender(appender);
+    DefaultTracer tracer =
+        new DefaultTracer() {
+          @Override
+          public void setSpan(Span span) {
+            throw new RuntimeException("install boom");
+          }
+        };
+    try {
+      // When two tasks degrade to an untraced run
+      TraceScope.runLenient(tracer, () -> Span.child(tracer, null), () -> {});
+      TraceScope.runLenient(tracer, () -> Span.child(tracer, null), () -> {});
+
+      // Then the first fallback is loud and the second does not repeat the stack trace
+      java.util.List<String> errors = new java.util.ArrayList<>();
+      java.util.List<String> debug = new java.util.ArrayList<>();
+      for (ch.qos.logback.classic.spi.ILoggingEvent event : appender.list) {
+        if (event.getLevel() == ch.qos.logback.classic.Level.ERROR) {
+          errors.add(event.getFormattedMessage());
+        } else if (event.getLevel() == ch.qos.logback.classic.Level.DEBUG) {
+          debug.add(event.getFormattedMessage());
+        }
+      }
+      assertThat(errors).hasSize(1).first().asString().contains("Tracer.setSpan failed");
+      assertThat(debug).hasSize(1).first().asString().contains("repeat fallback");
+      assertThat(tracer.getTracerFallbackCount()).isEqualTo(2);
+    } finally {
+      scopeLogger.detachAppender(appender);
+      appender.stop();
+      scopeLogger.setLevel(savedLevel);
+    }
+  }
+
+  @Test
   @DisplayName("should count fallback on the owning tracer when span creation fails")
   void shouldCountFallbackOnTheOwningTracerWhenSpanCreationFails() {
     // Given a TraceRunnable whose span creation fails with an Exception

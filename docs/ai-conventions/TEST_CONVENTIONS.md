@@ -156,7 +156,7 @@ For `*BenchmarkTest` classes:
 
 | Location | Role |
 |----------|------|
-| `utils/TestUtils` | `sleep`, `uncheckedRun`, `uncheckedCall` for test ergonomics |
+| `utils/TestUtils` | `awaitCountDown`, `awaitIdle`, `sleep`, `uncheckedRun` for test ergonomics |
 | `utils/SequentialTask` | Helpers for ordered execution scenarios |
 | `executor/ExecutorFixture` | Shared executor variants for parameterized tests |
 | `redisson/setup/RedisExtension` | Starts or reuses Redis (Testcontainers; skipped when `redis-host` env is set) |

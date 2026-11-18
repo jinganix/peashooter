@@ -525,6 +525,19 @@ class W3CTraceContextTest {
   }
 
   @Test
+  @DisplayName("should not put a lone surrogate into a truncated rejection message")
+  void shouldNotPutALoneSurrogateIntoATruncatedRejectionMessage() {
+    // Given a trace-id field whose 129th char is the high half of a surrogate pair
+    String header = "00-" + "a".repeat(127) + "\uD83D\uDE00-0000000000000000-01";
+
+    // When / Then the truncated fragment stops before the split pair instead of emitting half of it
+    Throwable thrown =
+        org.assertj.core.api.Assertions.catchThrowable(() -> W3CTraceContext.parse(header));
+    assertThat(thrown).isInstanceOf(IllegalArgumentException.class);
+    assertThat(thrown.getMessage()).doesNotContain("\uD83D").doesNotContain("\uDE00");
+  }
+
+  @Test
   @DisplayName("should reject null and oversized tracestate")
   void shouldRejectNullAndOversizedTracestate() {
     assertThat(W3CTraceContext.isValidTracestate(null)).isFalse();

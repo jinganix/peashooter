@@ -28,9 +28,10 @@ import java.util.Objects;
  *
  * <p>Created by {@link OrderedTraceRunnable} for each ordered submission. The {@code sync} flag
  * participates in {@link #invokedBy(Span, String)}: a span matching the nested key is detected as
- * reentrant, and {@link io.github.jinganix.peashooter.executor.OrderedTraceExecutor} fails fast
- * instead of running inline, preserving strict per-key FIFO. An async span with a different key
- * stops the chain walk.
+ * reentrant; {@link io.github.jinganix.peashooter.executor.OrderedTraceExecutor} then runs the
+ * nested call inline when no peer task is queued for that key, and fails fast instead of overtaking
+ * queued peers, preserving strict per-key FIFO. An async span with a different key stops the chain
+ * walk.
  *
  * <p>Equality is identity, inherited from {@link Span}: key/sync never participate because no
  * value-based {@code equals} exists to narrow. Use {@link SpanIdKey} to look spans up by ids.

@@ -30,6 +30,9 @@ public final class W3CTraceContext {
 
   private static final String VERSION = "00";
 
+  /** Char cap for a rejection-message display fragment. */
+  private static final int SNIPPET_CHARS = 128;
+
   /**
    * Maximum {@code traceparent} header length accepted by {@link #parse}. A valid {@code 00} value
    * is 55 chars; future versions may append dash-delimited fields, but an attacker-sized header
@@ -235,13 +238,26 @@ public final class W3CTraceContext {
    */
   private static String snippet(String value) {
     String raw = String.valueOf(value);
-    boolean truncated = raw.length() > 128;
-    String head = truncated ? raw.substring(0, 128) : raw;
+    boolean truncated = raw.length() > SNIPPET_CHARS;
+    String head = headOf(raw, 0, raw.length());
     String sanitized = KeySanitizer.sanitize(head);
     if (!truncated) {
       return sanitized.isEmpty() ? "<empty>" : sanitized;
     }
     return sanitized + "...(len=" + raw.length() + ")";
+  }
+
+  /**
+   * Display head of {@code value[from, to)}: at most {@link #SNIPPET_CHARS} chars, backing off one
+   * char when the cut would split a surrogate pair. A rejected header must never put a lone
+   * surrogate into a log line, which strict UTF-8/JSON encoders cannot represent.
+   */
+  private static String headOf(String value, int from, int to) {
+    int headEnd = Math.min(to, from + SNIPPET_CHARS);
+    if (headEnd < to && headEnd > from && Character.isHighSurrogate(value.charAt(headEnd - 1))) {
+      headEnd--;
+    }
+    return value.substring(from, headEnd);
   }
 
   /**
@@ -252,9 +268,8 @@ public final class W3CTraceContext {
     int from = Math.max(0, start);
     int to = Math.min(value.length(), Math.max(from, end));
     int length = to - from;
-    boolean truncated = length > 128;
-    int headEnd = truncated ? from + 128 : to;
-    String head = value.substring(from, headEnd);
+    boolean truncated = length > SNIPPET_CHARS;
+    String head = headOf(value, from, to);
     String sanitized = KeySanitizer.sanitize(head);
     if (!truncated) {
       return sanitized.isEmpty() ? "<empty>" : sanitized;

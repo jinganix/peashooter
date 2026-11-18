@@ -141,7 +141,7 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 | `isIdle(key)` | Whether no tasks are queued and no runner is in flight for `key`. |
 | `getReentrantInlineCount()` | Cumulative peer-free nested same-key sync executions run inline. |
 | `builder(executor)` | Builder for custom queues, selector, tracer, pool sizing, and timeout. |
-| `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits. |
+| `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits and for each inner level of a multi-key async chain. |
 | `getTracer()` | Access the tracer for custom span integration. |
 
 Async submissions are fail-fast for the outermost submission: when the queue's executor rejects the work before it runs, the failure propagates to the calling thread, so `executeAsync` throws and `submitAsync` / `supplyAsync` / `supplyCheckedAsync` throw instead of returning their future (deduplicate retries via the key). The future-returning methods contain an outermost selector `Exception` instead: their submission future is completed exceptionally and returned. Rejections at inner multi-key levels never reach the submitting thread: they complete the returned future and are forwarded directly to a `RejectionAware` task.

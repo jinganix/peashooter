@@ -69,17 +69,21 @@ public abstract class AbstractTracer implements Tracer {
    * install forces an untraced delegate run. Package-private: this mutates the alerting signal and
    * must not be reachable from consumer code. Saturated atomic increment: concurrent degraded runs
    * never lose an increment; the count pins at {@link Long#MAX_VALUE} instead of wrapping.
+   *
+   * @return {@code true} when this is the first fallback recorded for this tracer, so the caller
+   *     can log the full stack once instead of once per degraded task
    */
-  final void recordTracerFallback() {
+  final boolean recordTracerFallback() {
     // Zero-allocation saturating increment: hand-rolled get/CAS loop instead of
     // updateAndGet (which allocates its lambda on every degraded run).
     long current;
     do {
       current = tracerFallbackCount.get();
       if (current >= Long.MAX_VALUE) {
-        return;
+        return false;
       }
     } while (!tracerFallbackCount.compareAndSet(current, current + 1));
+    return current == 0;
   }
 
   /**

@@ -21,12 +21,15 @@ package io.github.jinganix.peashooter.executor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+import io.github.jinganix.peashooter.trace.DefaultTracer;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -69,6 +72,63 @@ class MultiKeyAsyncBoundedWaitTest {
       } catch (java.util.concurrent.ExecutionException expected) {
         assertThat(expected.getCause()).isInstanceOf(TraceTimeoutException.class);
       }
+    } finally {
+      releaseBlocker.countDown();
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should not spend the sync-wait budget on the outer key's own queue latency")
+  void shouldNotSpendTheSyncWaitBudgetOnTheOuterKeysOwnQueueLatency() throws Exception {
+    ThreadPoolExecutor pool =
+        new ThreadPoolExecutor(2, 2, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    pool.setThreadFactory(r -> {
+      Thread t = new Thread(r, "multi-pool");
+      t.setDaemon(true);
+      return t;
+    });
+    // Inline-sync routing off: every nested level takes the real thread hop, so the shared budget
+    // is what decides the wait instead of an inline run that is already complete.
+    TraceExecutor routing = new TraceExecutor(pool, new DefaultTracer());
+    OrderedTraceExecutor executor =
+        OrderedTraceExecutor.builder(pool).selector((queue, sync) -> routing).build();
+    executor.setTimeout(Duration.ofMillis(200));
+    CountDownLatch blockerStarted = new CountDownLatch(1);
+    CountDownLatch releaseBlocker = new CountDownLatch(1);
+    AtomicBoolean ran = new AtomicBoolean();
+    try {
+      // Given the outer key busy for longer than the wait budget
+      executor.executeAsync(
+          "mk-lat-a",
+          () -> {
+            blockerStarted.countDown();
+            try {
+              releaseBlocker.await(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+          });
+      assertThat(blockerStarted.await(5, TimeUnit.SECONDS)).isTrue();
+      CompletableFuture<Void> future =
+          executor.submitAsync(
+              List.of("mk-lat-a", "mk-lat-b"),
+              () -> {
+                try {
+                  Thread.sleep(50);
+                } catch (InterruptedException e) {
+                  Thread.currentThread().interrupt();
+                }
+                ran.set(true);
+              });
+
+      // When the outer key stays busy past the budget (an async submission itself never waits)
+      Thread.sleep(300);
+      releaseBlocker.countDown();
+
+      // Then the chain still runs: the budget bounds the nested waits, not the outer queue latency
+      future.get(5, TimeUnit.SECONDS);
+      assertThat(ran).isTrue();
     } finally {
       releaseBlocker.countDown();
       pool.shutdownNow();

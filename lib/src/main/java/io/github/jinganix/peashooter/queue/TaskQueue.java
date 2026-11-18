@@ -43,12 +43,14 @@ import org.slf4j.LoggerFactory;
  * the key's backlog.
  *
  * <p><b>Task body failures (at-most-once):</b> ordinary {@link Throwable}s from a task {@link
- * Runnable} are logged and the queue continues with the next task; the dequeued head is never
- * retried. {@link Error} propagates instead: the runner dies loudly while the runner claim is
- * released, so the remaining backlog is preserved for the next explicit submit rather than stalling
- * behind a dead runner. Exception propagation is otherwise the caller's responsibility (e.g. {@link
- * io.github.jinganix.peashooter.executor.OrderedTraceExecutor} wraps sync delegates in a {@link
- * java.util.concurrent.CompletableFuture}).
+ * Runnable} are logged and the queue continues with the next task, except an interrupt-carrying
+ * failure (a smuggled {@link InterruptedException}, or any cause chain containing one): that
+ * restores the interrupt flag and ends the batch, leaving the backlog for the next submit. The
+ * dequeued head is never retried. {@link Error} propagates instead: the runner dies loudly while
+ * the runner claim is released, so the remaining backlog is preserved for the next explicit submit
+ * rather than stalling behind a dead runner. Exception propagation is otherwise the caller's
+ * responsibility (e.g. {@link io.github.jinganix.peashooter.executor.OrderedTraceExecutor} wraps
+ * sync delegates in a {@link java.util.concurrent.CompletableFuture}).
  *
  * <p><b>Subclass contract (internal, not public API; compiler-enforced):</b> queue state ({@code
  * head}/{@code tail}/{@code size}, {@code runner}, {@code current}) is private and guarded by the
@@ -524,37 +526,58 @@ public class TaskQueue {
             // runners die loudly.
             throw e;
           } catch (Throwable t) {
-            if (Interruptions.carriesInterrupt(t)) {
-              // Never swallow interrupts: restore the flag and end this batch. The runner claim
-              // is released so the preserved backlog resumes on the next submit instead of
-              // stalling behind a dead runner; the interrupt flag lets the owner observe it.
-              // Pooled runners tolerate the set flag: ThreadPoolExecutor workers re-check (and
-              // clear) interruption before the next task, and inline (DirectExecutor) paths run
-              // on the caller thread which must observe it.
-              Thread.currentThread().interrupt();
-              if (log.isWarnEnabled()) {
-                log.warn(
-                    "Interrupted task in {} from task {}; ending batch with interrupt restored",
-                    describeQueue(),
-                    task.runnable().getClass().getName(),
-                    t);
-              }
+            if (endsBatchOnTaskFailure(log, this, task, t)) {
+              // Never swallow interrupts: the flag is restored (see the helper) and this batch
+              // ends. The runner claim is released so the preserved backlog resumes on the next
+              // submit instead of stalling behind a dead runner.
               synchronized (lock) {
                 current = null;
               }
               return;
             }
-            if (log.isErrorEnabled()) {
-              log.error(
-                  "Caught unexpected Throwable in {} from task {}",
-                  describeQueue(),
-                  task.runnable().getClass().getName(),
-                  t);
-            }
           }
         }
       }
     }
+  }
+
+  /**
+   * Single owner of the task-body failure policy shared by this class and {@link LockBatch}: an
+   * {@link Error} is the caller's to rethrow, an interrupt-carrying {@link Throwable} restores the
+   * flag and ends the batch, and any other {@link Throwable} is logged while the batch continues.
+   * Batches keep their own end-of-batch bookkeeping (clearing the runner claim here, unlocking and
+   * rescheduling in {@link LockBatch}).
+   *
+   * <p>Pooled runners tolerate the restored flag: ThreadPoolExecutor workers re-check (and clear)
+   * interruption before the next task, and inline (DirectExecutor) paths run on the caller thread,
+   * which must observe it.
+   *
+   * @param log caller's logger, so failures stay in the category that owns the batch
+   * @param queue queue owning the failing task, used for the log label
+   * @param task task whose body failed
+   * @param failure task failure
+   * @return {@code true} when the caller must end its batch
+   */
+  static boolean endsBatchOnTaskFailure(Logger log, TaskQueue queue, Task task, Throwable failure) {
+    if (Interruptions.carriesInterrupt(failure)) {
+      Thread.currentThread().interrupt();
+      if (log.isWarnEnabled()) {
+        log.warn(
+            "Interrupted task in {} from task {}; ending batch with interrupt restored",
+            queue.describeQueue(),
+            task.runnable().getClass().getName(),
+            failure);
+      }
+      return true;
+    }
+    if (log.isErrorEnabled()) {
+      log.error(
+          "Caught unexpected Throwable in {} from task {}",
+          queue.describeQueue(),
+          task.runnable().getClass().getName(),
+          failure);
+    }
+    return false;
   }
 
   /**

@@ -296,7 +296,8 @@ public class OrderedTraceExecutor {
   }
 
   /**
-   * Sets the maximum wait for sync calls. See {@link TimeoutPolicy}.
+   * Sets the maximum wait for sync calls, and for each inner level of a multi-key async chain
+   * (whose budget starts when the chain starts, not at submission). See {@link TimeoutPolicy}.
    *
    * @param timeout maximum wait, must not be negative and must not be {@code null}
    */
@@ -516,12 +517,13 @@ public class OrderedTraceExecutor {
       return submitAsync(sorted.get(0), task);
     }
     long waitNanos = timeoutPolicy.waitNanos();
-    long deadlineNanos = SyncWait.deadlineOf(waitNanos);
+    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     Runnable chain =
         MultiKeyNesting.nestSync(
             sorted.subList(1, sorted.size()),
             task,
-            (key, inner) -> executeSyncAt(key, inner, waitNanos, deadlineNanos, false));
+            (key, inner) -> executeSyncAt(key, inner, waitNanos, deadline.of(waitNanos), false));
     return submitAsync(sorted.get(0), chain);
   }
 
@@ -551,12 +553,13 @@ public class OrderedTraceExecutor {
       return supplyAsync(sorted.get(0), supplier);
     }
     long waitNanos = timeoutPolicy.waitNanos();
-    long deadlineNanos = SyncWait.deadlineOf(waitNanos);
+    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     Supplier<R> chain =
         MultiKeyNesting.nestSupply(
             sorted.subList(1, sorted.size()),
             supplier,
-            (key, inner) -> supplyAt(key, inner, waitNanos, deadlineNanos, false));
+            (key, inner) -> supplyAt(key, inner, waitNanos, deadline.of(waitNanos), false));
     return supplyAsync(sorted.get(0), chain);
   }
 
@@ -590,12 +593,14 @@ public class OrderedTraceExecutor {
       return supplyCheckedAsync(sorted.get(0), supplier);
     }
     long waitNanos = timeoutPolicy.waitNanos();
-    long deadlineNanos = SyncWait.deadlineOf(waitNanos);
+    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     ThrowingSupplier<R, E> chain =
         MultiKeyNesting.nestChecked(
             sorted.subList(1, sorted.size()),
             supplier,
-            (key, inner) -> supplyCheckedAt(key, type, inner, waitNanos, deadlineNanos, false));
+            (key, inner) ->
+                supplyCheckedAt(key, type, inner, waitNanos, deadline.of(waitNanos), false));
     return supplyCheckedAsync(sorted.get(0), chain);
   }
 
