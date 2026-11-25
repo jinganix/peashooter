@@ -29,11 +29,13 @@ public interface ExecutorSelector {
    * Selects the executor that will run the next queue runner for an ordered submission.
    *
    * <p>Implementations must be thread-safe; this is called concurrently from multiple submitter
-   * threads. They should not throw and must return a non-{@code null} {@link Executor}. If an
-   * implementation does throw (or returns {@code null}), the caller fails the submission fast — it
-   * releases the submit fence and notifies the submission (sync callers observe the original
-   * failure, {@code submitAsync} completes its future, or propagates {@code Error}s) — instead of
-   * stranding waiters. Throwing is therefore tolerated but must be treated as a bug.
+   * threads. It runs with the per-key submit fence held: keep it fast and non-blocking, never
+   * re-enter the provider or queues from inside it, or key eviction stalls. They should not throw
+   * and must return a non-{@code null} {@link Executor}. If an implementation does throw (or
+   * returns {@code null}), the caller fails the submission fast — it releases the submit fence and
+   * notifies the submission (sync callers observe the original failure, {@code submitAsync}
+   * completes its future, or propagates {@code Error}s) — instead of stranding waiters. Throwing is
+   * therefore tolerated but must be treated as a bug.
    *
    * @param queue per-key queue for the submission; must not be {@code null}
    * @param sync {@code true} when the submission originated from a sync API

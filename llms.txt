@@ -2,7 +2,8 @@
 
 > Per-key ordered task execution for Java thread pools: tasks sharing the same
 > key run serially in submission order; different keys run in parallel on a
-> shared pool. Includes deadlock-safe nested sync calls and distributed tracing.
+> shared pool. Includes deadlock-safe nested sync calls and distributed tracing
+> (trace propagation across processes; ordering itself is single-JVM only).
 
 - GitHub: https://github.com/jinganix/peashooter
 - License: Apache-2.0
@@ -32,13 +33,14 @@
 
 ## API summary
 
-- `executeAsync(key, task)` — enqueue, return immediately (pool-backed).
+- `executeAsync(key, task)` — enqueue, return immediately (pool-backed). Task failures are log-only; use `submitAsync` to observe them.
+- `executeAsync(keys, task)` — fire-and-forget multi-key variant with the same sorted acquisition.
 - `submitAsync(key, task)` / `supplyAsync(key, supplier)` — enqueue, return future.
 - `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` — checked-exception async variants.
 - `executeSync(key, task)` / `supply(key, supplier)` — run on key queue, block until done.
 - `executeSync(keys, task)` / `supply(keys, supplier)` — sort keys in natural String order, dedupe, acquire outermost-first.
 - `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` — sync variants throwing declared checked failures unwrapped.
-- `isIdle(key)`, `getReentrantInlineCount()`, `builder(executor)`, `setTimeout` / `getTimeout`, `getTracer()`.
+- `isIdle(key)` (best-effort snapshot), `getReentrantInlineCount()`, `builder(executor)` / `builder(selector)`, `setTimeout` / `getTimeout`, `getTracer()`.
 
 ## Key sources (read for behavior details)
 
@@ -54,12 +56,12 @@
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.14</version>
+  <version>0.0.15</version>
 </dependency>
 ```
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.14'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.15'
 ```
 
 ## Minimal example
@@ -82,3 +84,9 @@ executor.executeSync("user-1", () -> System.out.println("runs in order"));
   global order (e.g. ascending), or use the multi-key overloads.
 - Q: Thread-safety of my own collections? A: Still required — peashooter orders
   tasks, it does not make your data structures thread-safe.
+- Q: How deep can nested sync calls go? A: Reentrancy probing walks at most 4096
+  ordered spans, then assumes reentrant (liveness over FIFO). Keep nesting far
+  below that; deeper chains may run inline or fail fast spuriously.
+- Q: Does peashooter order across machines? A: No — single-JVM only. Trace
+  headers spread across processes; cross-machine ordering needs Kafka/a
+  distributed lock. The Redis `RedisLockableTaskQueue` under `src/test` (`redisson/setup`) is a test-only reference; the generic `queue/LockableTaskQueue` is prod API and ships normally.

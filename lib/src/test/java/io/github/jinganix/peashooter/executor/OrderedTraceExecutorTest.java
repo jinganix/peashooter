@@ -134,7 +134,7 @@ class OrderedTraceExecutorTest {
     @Test
     @DisplayName("should reject null key on executeAsync")
     void shouldRejectNullKeyOnExecuteAsync() {
-      assertThatThrownBy(() -> executor.executeAsync(null, () -> {}))
+      assertThatThrownBy(() -> executor.executeAsync((String) null, () -> {}))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("key");
     }

@@ -93,6 +93,44 @@ class AsyncForKeyFailureTest {
   }
 
   @Test
+  @DisplayName("should return a completed future when the queue provider fails with an exception")
+  void shouldReturnCompletedFutureWhenQueueProviderFailsWithException() throws Exception {
+    // Given a provider whose fence fails
+    IllegalStateException providerFailure = new IllegalStateException("provider shut down");
+    io.github.jinganix.peashooter.TaskQueueProvider failing =
+        new io.github.jinganix.peashooter.TaskQueueProvider() {
+          @Override
+          public boolean isIdle(String key) {
+            return true;
+          }
+
+          @Override
+          public boolean hasPending(String key) {
+            return false;
+          }
+
+          @Override
+          public io.github.jinganix.peashooter.queue.TaskQueue getForSubmit(String key) {
+            throw providerFailure;
+          }
+
+          @Override
+          public void abortSubmit(
+              String key, io.github.jinganix.peashooter.queue.TaskQueue queue) {}
+        };
+    Tracer tracer = new DefaultTracer();
+    OrderedTraceExecutor executor =
+        new OrderedTraceExecutor(
+            failing, new DefaultExecutorSelector(new TraceExecutor(Runnable::run, tracer)), tracer);
+
+    // When an async submission hits the provider failure Then the future carries it (contained)
+    CompletableFuture<String> future = executor.supplyAsync("k", () -> "value");
+    assertThatThrownBy(() -> future.get(5, TimeUnit.SECONDS))
+        .isInstanceOf(ExecutionException.class)
+        .hasCause(providerFailure);
+  }
+
+  @Test
   @DisplayName("should stay loud when span capture fails with an error")
   void shouldStayLoudWhenSpanCaptureFailsWithError() {
     AssertionError boom = new AssertionError("span error");

@@ -75,6 +75,15 @@ class OrderedTraceExecutorWiringTest {
   }
 
   @Test
+  @DisplayName("should reject a negative builder timeout without building")
+  void shouldRejectNegativeBuilderTimeoutWithoutBuilding() {
+    assertThatThrownBy(() ->
+            OrderedTraceExecutor.builder(DirectExecutor.INSTANCE).timeout(Duration.ofMillis(-1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("must not be negative");
+  }
+
+  @Test
   @DisplayName("should fail fast from the max pool threads set through the builder")
   void shouldFailFastFromMaxPoolThreadsSetThroughBuilder() {
     // Given a builder that declares a single pool thread
@@ -101,6 +110,40 @@ class OrderedTraceExecutorWiringTest {
     // Then the submission landed on that provider
     assertThat(queues.estimatedSize()).isEqualTo(1);
     assertThat(executor.isIdle("wire-provider-key")).isTrue();
+  }
+
+  @Test
+  @DisplayName("should reject illegal keys on isIdle even when the provider is lax")
+  void shouldRejectIllegalKeysOnIsIdleEvenWhenProviderIsLax() {
+    // Given a provider that skips validation (foreign implementations must not weaken the facade)
+    io.github.jinganix.peashooter.TaskQueueProvider lax =
+        new io.github.jinganix.peashooter.TaskQueueProvider() {
+          @Override
+          public boolean isIdle(String key) {
+            return true;
+          }
+
+          @Override
+          public boolean hasPending(String key) {
+            return false;
+          }
+
+          @Override
+          public io.github.jinganix.peashooter.queue.TaskQueue getForSubmit(String key) {
+            throw new UnsupportedOperationException("not needed here");
+          }
+
+          @Override
+          public void abortSubmit(
+              String key, io.github.jinganix.peashooter.queue.TaskQueue queue) {}
+        };
+    OrderedTraceExecutor executor =
+        new OrderedTraceExecutor(
+            lax, (queue, sync) -> DirectExecutor.INSTANCE, new DefaultTracer());
+
+    // When / Then illegal keys fail on the facade instead of reporting a false idle
+    assertThatThrownBy(() -> executor.isIdle(null)).isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> executor.isIdle("  ")).isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test
@@ -155,6 +198,58 @@ class OrderedTraceExecutorWiringTest {
     // When / Then
     assertThatThrownBy(() -> executor.executeSync(List.of("wire-a", "wire-b"), () -> {}))
         .isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  @DisplayName("should build from a selector alone without a backing pool")
+  void shouldBuildFromSelectorAloneWithoutBackingPool() {
+    // Given a selector that decides scheduling on its own
+    AtomicBoolean ran = new AtomicBoolean();
+    OrderedTraceExecutor executor =
+        OrderedTraceExecutor.builder((queue, sync) -> DirectExecutor.INSTANCE).build();
+
+    // When sync and fire-and-forget work is submitted Then no dummy pool is needed
+    executor.executeSync("wire-nosrc-key", () -> ran.set(true));
+    assertThat(ran).isTrue();
+    assertThat(executor.getTracer()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("should run a fire-and-forget multi-key chain in sorted order")
+  void shouldRunFireAndForgetMultiKeyChainInSortedOrder() {
+    // Given a pool big enough for a two-key chain
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      OrderedTraceExecutor executor = new OrderedTraceExecutor(pool);
+      AtomicBoolean ran = new AtomicBoolean();
+
+      // When fire-and-forget work holds two keys (unsorted input)
+      executor.executeAsync(List.of("wire-ff-b", "wire-ff-a"), () -> ran.set(true));
+
+      // Then a same-key barrier runs only after the chain, proving the chain ran
+      executor.supply("wire-ff-a", () -> null);
+      assertThat(ran).isTrue();
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("should fail fast when fire-and-forget multi-key selection fails")
+  void shouldFailFastWhenFireAndForgetMultiKeySelectionFails() {
+    // Given a selector that reports a bug instead of an executor
+    OrderedTraceExecutor executor =
+        OrderedTraceExecutor.builder((queue, sync) -> DirectExecutor.INSTANCE)
+            .selector((queue, sync) -> {
+              throw new IllegalStateException("selector boom");
+            })
+            .build();
+
+    // When the outermost selection fails Then the caller observes it instead of a dropped future
+    assertThatThrownBy(
+            () -> executor.executeAsync(List.of("wire-ff-fail-b", "wire-ff-fail-a"), () -> {}))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("selector boom");
   }
 
   @Test

@@ -52,7 +52,7 @@ class HasUnitTestSourcesSpec(private val sourceDirs: List<File>) : Spec<Task> {
  */
 internal fun Project.requiredValues(keys: List<String>, owner: String, noun: String): Map<String, String> {
   val resolved = keys.associateWith {
-    providers.gradleProperty(it).orNull?.takeIf(String::isNotEmpty)
+    providers.gradleProperty(it).orNull?.takeIf(String::isNotBlank)
   }
   val missing = resolved.filterValues { it == null }.keys.sorted()
   if (missing.isNotEmpty()) {

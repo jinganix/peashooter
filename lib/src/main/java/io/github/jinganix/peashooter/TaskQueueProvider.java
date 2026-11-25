@@ -26,14 +26,16 @@ public interface TaskQueueProvider {
   /**
    * Whether the queue for {@code key} is idle: no pending tasks and no active runner.
    *
-   * <p>A key with no entry counts as idle, and probing it creates nothing. This is the only
-   * read-only probe: the provider never hands out an unfenced queue instance, so submissions cannot
-   * bypass the {@link #getForSubmit} fence and split per-key ordering across two queue instances.
+   * <p>A key with no entry counts as idle, and probing it creates nothing. Best-effort snapshot:
+   * the state may change immediately after this call returns. Do not use the result for control
+   * flow that assumes the key stays idle. This is the only read-only probe: the provider never
+   * hands out an unfenced queue instance, so submissions cannot bypass the {@link #getForSubmit}
+   * fence and split per-key ordering across two queue instances.
    *
-   * @param key ordering key; must not be {@code null}, empty, or blank
+   * @param key ordering key; must not be {@code null}, empty, blank, or too long
    * @return {@code true} when no entry exists, or the live queue is idle
    * @throws NullPointerException if {@code key} is {@code null}
-   * @throws IllegalArgumentException if {@code key} is empty or blank
+   * @throws IllegalArgumentException if {@code key} is empty, blank, or too long
    */
   boolean isIdle(String key);
 
@@ -50,10 +52,10 @@ public interface TaskQueueProvider {
    * enables it. A silent inherited {@code true} hid the forfeit, so the choice is now forced at
    * compile time.
    *
-   * @param key ordering key; must not be {@code null}, empty, or blank
+   * @param key ordering key; must not be {@code null}, empty, blank, or too long
    * @return {@code true} when at least one task is queued for the key
    * @throws NullPointerException if {@code key} is {@code null}
-   * @throws IllegalArgumentException if {@code key} is empty or blank
+   * @throws IllegalArgumentException if {@code key} is empty, blank, or too long
    */
   boolean hasPending(String key);
 
@@ -82,10 +84,10 @@ public interface TaskQueueProvider {
    * re-enter the provider: calling {@link #getForSubmit}, {@link #abortSubmit}, {@link #isIdle}, or
    * any maintenance method from inside it can deadlock or corrupt the submit fence.
    *
-   * @param key key of the {@link TaskQueue}; must not be {@code null}, empty, or blank
+   * @param key key of the {@link TaskQueue}; must not be {@code null}, empty, blank, or too long
    * @return live {@link TaskQueue} for submission, stable per key
    * @throws NullPointerException if {@code key} is {@code null}
-   * @throws IllegalArgumentException if {@code key} is empty or blank
+   * @throws IllegalArgumentException if {@code key} is empty, blank, or too long
    */
   TaskQueue getForSubmit(String key);
 
@@ -99,10 +101,10 @@ public interface TaskQueueProvider {
    * <p>Idempotent with respect to identity: when {@code queue} is not the live entry for {@code
    * key} (evicted, replaced, or foreign), this is a no-op and the live entry is untouched.
    *
-   * @param key ordering key; must not be {@code null}, empty, or blank
+   * @param key ordering key; must not be {@code null}, empty, blank, or too long
    * @param queue the instance returned by {@link #getForSubmit}; must not be {@code null}
    * @throws NullPointerException if {@code key} or {@code queue} is {@code null}
-   * @throws IllegalArgumentException if {@code key} is empty or blank
+   * @throws IllegalArgumentException if {@code key} is empty, blank, or too long
    */
   void abortSubmit(String key, TaskQueue queue);
 }

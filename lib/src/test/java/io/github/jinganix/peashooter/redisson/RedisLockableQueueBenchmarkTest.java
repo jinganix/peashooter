@@ -102,7 +102,7 @@ public class RedisLockableQueueBenchmarkTest {
                 latch.countDown();
               });
         }
-        latch.await();
+        assertThat(latch.await(120, TimeUnit.SECONDS)).isTrue();
       }
 
       // Then
@@ -136,7 +136,7 @@ public class RedisLockableQueueBenchmarkTest {
           }
         });
       }
-      latch.await();
+      assertThat(latch.await(120, TimeUnit.SECONDS)).isTrue();
 
       // Then
       assertThat(counter.count).isEqualTo(taskCount);

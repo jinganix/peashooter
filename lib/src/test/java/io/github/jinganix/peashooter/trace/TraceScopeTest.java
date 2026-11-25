@@ -858,6 +858,32 @@ class TraceScopeTest {
     assertThat(prebuilt).isTrue();
   }
 
+  @Test
+  @DisplayName("should wrap a witnessed checked afterCall failure instead of masquerading as E")
+  void shouldWrapAWitnessedCheckedAfterCallFailureInsteadOfMasqueradingAsE() {
+    // Given a delegate that succeeds and an afterCall failing with the witnessed checked type
+    class Witnessed extends Exception {
+      Witnessed(String message) {
+        super(message);
+      }
+    }
+    Witnessed afterFailure = new Witnessed("afterCall boom");
+    Tracer tracer =
+        new DefaultTracer() {
+          @Override
+          public void afterCall(Span span, Throwable e) {
+            sneakyThrow(afterFailure);
+          }
+        };
+    Span span = Span.child(tracer, null);
+
+    // When running a checked scope whose finish fails with the witnessed type
+    // Then it surfaces wrapped (tracer bug), never unwrapped as the delegate's E
+    assertThatThrownBy(() -> TraceScope.callChecked(tracer, span, Witnessed.class, () -> "ok"))
+        .isInstanceOf(java.util.concurrent.CompletionException.class)
+        .hasCause(afterFailure);
+  }
+
   @SuppressWarnings("unchecked")
   private static <E extends Throwable> RuntimeException sneakyThrow(Throwable throwable) throws E {
     throw (E) throwable;

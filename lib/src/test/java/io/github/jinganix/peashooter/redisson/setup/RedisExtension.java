@@ -145,10 +145,14 @@ public class RedisExtension implements BeforeAllCallback {
    *     somewhere we did not start
    */
   static boolean isExternalRedis() {
-    if (System.getenv("redis-host") != null) {
+    // shortcut: hyphenated names cannot be exported in bash, so accept REDIS_HOST too.
+    // Blank counts as unset: an empty export must not masquerade as an external address.
+    String envUpper = System.getenv("REDIS_HOST");
+    String envLower = System.getenv("redis-host");
+    if ((envUpper != null && !envUpper.isBlank()) || (envLower != null && !envLower.isBlank())) {
       return true;
     }
     String address = System.getProperty("redis-host");
-    return address != null && !address.equals(ownedUrl);
+    return address != null && !address.isBlank() && !address.equals(ownedUrl);
   }
 }

@@ -73,6 +73,10 @@ public class OrderedTraceRunnable extends TraceRunnable {
   /**
    * Creates an ordered runnable for {@code key}.
    *
+   * <p>The returned instance is single-use: hand it to exactly one submission. A second {@link
+   * #run()}, {@link #createSpan()}, or {@link #rejected(Throwable)} throws {@link
+   * IllegalStateException} instead of reusing the span id.
+   *
    * @param tracer tracer
    * @param key per-key ordering identifier
    * @param sync true for sync paths
@@ -86,6 +90,9 @@ public class OrderedTraceRunnable extends TraceRunnable {
 
   /**
    * Creates an ordered runnable with a forced trace id.
+   *
+   * <p>The returned instance is single-use, like {@link #forKey}: one submission only, further uses
+   * throw {@link IllegalStateException}.
    *
    * @param tracer tracer, also used for the new span id
    * @param traceId forced trace id, validated as W3C-compatible (not passed through as-is)
@@ -143,6 +150,13 @@ public class OrderedTraceRunnable extends TraceRunnable {
     this.sync = sync;
   }
 
+  /**
+   * Builds and caches the single-use span for a later {@link #run()} to reuse.
+   *
+   * @return cached span
+   * @throws IllegalStateException when this instance was already consumed (ran, rejected, or
+   *     prebuilt before)
+   */
   @Override
   public Span createSpan() {
     // Build before claiming: publishing READY(null) first would let a concurrent run() observe
@@ -160,6 +174,13 @@ public class OrderedTraceRunnable extends TraceRunnable {
     return span;
   }
 
+  /**
+   * Runs the task once under the single-use span.
+   *
+   * @throws IllegalStateException when this instance was already consumed (ran, rejected, or a
+   *     concurrent loser lost the single-use claim); a concurrent loser also completes the delegate
+   *     with the reuse failure first so sync waiters fail fast instead of hanging
+   */
   @Override
   public void run() {
     // Single CAS on the observed slot: READY reuses the prebuilt span, FRESH builds it below.
@@ -354,6 +375,14 @@ public class OrderedTraceRunnable extends TraceRunnable {
     return TraceScope.callChecked(tracer, span, RuntimeException.class, supplier::get);
   }
 
+  /**
+   * Discards this instance without running it, completing the delegate once.
+   *
+   * <p>A duplicate rejection (caller bug) is dropped so a non-idempotent delegate is never notified
+   * twice; a lost CAS race notifies nothing.
+   *
+   * @param cause rejection or failure cause
+   */
   @Override
   public void rejected(Throwable cause) {
     // Idempotent consume via CAS: a discarded instance must never be resubmitted,

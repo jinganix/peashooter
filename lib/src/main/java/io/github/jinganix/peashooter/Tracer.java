@@ -30,5 +30,10 @@ package io.github.jinganix.peashooter;
  * io.github.jinganix.peashooter.trace.DelegatingTracer}.
  *
  * <p>TraceScope owns the single save/restore around callbacks; callbacks only observe.
+ *
+ * <p>Alerting needs inheritance: only {@link io.github.jinganix.peashooter.trace.AbstractTracer}
+ * (or a {@link io.github.jinganix.peashooter.trace.DelegatingTracer} over one) counts fallbacks — a
+ * direct implementation of this interface logs every fallback at ERROR instead of once-ERROR +
+ * DEBUG. Prefer extending the abstract base when fallback volume matters.
  */
 public interface Tracer extends SpanAccessor, TraceIdGenerator, TraceCallback {}

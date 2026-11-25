@@ -58,7 +58,7 @@ jobs:
       - name: Setup redis on Linux
         if: matrix.os == 'ubuntu-latest'
         run: |
-          docker run --name redis -p 6379:6379 -d redis:7.4.0-alpine
+          docker run --name redis -p 6379:6379 -d redis:8.6.0-alpine
           until docker exec redis redis-cli ping | grep -q PONG; do sleep 1; done
 
       - name: Setup redis on macOS

@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const gradlePropsPath = join(repoRoot, "gradle.properties");
-const readmePaths = ["README.md", "README.zh.md"].map((name) =>
+const readmePaths = ["README.md", "README.zh.md", "llms.txt"].map((name) =>
   join(repoRoot, name),
 );
 
@@ -35,6 +35,10 @@ function parseArgs() {
       syncConsumerFiles = true;
     } else if (args[index] === "--all") {
       syncConsumerFiles = true;
+    } else {
+      console.error(`sync-versions: unknown argument '${args[index]}'`);
+      process.exitCode = 1;
+      return { consumerVersion: null, syncConsumerFiles: false, invalid: true };
     }
   }
   return { consumerVersion, syncConsumerFiles };

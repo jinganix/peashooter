@@ -20,11 +20,13 @@ package io.github.jinganix.peashooter.executor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import io.github.jinganix.peashooter.SpanAccessor;
 import io.github.jinganix.peashooter.Tracer;
 import io.github.jinganix.peashooter.queue.CaffeineTaskQueueProvider;
 import io.github.jinganix.peashooter.trace.OrderedSpan;
+import java.time.Duration;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -115,7 +117,13 @@ class ReentrantOvertakeFailFastTest {
                     peerDone.countDown();
                   }));
       peer.start();
-      Thread.sleep(300);
+      // Wait until the peer is blocked in sync wait (enqueue already happened),
+      // instead of a fixed sleep that flakes under CI load.
+      await()
+          .atMost(Duration.ofSeconds(5))
+          .until(() ->
+              peer.getState() == Thread.State.WAITING
+                  || peer.getState() == Thread.State.TIMED_WAITING);
       peerQueued.countDown();
 
       // Then the nested call fails explicitly and never overtakes the peer.

@@ -33,12 +33,15 @@ final class TimeoutPolicy {
   /** Default sync wait: 10 seconds. Named so the default is documented in one place. */
   static final long DEFAULT_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(10);
 
-  /** Largest duration exactly representable in nanos; at or beyond it waits saturate. */
   static final Duration MAX_NANOS_DURATION = Duration.ofNanos(Long.MAX_VALUE);
 
   /**
    * Sync call timeout in nanoseconds, held as a single {@code volatile long} so reads and the
    * concurrent {@link #setTimeout(Duration)} writer can never observe a torn or mixed snapshot.
+   *
+   * <p>Saturation (not round-trip) is intentional: beyond the nanos range the exact value is
+   * unrepresentable, and callers converting {@link #getTimeout()} via {@code toNanos()} must never
+   * see an {@link ArithmeticException} — both effectively mean "wait forever".
    */
   private volatile long timeoutNanos = DEFAULT_TIMEOUT_NANOS;
 

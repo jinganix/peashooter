@@ -309,14 +309,15 @@ class TaskQueueTest {
     // notified: only the triggering submit observes the rejection.
     assertThat(backgroundFailure.get()).isInstanceOf(RejectedExecutionException.class);
     assertThat(secondRejected.get()).isNull();
-    assertThat(taskQueue.isIdle()).isFalse();
 
-    // And the preserved backlog still drains on the next submission
+    // And the preserved backlog resumes without requiring another submission
+    awaitCountDown(secondDone);
+    assertThat(secondRan.get()).isTrue();
+
+    // And the queue still accepts new work after the resume
     CountDownLatch resume = new CountDownLatch(1);
     taskQueue.execute(worker, resume::countDown);
-    awaitCountDown(secondDone);
     awaitCountDown(resume);
-    assertThat(secondRan.get()).isTrue();
     assertThat(taskQueue.isIdle()).isTrue();
   }
 

@@ -117,6 +117,12 @@ public final class W3CTraceContext {
     }
     int fourth = indexOfDash(traceparent, third + 1, end);
     int flagsEnd = fourth < 0 ? end : fourth;
+    // A trailing dash with nothing after it is a malformed empty extension, not forward
+    // compatibility: future versions append non-empty fields.
+    if (fourth >= 0 && fourth + 1 >= end) {
+      throw new IllegalArgumentException(
+          "traceparent must not end with an empty extension field: " + snippet(traceparent));
+    }
     // Version 00 must have exactly 4 fields; future versions may append extras (ignored here).
     if (fourth >= 0 && isVersion00(traceparent, start, first)) {
       throw new IllegalArgumentException(
@@ -466,12 +472,13 @@ public final class W3CTraceContext {
    * non-printable inside a key or value rejects.
    *
    * @param tracestate candidate header value
-   * @return {@code true} if safe to forward as-is; {@code null} and empty report {@code false}
+   * @return {@code true} if safe to forward as-is; {@code null} and blank report {@code false}
    *     (absent, not a present value) — pair with {@link #inject(Span, boolean, String)}, which
    *     maps any blank input to an absent tracestate
    */
   public static boolean isValidTracestate(String tracestate) {
-    if (tracestate == null || tracestate.isEmpty() || tracestate.length() > MAX_TRACESTATE_CHARS) {
+    // Length first: O(1) reject before the O(N) blank scan on oversized input.
+    if (tracestate == null || tracestate.length() > MAX_TRACESTATE_CHARS || tracestate.isBlank()) {
       return false;
     }
     // Single pass over the original string: no substring/isBlank/strip temporaries.

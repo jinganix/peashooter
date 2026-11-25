@@ -101,4 +101,27 @@ class SyncWaitExecutionFailureTranslationTest {
         .isSameAs(witnessed);
     assertThat(executor.isIdle("k")).isTrue();
   }
+
+  @Test
+  @DisplayName("should restore interrupt flag when typed unwrap carries interruption")
+  void shouldRestoreInterruptFlagWhenTypedUnwrapCarriesInterruption() {
+    OrderedTraceExecutor executor = newExecutor();
+    IOException failure = new IOException(new InterruptedException("stop"));
+    Thread.interrupted();
+
+    assertThatThrownBy(() ->
+            executor.supplyChecked(
+                "k",
+                IOException.class,
+                () -> {
+                  throw failure;
+                }))
+        .isSameAs(failure);
+    try {
+      assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    } finally {
+      Thread.interrupted();
+    }
+    assertThat(executor.isIdle("k")).isTrue();
+  }
 }
