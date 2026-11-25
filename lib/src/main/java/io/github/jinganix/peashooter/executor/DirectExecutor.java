@@ -37,11 +37,13 @@ import java.util.concurrent.Executor;
  * Runnable::run} executor gets the same bounded-depth protection.
  *
  * <p><b>Unified stack budget:</b> Channel 1 (this class, {@value #MAX_INLINE_DEPTH}) and Channel 2
- * ({@link OrderedTraceExecutor} peer-free reentrant inline, 256) share the calling thread, so one
- * thread can stack both. Worst case is the sum: 32 + 256 = 288 logical inline levels, each a
- * constant handful of Java frames ({@code execute} + queue runner + trace wrapper), far below
- * {@link StackOverflowError} on a default stack. Both channels fail fast with {@link
- * IllegalStateException} when their budget is exceeded — never {@link StackOverflowError}.
+ * ({@link OrderedTraceExecutor} peer-free reentrant inline, 256 per executor instance) share the
+ * calling thread, so one thread can stack both. Worst case per executor is the sum: 32 + 256 = 288
+ * logical inline levels, each a constant handful of Java frames ({@code execute} + queue runner +
+ * trace wrapper), far below {@link StackOverflowError} on a default stack. With N executors nested
+ * on one thread the per-instance Channel 2 budgets add up (32 + 256 x N): keep cross-executor
+ * nesting shallow. Both channels fail fast with {@link IllegalStateException} when their budget is
+ * exceeded — never {@link StackOverflowError}.
  */
 public final class DirectExecutor implements Executor {
   /** Shared instance. */

@@ -29,7 +29,7 @@
 - **按 key 有序执行** —— 相同 key 的任务按提交顺序依次执行。
 - **跨 key 并发** —— 不同 key 的任务在共享线程池中并行运行。
 - **嵌套调用不死锁** —— `supply` / `executeSync` 会检测同一 key 上的重入调用并内联执行，避免阻塞（该 key 已有排队任务时快速失败）。
-- **分布式追踪** —— 内置 trace ID 与父子 span，便于追踪有序调用链。
+- **分布式追踪（仅透传）** —— 内置 trace ID 与父子 span，便于追踪有序调用链。Trace 头可跨进程透传，排序本身只在单个 JVM 内生效。
 - **低开销** —— 任务执行热路径无锁；按 key 队列基于 Caffeine，按空闲时间过期。
 
 ## 适用场景
@@ -41,7 +41,7 @@
 - 网关与 IM 系统中的按设备 / 按会话消息处理；
 - 替代脆弱的“每 key 一线程”或 `synchronized` 锁映射方案。
 
-**不适用：** 全局全序（用单个队列即可）、严格实时调度、跨进程（分布式）排序——peashooter 只保证单个 JVM 内的有序，跨进程排序需要分布式锁或队列。
+**不适用：** 全局全序（用单个队列即可）、严格实时调度、跨进程（分布式）排序——peashooter 只保证单个 JVM 内的有序，跨进程排序需要分布式锁或队列。`src/test` 下（`redisson/setup`）的 Redis `RedisLockableTaskQueue` 只是测试参考实现，不随产品发布；通用的 `queue/LockableTaskQueue` 是产品 API，正常发布。
 
 ## 环境要求
 
@@ -55,20 +55,20 @@
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.14</version>
+  <version>0.0.15</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.14'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.15'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.14")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.15")
 ```
 
 ## 快速开始
@@ -84,8 +84,10 @@ executor.supply("user-1", () -> { values.add("2"); return null; });
 executor.executeAsync("user-1", () -> values.add("3"));
 executor.executeSync("user-1", () -> values.add("4"));
 
-// 提交顺序得到保留：[1, 2, 3, 4]
-System.out.println("Values: [" + String.join(", ", values) + "]");
+// 提交顺序得到保留：[1, 2, 3, 4]。遍历时持有同一把锁：即使是同步 list，多线程可能修改时遍历仍需加锁。
+synchronized (values) {
+  System.out.println("Values: [" + String.join(", ", values) + "]");
+}
 ```
 
 ## 工作原理
@@ -128,7 +130,8 @@ int value =
 
 | 方法 | 说明 |
 |------|------|
-| `executeAsync(key, task)` | 将 `task` 入队到 `key` 对应队列；线程池执行器下立即返回。使用 `DirectExecutor` 等同步执行器时，若抢占到空闲队列会内联执行并阻塞；若该 key 已有运行中的 runner，则排队其后并返回。 |
+| `executeAsync(key, task)` | 将 `task` 入队到 `key` 对应队列；线程池执行器下立即返回。使用 `DirectExecutor` 等同步执行器时，若抢占到空闲队列会内联执行并阻塞；若该 key 已有运行中的 runner，则排队其后并返回。任务失败仅记日志；需观察失败请用 `submitAsync`。 |
+| `executeAsync(keys, task)` | 多 key fire-and-forget 版本，采用相同的排序获取顺序；future 被丢弃，任务失败仅记日志。 |
 | `submitAsync(key, task)` / `supplyAsync(key, supplier)` | 入队到 `key`；返回任务运行后完成的 future。 |
 | `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | 异步版本，声明的 checked 异常经由 future 传播。 |
 | `executeSync(key, task)` | 在 `key` 的队列上运行 `task` 并阻塞至完成（默认超时 10 秒）。 |
@@ -137,9 +140,10 @@ int value =
 | `supply(keys, supplier)` | `supply` 的多 key 版本，采用相同的排序获取顺序。 |
 | `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` | 同步版本，声明的 checked 异常直接抛出而非包装。 |
 | `submitAsync(keys, task)` / `supplyAsync(keys, supplier)` | 异步多 key 版本，采用相同的排序获取顺序。 |
-| `isIdle(key)` | `key` 是否无排队任务且无运行中的 runner。 |
+| `isIdle(key)` | `key` 是否无排队任务且无运行中的 runner（尽力快照；不要假设该 key 保持空闲）。 |
 | `getReentrantInlineCount()` | 累计的无 peer 嵌套同 key 同步内联执行次数。 |
 | `builder(executor)` | 构建器，用于自定义队列、selector、tracer、池大小与超时。 |
+| `builder(selector)` | 构建器变体，无需 backing 池：自定义 selector 决定调度时使用。 |
 | `setTimeout(Duration)` / `getTimeout()` | 配置 / 读取同步等待的超时时间，以及多 key 异步链每一层的等待上限。 |
 | `getTracer()` | 获取 tracer，用于自定义 span 集成。 |
 
@@ -181,8 +185,10 @@ int value =
 > ⚠️ 下表仅为单次示意（n=1，Apple M1 Pro，10 核 16 GB 内存，JDK 21 G1）。该基准对分配与 GC 敏感：同一台机器同一次运行内的多次采样可相差约 2 倍，不可作为性能保证，请本地重跑：
 
 ```bash
-./gradlew :lib:test --tests "*Benchmark*"
+skip_benchmark= ./gradlew :lib:test --tests "*Benchmark*"
 ```
+
+（CI 默认导出 `skip_benchmark=true` 会跳过这些测试——如上显式置空才跑。Redis 基准还需要可达的 Redis，见其源码。）
 
 ### TaskQueue（[源码](lib/src/test/java/io/github/jinganix/peashooter/queue/TaskQueueBenchmarkTest.java)）
 

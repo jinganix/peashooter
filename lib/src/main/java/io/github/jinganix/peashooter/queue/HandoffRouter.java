@@ -104,7 +104,11 @@ final class HandoffRouter {
    * @param e rejection or failure cause
    */
   void rejectHead(TaskQueue.Task failedHead, Throwable e) {
-    queue.discardHeadAndRepoint(failedHead);
+    // A miss means a concurrent runner already polled the head: it runs normally, so only
+    // an actual removal is reported rejected.
+    if (!queue.discardHeadAndRepoint(failedHead)) {
+      return;
+    }
     notifyHeadRejected(failedHead, e);
   }
 

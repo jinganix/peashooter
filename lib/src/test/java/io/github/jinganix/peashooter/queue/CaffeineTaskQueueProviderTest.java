@@ -669,7 +669,8 @@ class CaffeineTaskQueueProviderTest {
       awaitCountDown(secondDone);
 
       // Then the queue eventually drains and becomes reclaimable without an ordering split
-      await().atMost(Duration.ofSeconds(5)).until(() -> provider.invalidateIfIdle("handoff"));
+      await().atMost(Duration.ofSeconds(5)).until(() -> provider.isIdle("handoff"));
+      assertThat(provider.invalidateIfIdle("handoff")).isTrue();
       assertThat(provider.isIdle("handoff")).isTrue();
     } finally {
       first.shutdownNow();
@@ -944,7 +945,8 @@ class CaffeineTaskQueueProviderTest {
     // And after the task finishes the entry becomes evictable again
     releaseTask.countDown();
     awaitCountDown(taskDone);
-    await().atMost(Duration.ofSeconds(10)).until(() -> provider.invalidateIfIdle("key"));
+    await().atMost(Duration.ofSeconds(10)).until(() -> provider.isIdle("key"));
+    assertThat(provider.invalidateIfIdle("key")).isTrue();
   }
 
   @Test

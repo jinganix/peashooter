@@ -52,6 +52,10 @@ import org.slf4j.LoggerFactory;
  * logging), {@link #checkBoundAndWarn()} reports a sustained overshoot with a WARN, and {@link
  * #cleanUp()} returns the actual evicted count plus a WARN so the drive frequency can be sized.
  *
+ * <p>shortcut: the bound covers idle entries only — busy (pinned) queues are never evicted, so a
+ * flood of concurrently busy keys grows past the bound until they drain; size the bound for peak
+ * concurrent busy keys and shed load upstream, the provider never fail-fasts submits.
+ *
  * <p>Drive-interval sizing: one sweep (piggyback or {@link #cleanUp()}) evicts at most {@value
  * #MAX_SWEEP_SCAN} idle entries (fewer when busy queues consume scan budget). With a sustained
  * new-key rate of {@code R} keys/sec, the piggyback converges on its own while {@code R} stays

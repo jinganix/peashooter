@@ -29,7 +29,7 @@
 - **Ordered execution per key** — tasks sharing the same key run one after another, in submission order.
 - **Concurrent across keys** — different keys use the shared thread pool in parallel.
 - **Deadlock-safe nesting** — `supply` / `executeSync` detect re-entrant calls on the same key and run inline instead of blocking (fail fast when same-key peers are already queued).
-- **Distributed tracing** — built-in trace IDs and parent/child spans for ordered call chains.
+- **Distributed tracing (propagation only)** — built-in trace IDs and parent/child spans for ordered call chains. Trace headers spread across processes; ordering itself stays within one JVM.
 - **Low overhead** — lock-free hot path during task execution; per-key queues use Caffeine with idle expiration.
 
 ## When to use
@@ -41,7 +41,7 @@ Use peashooter when you need **per-entity serialization on a shared pool**:
 - per-device / per-session message processing in gateways and IM systems;
 - replacing a fragile "one thread per key" or `synchronized` map-of-locks design.
 
-**Not for:** global total ordering across all keys (use a single queue), strict real-time scheduling, or distributed (multi-process) ordering — peashooter orders within one JVM; cross-process ordering needs a distributed lock or queue.
+**Not for:** global total ordering across all keys (use a single queue), strict real-time scheduling, or distributed (multi-process) ordering — peashooter orders within one JVM; cross-process ordering needs a distributed lock or queue. The Redis `RedisLockableTaskQueue` under `src/test` (`redisson/setup`) is a test-only reference, no prod Redis module ships; the generic `queue/LockableTaskQueue` is prod API and ships normally.
 
 ## Requirements
 
@@ -55,20 +55,20 @@ Use peashooter when you need **per-entity serialization on a shared pool**:
 <dependency>
   <groupId>io.github.jinganix.peashooter</groupId>
   <artifactId>peashooter</artifactId>
-  <version>0.0.14</version>
+  <version>0.0.15</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'io.github.jinganix.peashooter:peashooter:0.0.14'
+implementation 'io.github.jinganix.peashooter:peashooter:0.0.15'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("io.github.jinganix.peashooter:peashooter:0.0.14")
+implementation("io.github.jinganix.peashooter:peashooter:0.0.15")
 ```
 
 ## Quick start
@@ -85,8 +85,11 @@ executor.supply("user-1", () -> { values.add("2"); return null; });
 executor.executeAsync("user-1", () -> values.add("3"));
 executor.executeSync("user-1", () -> values.add("4"));
 
-// Submission order is preserved: [1, 2, 3, 4]
-System.out.println("Values: [" + String.join(", ", values) + "]");
+// Submission order is preserved: [1, 2, 3, 4]. Iterate under the same lock: even a
+// synchronized list needs synchronized iteration when another thread may modify it.
+synchronized (values) {
+  System.out.println("Values: [" + String.join(", ", values) + "]");
+}
 ```
 
 ## How it works
@@ -129,7 +132,8 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 
 | Method | Description |
 |--------|-------------|
-| `executeAsync(key, task)` | Enqueue `task` for `key`; returns without waiting with a pool-backed executor. With a synchronous executor such as `DirectExecutor` it may run the task inline and block when it claims an idle queue; if another runner is active for the key it enqueues behind it and returns. |
+| `executeAsync(key, task)` | Enqueue `task` for `key`; returns without waiting with a pool-backed executor. With a synchronous executor such as `DirectExecutor` it may run the task inline and block when it claims an idle queue; if another runner is active for the key it enqueues behind it and returns. Task failures are log-only; use `submitAsync` to observe them via a future. |
+| `executeAsync(keys, task)` | Fire-and-forget multi-key variant with the same sorted acquisition; the future is dropped so task failures stay log-only. |
 | `submitAsync(key, task)` / `supplyAsync(key, supplier)` | Enqueue for `key`; return a future completed after the task runs. |
 | `supplyCheckedAsync(key, supplier)` / `supplyCheckedAsync(keys, type, supplier)` | Async variants propagating the declared checked failure via the future. |
 | `executeSync(key, task)` | Run `task` on the queue for `key` and block until it completes (default timeout 10 seconds). |
@@ -138,9 +142,10 @@ Re-entrant synchronous calls on the **same** key are detected via the current tr
 | `supply(keys, supplier)` | Multi-key variant of `supply` with the same sorted acquisition. |
 | `supplyChecked(key, type, supplier)` / `supplyChecked(keys, type, supplier)` | Sync variants propagating the declared checked failure unwrapped. |
 | `submitAsync(keys, task)` / `supplyAsync(keys, supplier)` | Async multi-key variants with the same sorted acquisition. |
-| `isIdle(key)` | Whether no tasks are queued and no runner is in flight for `key`. |
+| `isIdle(key)` | Whether no tasks are queued and no runner is in flight for `key` (best-effort snapshot; do not assume the key stays idle). |
 | `getReentrantInlineCount()` | Cumulative peer-free nested same-key sync executions run inline. |
 | `builder(executor)` | Builder for custom queues, selector, tracer, pool sizing, and timeout. |
+| `builder(selector)` | Builder variant with no backing pool required: use when a custom selector decides scheduling. |
 | `setTimeout(Duration)` / `getTimeout()` | Configure / read the timeout for synchronous waits and for each inner level of a multi-key async chain. |
 | `getTracer()` | Access the tracer for custom span integration. |
 
@@ -185,8 +190,11 @@ Yes. peashooter orders tasks; it does not make your data structures thread-safe 
 > with:
 
 ```bash
-./gradlew :lib:test --tests "*Benchmark*"
+skip_benchmark= ./gradlew :lib:test --tests "*Benchmark*"
 ```
+
+(CI exports `skip_benchmark=true`, which disables these tests — unset it explicitly as above.
+The Redis benchmark also needs a reachable Redis; see its source.)
 
 ### TaskQueue ([source](lib/src/test/java/io/github/jinganix/peashooter/queue/TaskQueueBenchmarkTest.java))
 

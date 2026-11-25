@@ -486,7 +486,10 @@ final class TraceScope {
       throws E, Exception {
     Throwable pending = finishCollect(tracer, span, error, previous);
     if (pending != null) {
-      throw policy.<E>rethrowPending(pending, type);
+      // Finish failures (afterCall/restore) never masquerade as the delegate's witnessed type:
+      // a tracer bug must not look like a supplier failure the caller would retry. Only the
+      // delegate path (rethrowDelegate) may unwrap to E.
+      throw ErrorPolicy.UNCHECKED.rethrowUnchecked(pending);
     }
   }
 

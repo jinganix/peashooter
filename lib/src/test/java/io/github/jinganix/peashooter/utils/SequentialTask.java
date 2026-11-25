@@ -27,17 +27,9 @@ public class SequentialTask implements Runnable {
 
   private final Runnable delegate;
 
-  private volatile String key;
-
   public SequentialTask(AtomicReference<Thread> guard, Runnable delegate) {
     this.guard = Objects.requireNonNull(guard, "guard");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
-  }
-
-  /** Attaches key context for failure diagnostics; may be called once before use. */
-  public SequentialTask withKey(String key) {
-    this.key = key;
-    return this;
   }
 
   @Override
@@ -46,9 +38,7 @@ public class SequentialTask implements Runnable {
     if (!guard.compareAndSet(null, current)) {
       Thread holding = guard.get();
       throw new RuntimeException(
-          "Task is running concurrently"
-              + (key != null ? " for key '" + key + "'" : "")
-              + " on thread '"
+          "Task is running concurrently on thread '"
               + current.getName()
               + "', owned by '"
               + (holding != null ? holding.getName() : "unknown")

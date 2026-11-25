@@ -63,6 +63,34 @@ class SpanTest {
   }
 
   @Test
+  @DisplayName("should not consume the id generator when the forced trace id is invalid")
+  void shouldNotConsumeTheIdGeneratorWhenTheForcedTraceIdIsInvalid() {
+    // Given a counting generator
+    java.util.concurrent.atomic.AtomicInteger spanCalls =
+        new java.util.concurrent.atomic.AtomicInteger();
+    TraceIdGenerator counting =
+        new TraceIdGenerator() {
+          @Override
+          public String nextTraceId() {
+            return TraceIds.nextTraceId();
+          }
+
+          @Override
+          public String nextSpanId() {
+            spanCalls.incrementAndGet();
+            return TraceIds.nextSpanId();
+          }
+        };
+
+    // When the forced trace id is rejected
+    assertThatThrownBy(() -> Span.continueTrace("trace", counting, null))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    // Then no span id was minted for the failed call
+    assertThat(spanCalls.get()).isZero();
+  }
+
+  @Test
   @DisplayName("should reject invalid generator ids in strict child factory")
   void shouldRejectInvalidGeneratorIdsInStrictChildFactory() {
     TraceIdGenerator badTraceId =

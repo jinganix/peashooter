@@ -21,6 +21,7 @@ package io.github.jinganix.peashooter.executor;
 import io.github.jinganix.peashooter.ExecutorSelector;
 import io.github.jinganix.peashooter.TaskQueueProvider;
 import io.github.jinganix.peashooter.Tracer;
+import io.github.jinganix.peashooter.internal.Interruptions;
 import io.github.jinganix.peashooter.internal.KeySanitizer;
 import io.github.jinganix.peashooter.queue.RejectionAware;
 import io.github.jinganix.peashooter.queue.TaskQueue;
@@ -64,7 +65,20 @@ final class SubmissionRouter {
    * call sites.
    */
   void executeAsync(String key, TraceRunnable runnable) {
-    TaskQueue queue = queues.getForSubmit(key);
+    TaskQueue queue;
+    try {
+      queue = queues.getForSubmit(key);
+    } catch (Throwable providerFailure) {
+      try {
+        RejectionAware.dispatch(runnable, providerFailure);
+      } catch (Throwable dispatchFailure) {
+        if (dispatchFailure != providerFailure) {
+          providerFailure.addSuppressed(dispatchFailure);
+        }
+        log.error("Rejection callback failed for provider failure", dispatchFailure);
+      }
+      throw ErrorPolicy.UNCHECKED.rethrowUnchecked(providerFailure);
+    }
     queue.execute(selectExecutor(key, queue, runnable, false), runnable);
   }
 
@@ -79,7 +93,27 @@ final class SubmissionRouter {
    */
   <R> CompletableFuture<R> enqueueAsync(
       String key, TraceRunnable runnable, CompletableFuture<R> future) {
-    TaskQueue queue = queues.getForSubmit(key);
+    TaskQueue queue;
+    try {
+      queue = queues.getForSubmit(key);
+    } catch (Throwable providerFailure) {
+      try {
+        RejectionAware.dispatch(runnable, providerFailure);
+      } catch (Throwable dispatchFailure) {
+        if (dispatchFailure != providerFailure) {
+          providerFailure.addSuppressed(dispatchFailure);
+        }
+        log.error("Rejection callback failed for provider failure", dispatchFailure);
+      }
+      if (providerFailure instanceof Exception) {
+        log.warn(
+            "Task queue provider failed for async key '{}'; submission future already completed",
+            KeySanitizer.sanitize(key),
+            providerFailure);
+        return future;
+      }
+      throw ErrorPolicy.UNCHECKED.rethrowUnchecked(providerFailure);
+    }
     Executor selected;
     try {
       selected = selectExecutor(key, queue, runnable, false);
@@ -150,7 +184,12 @@ final class SubmissionRouter {
       }
       // Typed unwrapping without sneaky throws: the witness-narrowed failure propagates via the
       // declared `throws E`; everything else converges on the unchecked single entry.
+      // Interrupt status is restored exactly like ErrorPolicy.rethrowUnchecked/rethrowDelegate:
+      // without this the typed hit would swallow a smuggled interruption.
       if (policy == ErrorPolicy.TYPED && type != null && type.isInstance(cause)) {
+        if (Interruptions.carriesInterrupt(cause)) {
+          Thread.currentThread().interrupt();
+        }
         throw type.cast(cause);
       }
       throw ErrorPolicy.UNCHECKED.rethrowUnchecked(cause);

@@ -146,6 +146,9 @@ public sealed class Span permits OrderedSpan {
    * @throws IllegalArgumentException if either id is not W3C-compatible
    */
   public static Span continueTrace(String traceId, TraceIdGenerator generator, Span parent) {
+    // Explicit check runs before nextSpanId() so a bad id never burns a fresh span id;
+    // the super constructor validates it again as the single owner.
+    requireValidTraceId(traceId);
     String spanId = nextSpanId(Objects.requireNonNull(generator, "generator"));
     return new Span(traceId, spanId, parent, true);
   }
@@ -218,7 +221,7 @@ public sealed class Span permits OrderedSpan {
   /**
    * Get the parent {@link Span}.
    *
-   * @return parent {@link Span}
+   * @return parent {@link Span}, or {@code null} at the root (see {@link #isRoot()})
    */
   public Span getParent() {
     return parent;

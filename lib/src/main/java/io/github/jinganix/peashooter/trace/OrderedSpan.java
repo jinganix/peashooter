@@ -100,7 +100,9 @@ public final class OrderedSpan extends Span {
       String traceId, TraceIdGenerator generator, Span parent, String key, boolean sync) {
     Objects.requireNonNull(generator, "generator");
     Keys.requireKey(key);
-    // Forced trace id and generated span id are validated by the super constructor (single owner).
+    // Explicit check runs before nextSpanId() so a bad id never burns a fresh span id;
+    // the super constructor validates it again as the single owner.
+    Span.requireValidTraceId(traceId);
     return new OrderedSpan(traceId, Span.nextSpanId(generator), parent, key, sync);
   }
 

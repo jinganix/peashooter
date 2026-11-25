@@ -81,14 +81,16 @@ public class OrderedTraceExecutor {
    * @param executor backing pool for queued work
    */
   public OrderedTraceExecutor(Executor executor) {
-    this(executor, (IntSupplier) null);
+    this(executor, null);
   }
 
   /**
    * Creates an executor with default queues and an explicit pool maximum.
    *
    * @param executor backing pool for queued work
-   * @param maxPoolThreads known pool maximum, or {@code null} when unknown
+   * @param maxPoolThreads known pool maximum, or {@code null} when unknown. When non-null the
+   *     supplier is read at each multi-key submit and must not throw: a throwing supplier fails
+   *     that submission with its own failure instead of guarding it
    */
   public OrderedTraceExecutor(Executor executor, IntSupplier maxPoolThreads) {
     this(builder(executor).maxPoolThreads(maxPoolThreads));
@@ -111,7 +113,9 @@ public class OrderedTraceExecutor {
    * @param queues per-key {@link TaskQueue} source
    * @param selector chooses the {@link Executor} for each submission
    * @param tracer records the ordered call chain
-   * @param maxPoolThreads known pool maximum, or {@code null} when unknown
+   * @param maxPoolThreads known pool maximum, or {@code null} when unknown. When non-null the
+   *     supplier is read at each multi-key submit and must not throw: a throwing supplier fails
+   *     that submission with its own failure instead of guarding it
    */
   public OrderedTraceExecutor(
       TaskQueueProvider queues,
@@ -127,7 +131,10 @@ public class OrderedTraceExecutor {
 
   private OrderedTraceExecutor(Builder builder) {
     Objects.requireNonNull(builder, "builder");
-    Executor executor = Objects.requireNonNull(builder.backing, "backing");
+    Executor executor = builder.backing;
+    if (executor == null && builder.selector == null) {
+      throw new NullPointerException("either a backing executor or a selector is required");
+    }
     TaskQueueProvider resolvedQueues =
         builder.queues != null ? builder.queues : new CaffeineTaskQueueProvider();
     ExecutorSelector selector;
@@ -174,17 +181,39 @@ public class OrderedTraceExecutor {
   /**
    * Starts a builder for an executor on {@code executor}.
    *
+   * <p>When you already choose executors with a custom {@link ExecutorSelector}, the backing
+   * executor is unused for scheduling: prefer {@link #builder(ExecutorSelector)} so no dummy pool
+   * is required.
+   *
    * @param executor backing pool for queued work
    * @return builder, never {@code null}
    */
   public static Builder builder(Executor executor) {
-    return new Builder(executor);
+    return new Builder(Objects.requireNonNull(executor, "executor"));
+  }
+
+  /**
+   * Starts a builder for an executor on a custom {@code selector}.
+   *
+   * <p>No backing pool is required: sizing introspects the selector. Use this instead of passing a
+   * dummy executor to {@link #builder(Executor)} when the selector decides scheduling.
+   *
+   * @param selector chooses the {@link Executor} for each submission
+   * @return builder, never {@code null}
+   */
+  public static Builder builder(ExecutorSelector selector) {
+    return new Builder(Objects.requireNonNull(selector, "selector"));
   }
 
   /**
    * Builder for {@link OrderedTraceExecutor}: one place for every construction axis. Details for
    * each axis live with its owner ({@link CaffeineTaskQueueProvider}, {@link
    * DefaultExecutorSelector}, {@link MultiKeyGuard}, {@link TimeoutPolicy}).
+   *
+   * <p>Either a backing {@link Executor} or a custom {@link ExecutorSelector} is required, never
+   * both for sizing: with a custom selector the backing executor (when present) is unused for
+   * scheduling and sizing, so prefer {@link OrderedTraceExecutor#builder(ExecutorSelector)} to
+   * avoid keeping a dummy pool.
    */
   public static final class Builder {
     private final Executor backing;
@@ -195,7 +224,12 @@ public class OrderedTraceExecutor {
     private Duration timeout;
 
     private Builder(Executor executor) {
-      this.backing = Objects.requireNonNull(executor, "executor");
+      this.backing = executor;
+    }
+
+    private Builder(ExecutorSelector selector) {
+      this.backing = null;
+      this.selector = Objects.requireNonNull(selector, "selector");
     }
 
     /**
@@ -234,7 +268,9 @@ public class OrderedTraceExecutor {
     /**
      * Sets the known pool maximum for multi-key fail-fast sizing.
      *
-     * @param maxPoolThreads known maximum, or {@code null} when unknown
+     * @param maxPoolThreads known maximum, or {@code null} when unknown. When non-null the supplier
+     *     is read at each multi-key submit and must not throw: a throwing supplier fails that
+     *     submission with its own failure instead of guarding it
      * @return this builder
      */
     public Builder maxPoolThreads(IntSupplier maxPoolThreads) {
@@ -245,11 +281,18 @@ public class OrderedTraceExecutor {
     /**
      * Sets the sync-wait timeout.
      *
+     * <p>Applies to submissions made after {@link #build}; in-flight waits keep their existing
+     * deadline.
+     *
      * @param timeout maximum wait, must not be negative
      * @return this builder
      */
     public Builder timeout(Duration timeout) {
-      this.timeout = Objects.requireNonNull(timeout, "timeout");
+      Objects.requireNonNull(timeout, "timeout");
+      if (timeout.isNegative()) {
+        throw new IllegalArgumentException("timeout must not be negative");
+      }
+      this.timeout = timeout;
       return this;
     }
 
@@ -298,6 +341,8 @@ public class OrderedTraceExecutor {
   /**
    * Sets the maximum wait for sync calls, and for each inner level of a multi-key async chain
    * (whose budget starts when the chain starts, not at submission). See {@link TimeoutPolicy}.
+   *
+   * <p>Applies to submissions made after the call; in-flight waits keep their existing deadline.
    *
    * @param timeout maximum wait, must not be negative and must not be {@code null}
    */
@@ -351,12 +396,13 @@ public class OrderedTraceExecutor {
     if (!allowReentrant || !reentrancyGate.isReentrant(tracer, key)) {
       return false;
     }
-    // Peer probe is fail-closed (probe failure assumes peers and throws). The probe itself holds
-    // the queue monitor, so a peer enqueued before the probe is always observed. A peer enqueued
-    // after the probe submitted after this inline call, so running inline first preserves
-    // submission order rather than overtaking: the window between probe and inline run admits no
-    // FIFO violation for same-thread nesting (span storage is per-thread; cross-thread span
-    // sharing with concurrent same-key execution is unsupported).
+    // Peer probe is fail-closed (probe failure assumes peers and throws) and best-effort racy
+    // like the selector idle hint: the probe holds the queue monitor, so a peer enqueued before
+    // the probe is always observed, but a peer racing in after the probe can still be overtaken
+    // by this inline run. Same-thread nesting without concurrent same-key submitters preserves
+    // order; concurrent same-key submission racing a nested inline call may interleave (span
+    // storage is per-thread; cross-thread span sharing with concurrent same-key execution is
+    // unsupported).
     if (submissions.hasQueuedPeers(key)) {
       throw SubmissionRouter.overtakeRejected(key);
     }
@@ -366,11 +412,18 @@ public class OrderedTraceExecutor {
   /**
    * Returns whether no tasks are queued and no runner is in flight for {@code key}.
    *
+   * <p>Best-effort snapshot: the state may change immediately after this call returns (a concurrent
+   * submitter may enqueue, a runner may start or drain). Do not use the result for control flow
+   * that assumes the key stays idle; submit normally and let the queue order the work.
+   *
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @return {@code true} when idle
    */
   public boolean isIdle(String key) {
-    return queues.isIdle(Keys.requireKey(key));
+    // Executor enforces its own contract even though providers validate too: a foreign
+    // provider that forgets validation must not turn an illegal key into a false idle.
+    Keys.requireKey(key);
+    return queues.isIdle(key);
   }
 
   /**
@@ -378,6 +431,9 @@ public class OrderedTraceExecutor {
    *
    * <p>Submission is asynchronous for a pool-backed executor; a synchronous backing executor (for
    * example {@link DirectExecutor}) may run the task inline before this method returns.
+   *
+   * <p>Fire-and-forget: a task failure is logged by the queue and never reaches this caller. Use
+   * {@link #submitAsync(String, Runnable)} when the failure must be observed via a future.
    *
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param task work to run; must not be {@code null}
@@ -389,6 +445,47 @@ public class OrderedTraceExecutor {
     Keys.requireKey(key);
     Objects.requireNonNull(task, "task");
     submissions.executeAsync(key, OrderedTraceRunnable.forKey(getTracer(), key, false, task));
+  }
+
+  /**
+   * Enqueues a task while holding each key in turn, without returning a future. See {@link
+   * MultiKeyNesting}.
+   *
+   * <p>Fire-and-forget: a task failure is logged by the queue and never reaches this caller. Use
+   * {@link #submitAsync(Collection, Runnable)} when the failure must be observed via a future. A
+   * submission rejection still fails fast on this caller like {@link #executeAsync(String,
+   * Runnable)}.
+   *
+   * @param keys ordering keys; must not be {@code null} or empty, no element may be {@code null},
+   *     empty, or blank. Pass an immutable snapshot such as {@code List.of("a", "b")}; do not
+   *     mutate the collection during the call
+   * @param task work to run; must not be {@code null}
+   * @throws IllegalArgumentException when {@code keys} is empty
+   * @throws IllegalStateException when the known pool maximum is below the distinct key count
+   * @throws RuntimeException (or whatever a selected executor throws) when the outermost submission
+   *     is rejected without running it
+   * @throws Error when a selector or queue fails with one
+   */
+  public void executeAsync(Collection<String> keys, Runnable task) {
+    // Same nesting and timeout contract as the future-returning overload, but the outermost hop
+    // uses the fire-and-forget path so a selector Exception fails fast on this caller instead of
+    // completing a dropped future that nobody observes.
+    Objects.requireNonNull(task, "task");
+    List<String> sorted = sortedKeys(keys);
+    if (sorted.size() == 1) {
+      executeAsync(sorted.get(0), task);
+      return;
+    }
+    SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
+    Runnable chain =
+        MultiKeyNesting.nestSync(
+            sorted.subList(1, sorted.size()),
+            task,
+            (key, inner) -> {
+              long innerWaitNanos = timeoutPolicy.waitNanos();
+              executeSyncAt(key, inner, innerWaitNanos, deadline.of(innerWaitNanos), false);
+            });
+    executeAsync(sorted.get(0), chain);
   }
 
   /**
@@ -444,6 +541,9 @@ public class OrderedTraceExecutor {
   /**
    * Enqueues a checked supplier for ordered async execution.
    *
+   * <p>No {@code type} witness is needed here (unlike the multi-key overload): a single key has no
+   * inner sync level to unwrap, so the checked failure is carried by the future as-is.
+   *
    * @param key ordering key; must not be {@code null}, empty, or blank
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
@@ -496,7 +596,8 @@ public class OrderedTraceExecutor {
    * Enqueues a task while holding each key in turn. See {@link MultiKeyNesting}.
    *
    * @param keys ordering keys; must not be {@code null} or empty, no element may be {@code null},
-   *     empty, or blank
+   *     empty, or blank. Pass an immutable snapshot such as {@code List.of("a", "b")}; do not
+   *     mutate the collection during the call
    * @param task work to run; must not be {@code null}
    * @return future completed after the chain runs, exceptionally on failure
    * @throws IllegalArgumentException when {@code keys} is empty
@@ -516,14 +617,17 @@ public class OrderedTraceExecutor {
     if (sorted.size() == 1) {
       return submitAsync(sorted.get(0), task);
     }
-    long waitNanos = timeoutPolicy.waitNanos();
-    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    // Async submission never waits: the budget starts when the chain starts, not at submission,
+    // so the wait is read fresh when the chain runs instead of being captured here.
     SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     Runnable chain =
         MultiKeyNesting.nestSync(
             sorted.subList(1, sorted.size()),
             task,
-            (key, inner) -> executeSyncAt(key, inner, waitNanos, deadline.of(waitNanos), false));
+            (key, inner) -> {
+              long innerWaitNanos = timeoutPolicy.waitNanos();
+              executeSyncAt(key, inner, innerWaitNanos, deadline.of(innerWaitNanos), false);
+            });
     return submitAsync(sorted.get(0), chain);
   }
 
@@ -531,7 +635,8 @@ public class OrderedTraceExecutor {
    * Enqueues a supplier while holding each key in turn. See {@link MultiKeyNesting}.
    *
    * @param keys ordering keys; must not be {@code null} or empty, no element may be {@code null},
-   *     empty, or blank
+   *     empty, or blank. Pass an immutable snapshot such as {@code List.of("a", "b")}; do not
+   *     mutate the collection during the call
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @return future completed with the supplier result, exceptionally on failure
@@ -552,14 +657,17 @@ public class OrderedTraceExecutor {
     if (sorted.size() == 1) {
       return supplyAsync(sorted.get(0), supplier);
     }
-    long waitNanos = timeoutPolicy.waitNanos();
-    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    // Async submission never waits: the budget starts when the chain starts, not at submission,
+    // so the wait is read fresh when the chain runs instead of being captured here.
     SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     Supplier<R> chain =
         MultiKeyNesting.nestSupply(
             sorted.subList(1, sorted.size()),
             supplier,
-            (key, inner) -> supplyAt(key, inner, waitNanos, deadline.of(waitNanos), false));
+            (key, inner) -> {
+              long innerWaitNanos = timeoutPolicy.waitNanos();
+              return supplyAt(key, inner, innerWaitNanos, deadline.of(innerWaitNanos), false);
+            });
     return supplyAsync(sorted.get(0), chain);
   }
 
@@ -567,8 +675,10 @@ public class OrderedTraceExecutor {
    * Enqueues a checked supplier while holding each key in turn. See {@link MultiKeyNesting}.
    *
    * @param keys ordering keys; must not be {@code null} or empty, no element may be {@code null},
-   *     empty, or blank
-   * @param type witness for the declared checked failure type
+   *     empty, or blank. Pass an immutable snapshot such as {@code List.of("a", "b")}; do not
+   *     mutate the collection during the call
+   * @param type witness for the declared checked failure type, used to unwrap inner sync levels;
+   *     the returned future still carries the failure
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @param <E> checked failure type (carried by the future, never thrown)
@@ -592,15 +702,18 @@ public class OrderedTraceExecutor {
     if (sorted.size() == 1) {
       return supplyCheckedAsync(sorted.get(0), supplier);
     }
-    long waitNanos = timeoutPolicy.waitNanos();
-    // Async submission never waits: the budget starts when the chain starts, not at submission.
+    // Async submission never waits: the budget starts when the chain starts, not at submission,
+    // so the wait is read fresh when the chain runs instead of being captured here.
     SyncWait.ChainDeadline deadline = new SyncWait.ChainDeadline();
     ThrowingSupplier<R, E> chain =
         MultiKeyNesting.nestChecked(
             sorted.subList(1, sorted.size()),
             supplier,
-            (key, inner) ->
-                supplyCheckedAt(key, type, inner, waitNanos, deadline.of(waitNanos), false));
+            (key, inner) -> {
+              long innerWaitNanos = timeoutPolicy.waitNanos();
+              return supplyCheckedAt(
+                  key, type, inner, innerWaitNanos, deadline.of(innerWaitNanos), false);
+            });
     return supplyCheckedAsync(sorted.get(0), chain);
   }
 
@@ -645,7 +758,8 @@ public class OrderedTraceExecutor {
   /**
    * Runs a task while holding each key in turn. See {@link MultiKeyNesting}.
    *
-   * @param keys ordering keys; no element may be {@code null}, empty, or blank
+   * @param keys ordering keys; no element may be {@code null}, empty, or blank. Pass an immutable
+   *     snapshot such as {@code List.of("a", "b")}; do not mutate the collection during the call
    * @param task work to run; must not be {@code null}
    * @throws IllegalArgumentException when {@code keys} is empty
    * @throws IllegalStateException when the known pool maximum is below the distinct key count
@@ -712,7 +826,8 @@ public class OrderedTraceExecutor {
    * Runs a checked supplier under {@code key}, blocking until a result is available.
    *
    * @param key ordering key; must not be {@code null}, empty, or blank
-   * @param type witness for the declared checked failure type
+   * @param type witness for the declared checked failure type, so it propagates unwrapped instead
+   *     of wrapped in a {@link java.util.concurrent.CompletionException}
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @param <E> checked failure type
@@ -760,7 +875,8 @@ public class OrderedTraceExecutor {
   /**
    * Runs a supplier while holding each key in turn. See {@link MultiKeyNesting}.
    *
-   * @param keys ordering keys; no element may be {@code null}, empty, or blank
+   * @param keys ordering keys; no element may be {@code null}, empty, or blank. Pass an immutable
+   *     snapshot such as {@code List.of("a", "b")}; do not mutate the collection during the call
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @return supplier result
@@ -783,8 +899,10 @@ public class OrderedTraceExecutor {
   /**
    * Runs a checked supplier while holding each key in turn. See {@link MultiKeyNesting}.
    *
-   * @param keys ordering keys; no element may be {@code null}, empty, or blank
-   * @param type witness for the declared checked failure type
+   * @param keys ordering keys; no element may be {@code null}, empty, or blank. Pass an immutable
+   *     snapshot such as {@code List.of("a", "b")}; do not mutate the collection during the call
+   * @param type witness for the declared checked failure type, so it propagates unwrapped instead
+   *     of wrapped in a {@link java.util.concurrent.CompletionException}
    * @param supplier work to run; must not be {@code null}
    * @param <R> result type
    * @param <E> checked failure type

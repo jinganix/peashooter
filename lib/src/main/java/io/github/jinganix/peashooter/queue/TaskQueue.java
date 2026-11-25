@@ -113,7 +113,11 @@ public class TaskQueue {
   @GuardedBy("lock")
   private boolean unlocking;
 
-  /** Constructor. */
+  /**
+   * Constructor. The instance is the ordering point for its key: keep one stable instance per key
+   * (usually via a {@link io.github.jinganix.peashooter.TaskQueueProvider}) and never create a new
+   * instance per submission, or same-key tasks land on different queues and run concurrently.
+   */
   public TaskQueue() {
     // Stores (never invokes) the overridable run: PinnedTaskQueue.run only adds a post-drain
     // pin sync over super.run and touches no subclass state until after construction, so no
@@ -220,9 +224,10 @@ public class TaskQueue {
         }
         return false;
       }
-      if (callerReturning) {
-        current = null;
-      }
+      // Empty queue holds no work: always release the claim instead of retaining it for a
+      // looping NEXT_BATCH; retention would pin idle entries without adding safety (the
+      // external lock still serializes batches).
+      current = null;
       return false;
     }
   }
@@ -403,23 +408,25 @@ public class TaskQueue {
 
   /**
    * Removes {@code failedHead} when it is still at the front (identity) and repoints the runner
-   * claim at the new head (or releases it when empty). Always returns {@code failedHead} for
-   * outside-monitor notification. Package-private: in-package queues only.
+   * claim at the new head (or releases it when empty). A miss (already polled by a concurrent
+   * runner) leaves the queue untouched so the task runs normally and is never reported rejected.
+   * Package-private: in-package queues only.
    *
    * @param failedHead head task to remove when still at the front
-   * @return {@code failedHead}, never {@code null}
+   * @return {@code true} when {@code failedHead} was removed and the caller must notify it
    */
-  final Task discardHeadAndRepoint(Task failedHead) {
+  final boolean discardHeadAndRepoint(Task failedHead) {
     synchronized (lock) {
-      if (head != null && head == failedHead) {
-        unlinkFirst();
+      if (head == null || head != failedHead) {
+        return false;
       }
+      unlinkFirst();
       if (size == 0) {
         current = null;
       } else {
         current = head.executor();
       }
-      return failedHead;
+      return true;
     }
   }
 
@@ -628,7 +635,11 @@ public class TaskQueue {
    * @param e rejection or failure cause
    */
   private void rejectHandoffHead(Task failedHead, Throwable e) {
-    discardHeadAndRepoint(failedHead);
+    // A miss means a concurrent runner already polled the head: it runs normally, so only
+    // an actual removal is reported rejected.
+    if (!discardHeadAndRepoint(failedHead)) {
+      return;
+    }
     log.warn(
         "Rejected handoff head in {} due to {}: {}; backlog preserved",
         describeQueue(),
@@ -684,14 +695,25 @@ public class TaskQueue {
       onEnqueued(plan.changed());
     } catch (Error e) {
       // Fail open like above: the trigger stays queued; release only the claim we just took so
-      // the next submission resumes it.
-      releaseClaimAfterEnqueuedFailure(toSchedule);
+      // the next submission resumes it. A survivor Error during resume stays loud with
+      // this hook Error suppressed onto it instead of masking it.
+      try {
+        releaseClaimAfterEnqueuedFailure(toSchedule);
+      } catch (Error resumeError) {
+        resumeError.addSuppressed(e);
+        throw resumeError;
+      }
       throw e;
     } catch (Throwable hookFailure) {
       // Same for the notification hook: drop this submission (and the runner claim we just took,
       // if any) while preserving every other pending task, then surface the failure.
       removeTrigger(task);
-      releaseClaimAfterEnqueuedFailure(toSchedule);
+      try {
+        releaseClaimAfterEnqueuedFailure(toSchedule);
+      } catch (Error resumeError) {
+        resumeError.addSuppressed(hookFailure);
+        throw resumeError;
+      }
       throw ErrorPolicy.UNCHECKED.rethrowUnchecked(hookFailure);
     }
     if (toSchedule == null) {
@@ -709,11 +731,42 @@ public class TaskQueue {
           runner,
           e -> {
             // Scheduling failure before the runner started: fail only this submission.
-            removeTrigger(task);
+            // The trigger is at the tail when a backlog was already preserved with no
+            // runner (interrupt/Error fail-open): it is not the head, so remove it by
+            // identity instead of discarding the head. A peer may have joined behind the
+            // trigger while the claim was held: repoint to the survivor and resume it.
+            boolean removed;
+            Executor next;
             synchronized (lock) {
-              current = null;
+              if (!task.linked) {
+                removed = false;
+                next = null;
+              } else {
+                unlink(task);
+                removed = true;
+                if (size == 0) {
+                  current = null;
+                  next = null;
+                } else {
+                  current = head.executor();
+                  next = current;
+                }
+              }
+            }
+            if (!removed) {
+              // A concurrent runner already polled the trigger: it runs normally,
+              // so never report it rejected and leave the claim alone.
+              return;
             }
             notifyDiscardedContained(runnable, e);
+            if (next != null) {
+              try {
+                resumePreservedBacklog(next);
+              } catch (Error survivorError) {
+                survivorError.addSuppressed(e);
+                throw survivorError;
+              }
+            }
             throw ErrorPolicy.UNCHECKED.rethrowUnchecked(e);
           });
     } catch (Throwable submitFailure) {
@@ -778,10 +831,22 @@ public class TaskQueue {
    */
   private void releaseClaimAfterEnqueuedFailure(Executor toSchedule) {
     if (toSchedule != null) {
+      // A peer may have joined behind the trigger: blindly clearing strands it, so repoint to
+      // the survivor and resume it instead of requiring another submit.
+      Executor next;
       synchronized (lock) {
-        current = null;
+        if (size == 0) {
+          current = null;
+          next = null;
+        } else {
+          current = head.executor();
+          next = current;
+        }
       }
       onRunnerFinished();
+      if (next != null) {
+        resumePreservedBacklog(next);
+      }
     }
   }
 
@@ -856,10 +921,82 @@ public class TaskQueue {
   void onRunnerFinished() {}
 
   /**
+   * Resumes survivors after a submit/enqueue-hook scheduling failure (fail one, preserve rest).
+   *
+   * <p>Schedules the preserved backlog head via plain {@code execute}: the handshake box is an
+   * optimization, correctness needs only the head-miss check below to tell a scheduling failure
+   * (head never polled, still linked) from an inline runner failure (head polled, runner owns the
+   * drain). Scheduling failures discard one head and continue with the next; an inline {@link
+   * Error} stays loud while any other after-start throw is logged and the runner-owned drain is
+   * left alone. Never throws for scheduling failures (each is notified to its own head).
+   *
+   * @param first executor to try first (already the repointed claim)
+   */
+  private void resumePreservedBacklog(Executor first) {
+    Executor toTry = first;
+    while (toTry != null) {
+      Task headNow;
+      synchronized (lock) {
+        headNow = head;
+        if (headNow == null) {
+          current = null;
+          return;
+        }
+        toTry = headNow.executor();
+        current = toTry;
+      }
+      try {
+        toTry.execute(runner);
+        return;
+      } catch (Throwable survivorFailure) {
+        boolean stillQueued;
+        synchronized (lock) {
+          stillQueued = headNow.linked;
+        }
+        if (stillQueued) {
+          boolean removed = discardHeadAndRepoint(headNow);
+          Executor next;
+          synchronized (lock) {
+            next = current;
+          }
+          if (removed) {
+            notifyDiscardedContained(headNow.runnable(), survivorFailure);
+          }
+          if (!removed) {
+            // A concurrent runner polled the head and owns the drain; the pin stays busy
+            // until that runner finishes, so reconciling here is a no-op.
+            onRunnerFinished();
+            return;
+          }
+          if (next == null) {
+            // All survivors rejected and the queue is empty: release the pin so the entry
+            // can idle-evict instead of staying pinned resident.
+            onRunnerFinished();
+            return;
+          }
+          toTry = next;
+        } else {
+          if (survivorFailure instanceof Error err) {
+            throw err;
+          }
+          log.warn(
+              "Executor threw after starting the preserved runner in {}; backlog kept: {}: {}",
+              describeQueue(),
+              survivorFailure.getClass().getName(),
+              survivorFailure.getMessage());
+          return;
+        }
+      }
+    }
+  }
+
+  /**
    * Whether the queue is idle: no pending tasks and no active runner.
    *
    * <p>Note this is quiescence, not {@link java.util.Queue#isEmpty()} on the deque: {@code false}
-   * while a runner is in flight even if the deque is momentarily empty.
+   * while a runner is in flight even if the deque is momentarily empty. Best-effort snapshot: the
+   * state may change immediately after this call returns; do not use the result for control flow
+   * that assumes the queue stays idle.
    *
    * @return {@code true} when no tasks are queued and no runner is in flight
    */
@@ -882,6 +1019,23 @@ public class TaskQueue {
   public final boolean hasPending() {
     synchronized (lock) {
       return size != 0;
+    }
+  }
+
+  /**
+   * Number of tasks waiting in the deque, including the just-enqueued trigger when no runner has
+   * started yet.
+   *
+   * <p>The backlog is unbounded: a fast producer with a slow consumer grows this without limit
+   * until OOM. Poll this and shed load upstream (a single hot key ignores any provider key-count
+   * bound); there is deliberately no cap or drop policy here — dropping ordered work silently would
+   * be worse than backpressure by the caller.
+   *
+   * @return queued task count, never negative
+   */
+  public final int size() {
+    synchronized (lock) {
+      return size;
     }
   }
 

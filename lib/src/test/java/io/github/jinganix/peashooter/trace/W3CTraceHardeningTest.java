@@ -45,4 +45,13 @@ class W3CTraceHardeningTest {
     assertThat(KeySanitizer.sanitize("a\u200Db")).isEqualTo("a_b");
     assertThat(KeySanitizer.sanitize("a\u2060b")).isEqualTo("a_b");
   }
+
+  @Test
+  @DisplayName("should reject a traceparent with an empty trailing extension when parsed")
+  void shouldRejectTraceparentWithEmptyTrailingExtensionWhenParsed() {
+    String trailingDash = "01-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01-";
+    assertThatThrownBy(() -> W3CTraceContext.parse(trailingDash))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("empty extension");
+  }
 }

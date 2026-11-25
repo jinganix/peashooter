@@ -39,6 +39,11 @@ import java.util.function.IntSupplier;
  * fail-fast sizing there. The explicit supplier is composed at construction time by the caller and
  * always wins over introspection.
  *
+ * <p><b>Conservative by design:</b> one pool thread is counted per distinct key, ignoring the
+ * idle-queue inline hint ({@link DefaultExecutorSelector}) and the calling thread (which holds the
+ * outermost sync level): work that would succeed via inlining or on the caller's own thread still
+ * fail-fasts. Size the pool for the distinct key count instead of relying on those shortcuts.
+ *
  * <p>The maximum arrives as a single injected {@link IntSupplier} composed by the caller: this
  * guard never disassembles selectors or executors itself, so no Demeter chain ({@code selector ->
  * traceExecutor -> delegate}) lives here. Only the known {@link TraceExecutor} decorator is

@@ -63,13 +63,20 @@ public final class RedisClient {
 
   public static RedissonClient createClient() {
     Config config = new Config();
-    String address = System.getenv("redis-host");
+    // shortcut: hyphenated names cannot be exported in bash, so accept REDIS_HOST too.
+    String address = System.getenv("REDIS_HOST");
+    if (address == null) {
+      address = System.getenv("redis-host");
+    }
     if (address == null) {
       address = System.getProperty("redis-host");
     }
+    if (address != null && address.isBlank()) {
+      address = null;
+    }
     Objects.requireNonNull(
         address,
-        "redis-host is not set. Set env var 'redis-host' or system property 'redis-host'"
+        "redis-host is not set. Set env var 'REDIS_HOST' or system property 'redis-host'"
             + " to a redis URL (e.g. redis://127.0.0.1:6379)."
             + " RedisExtension normally sets it via Testcontainers.");
     config.useSingleServer().setAddress(address);

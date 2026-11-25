@@ -50,6 +50,10 @@ public class TraceRunnable implements Runnable, RejectionAware {
   /**
    * Constructor.
    *
+   * <p>Unlike the lenient run path, the parent capture here is not wrapped: {@code
+   * tracer.getSpan()} must be fast and must not throw — a throwing call fails the submission on the
+   * caller thread instead of completing a future.
+   *
    * @param tracer {@link Tracer}
    * @param delegate {@link Runnable}
    */

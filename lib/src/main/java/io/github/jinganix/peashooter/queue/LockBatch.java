@@ -66,6 +66,11 @@ final class LockBatch {
       return state.ownsBatch;
     }
     synchronized (acquireLock) {
+      // Re-check under the acquire monitor: a concurrent release may have started
+      // unlock between the fast-path check above and this block.
+      if (queue.isUnlocking()) {
+        return false;
+      }
       if (locked) {
         return state.ownsBatch;
       }

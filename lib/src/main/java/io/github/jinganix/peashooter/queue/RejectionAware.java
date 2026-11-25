@@ -44,6 +44,11 @@ public interface RejectionAware {
    * including {@link Error}s: sync waiters observe the original {@link Throwable} via their futures
    * regardless of this callback.
    *
+   * <p>Must be fast and non-blocking: rejection runs on the submitter thread or on the shared
+   * lock-contention retry scheduler, so a blocking callback stalls every other key. Must be
+   * idempotent: a concurrent single-use misuse may notify twice for one logical submission, and the
+   * second notification must be a no-op.
+   *
    * @param cause rejection or failure reported by {@link
    *     java.util.concurrent.Executor#execute(Runnable)}
    */

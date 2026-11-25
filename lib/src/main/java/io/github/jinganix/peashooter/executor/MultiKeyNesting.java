@@ -91,39 +91,39 @@ final class MultiKeyNesting {
     // carry a handful of keys, and a contiguous array sort plus adjacent dedup avoids one
     // red-black node allocation per key; the result is frozen via List.copyOf.
     Objects.requireNonNull(keys, "keys");
-    // Bound the copy+sort work before paying it: an oversized caller collection is validated and
-    // de-duplicated via a bounded set first (early exit past MAX distinct), then only the bounded
-    // distinct set is sorted — never the full oversized input. At most MAX+1 distinct keys are
-    // sampled; it is the distinct count that holds pool threads.
-    if (keys.size() > MAX_MULTI_KEYS) {
-      HashSet<String> distinct = new HashSet<>(MAX_MULTI_KEYS + 1);
-      int index = 0;
-      for (String key : keys) {
-        validateKey(key, index);
-        distinct.add(key);
+    // No keys.size() branch: size() is O(N) on concurrent queues (one full traversal just to
+    // choose a branch), so a single iterator pass covers both shapes. The ArrayList fast path
+    // handles the common handful-of-keys case with no HashSet; only a raw overflow past MAX
+    // switches to distinct counting for the remainder.
+    // shortcut: single pass validates in order, so an oversized collection reports the
+    // cardinality breach before validating later elements — error order only, both are
+    // IllegalArgumentException; a full pre-validation pass would pay unbounded work on hostile
+    // input.
+    List<String> ordered = new ArrayList<>(16);
+    int index = 0;
+    java.util.Iterator<String> it = keys.iterator();
+    while (it.hasNext()) {
+      String key = it.next();
+      validateKey(key, index);
+      ordered.add(key);
+      if (ordered.size() > MAX_MULTI_KEYS) {
+        HashSet<String> distinct = new HashSet<>(ordered);
         if (distinct.size() > MAX_MULTI_KEYS) {
           throw tooManyKeys(distinct.size());
         }
         index++;
-      }
-      // A misreporting collection can claim oversize yet yield nothing: enforce the same
-      // non-empty contract as the normal path instead of returning an empty list.
-      if (distinct.isEmpty()) {
-        throw new IllegalArgumentException("keys must not be empty");
-      }
-      List<String> sorted = new ArrayList<>(distinct);
-      Collections.sort(sorted);
-      return List.copyOf(sorted);
-    }
-    List<String> ordered = new ArrayList<>(Math.min(keys.size(), MAX_MULTI_KEYS + 1));
-    int index = 0;
-    for (String key : keys) {
-      validateKey(key, index);
-      ordered.add(key);
-      // Do not trust a prior size(): a concurrently growing or misreporting collection must
-      // still hit the distinct bound instead of paying an unbounded copy+sort.
-      if (ordered.size() > MAX_MULTI_KEYS) {
-        throw tooManyKeys(ordered.size());
+        while (it.hasNext()) {
+          String rest = it.next();
+          validateKey(rest, index);
+          distinct.add(rest);
+          if (distinct.size() > MAX_MULTI_KEYS) {
+            throw tooManyKeys(distinct.size());
+          }
+          index++;
+        }
+        List<String> sorted = new ArrayList<>(distinct);
+        Collections.sort(sorted);
+        return List.copyOf(sorted);
       }
       index++;
     }

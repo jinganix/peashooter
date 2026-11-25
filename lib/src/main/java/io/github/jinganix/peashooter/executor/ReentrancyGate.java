@@ -46,8 +46,10 @@ final class ReentrancyGate {
    * <p><b>Unified stack budget:</b> Channel 1 ({@link DirectExecutor} inline, 32, process-wide) and
    * this Channel 2 (per executor instance) share the calling thread, so one thread can stack both.
    * Worst case per executor is the sum: 32 + 256 = 288 logical inline levels, each a constant
-   * handful of Java frames, far below {@link StackOverflowError} on a default stack. Both channels
-   * fail fast with {@link IllegalStateException} — never {@link StackOverflowError}.
+   * handful of Java frames, far below {@link StackOverflowError} on a default stack. With N
+   * executors nested on one thread the per-instance Channel 2 budgets add up (32 + 256 x N): keep
+   * cross-executor nesting shallow. Both channels fail fast with {@link IllegalStateException} —
+   * never {@link StackOverflowError}.
    */
   static final int MAX_REENTRANT_DEPTH = 256;
 
